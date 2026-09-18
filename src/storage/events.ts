@@ -101,6 +101,114 @@ export async function queryEvents(q: EventQuery): Promise<StoredEvent[]> {
   }));
 }
 
+export async function searchByMessage(
+  tenant_id: string,
+  text: string,
+  limit = 20
+): Promise<StoredEvent[]> {
+  const pool = getPool();
+  const result = await pool.query(
+    `SELECT id, tenant_id, timestamp, service, level, message,
+            trace_id, span_id, attributes, ingested_at
+     FROM events
+     WHERE tenant_id = $1 AND message ILIKE $2
+     ORDER BY timestamp DESC
+     LIMIT $3`,
+    [tenant_id, `%${text}%`, limit]
+  );
+  return result.rows.map((r) => ({
+    ...r,
+    timestamp: r.timestamp.toISOString(),
+    ingested_at: r.ingested_at.toISOString(),
+  }));
+}
+
+export interface ServiceStats {
+  service: string;
+  total: number;
+  by_level: Record<string, number>;
+  error_count: number;
+  error_rate: number;
+  first_seen: string;
+  last_seen: string;
+}
+
+export async function getServiceStats(
+  tenant_id: string,
+  opts: { service?: string; from?: string; to?: string } = {}
+): Promise<ServiceStats[]> {
+  const pool = getPool();
+  const conditions = ["tenant_id = $1"];
+  const params: unknown[] = [tenant_id];
+  let p = 2;
+
+  if (opts.service) {
+    conditions.push(`service = $${p++}`);
+    params.push(opts.service);
+  }
+  if (opts.from) {
+    conditions.push(`timestamp >= $${p++}`);
+    params.push(opts.from);
+  }
+  if (opts.to) {
+    conditions.push(`timestamp <= $${p++}`);
+    params.push(opts.to);
+  }
+
+  const where = conditions.join(" AND ");
+
+  // Per-service, per-level counts
+  const levelResult = await pool.query(
+    `SELECT service, level, COUNT(*) AS cnt
+     FROM events WHERE ${where}
+     GROUP BY service, level`,
+    params
+  );
+
+  // Per-service aggregates
+  const aggResult = await pool.query(
+    `SELECT service,
+            COUNT(*) AS total,
+            COUNT(*) FILTER (WHERE level IN ('error','fatal')) AS error_count,
+            MIN(timestamp) AS first_seen,
+            MAX(timestamp) AS last_seen
+     FROM events WHERE ${where}
+     GROUP BY service
+     ORDER BY error_count DESC`,
+    params
+  );
+
+  // Merge
+  const levelMap: Record<string, Record<string, number>> = {};
+  for (const row of levelResult.rows) {
+    levelMap[row.service] ??= {};
+    levelMap[row.service][row.level] = parseInt(row.cnt, 10);
+  }
+
+  return aggResult.rows.map((r) => {
+    const total = parseInt(r.total, 10);
+    const error_count = parseInt(r.error_count, 10);
+    return {
+      service: r.service,
+      total,
+      by_level: levelMap[r.service] ?? {},
+      error_count,
+      error_rate: total > 0 ? Math.round((error_count / total) * 10000) / 100 : 0,
+      first_seen: r.first_seen.toISOString(),
+      last_seen: r.last_seen.toISOString(),
+    };
+  });
+}
+
+export async function getDistinctServices(tenant_id: string): Promise<string[]> {
+  const pool = getPool();
+  const result = await pool.query(
+    "SELECT DISTINCT service FROM events WHERE tenant_id = $1 ORDER BY service",
+    [tenant_id]
+  );
+  return result.rows.map((r) => r.service);
+}
+
 export async function countEvents(tenant_id: string): Promise<number> {
   const pool = getPool();
   const result = await pool.query(

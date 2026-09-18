@@ -1,0 +1,120 @@
+import Anthropic from "@anthropic-ai/sdk";
+import { getAllTools, executeTool } from "./registry.js";
+import { toApiTool } from "../schemas/index.js";
+import type { ToolInput } from "../schemas/index.js";
+
+const MODEL = process.env.CALYX_MODEL ?? "claude-opus-5";
+const MAX_TURNS = 10;
+
+export interface ToolCallRecord {
+  toolName: string;
+  input: ToolInput;
+  result: { ok: boolean; summary?: string; error?: string };
+}
+
+export interface AgentResponse {
+  answer: string;
+  toolCallsMade: ToolCallRecord[];
+  stopReason: string;
+  turns: number;
+}
+
+export async function runAgent(
+  tenantId: string,
+  userMessage: string,
+  systemPrompt?: string
+): Promise<AgentResponse> {
+  const client = new Anthropic();
+  const tools = getAllTools().map(toApiTool);
+
+  const system =
+    systemPrompt ??
+    `You are Calyx, an AI observability assistant. You help engineering teams understand what is
+happening in their production systems by analyzing logs and metrics. The tenant you are
+assisting has tenant_id: "${tenantId}". Always use this tenant_id when calling tools.
+
+When you cannot find data, say so clearly rather than guessing. When you do find data,
+cite specific numbers and service names from the tool results.`;
+
+  const messages: Anthropic.MessageParam[] = [
+    { role: "user", content: userMessage },
+  ];
+
+  const toolCallsMade: ToolCallRecord[] = [];
+  let turns = 0;
+
+  while (turns < MAX_TURNS) {
+    turns++;
+
+    const response = await client.messages.create({
+      model: MODEL,
+      max_tokens: 4096,
+      thinking: { type: "adaptive" },
+      system,
+      tools,
+      messages,
+    });
+
+    if (response.stop_reason === "end_turn") {
+      const answer = extractText(response.content);
+      return { answer, toolCallsMade, stopReason: "end_turn", turns };
+    }
+
+    if (response.stop_reason === "tool_use") {
+      messages.push({ role: "assistant", content: response.content });
+
+      const toolUseBlocks = response.content.filter(
+        (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
+      );
+
+      const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
+        toolUseBlocks.map(async (block) => {
+          const result = await executeTool(block.name, block.input as ToolInput);
+          const record: ToolCallRecord = {
+            toolName: block.name,
+            input: block.input as ToolInput,
+            result: result.ok
+              ? { ok: true, summary: result.output.summary }
+              : { ok: false, error: result.error },
+          };
+          toolCallsMade.push(record);
+
+          return {
+            type: "tool_result" as const,
+            tool_use_id: block.id,
+            content: result.ok
+              ? JSON.stringify(result.output)
+              : JSON.stringify({ error: result.error }),
+            is_error: !result.ok,
+          };
+        })
+      );
+
+      messages.push({ role: "user", content: toolResults });
+      continue;
+    }
+
+    // Any other stop reason (refusal, max_tokens, etc.) — return what we have
+    const answer = extractText(response.content);
+    return {
+      answer,
+      toolCallsMade,
+      stopReason: response.stop_reason ?? "unknown",
+      turns,
+    };
+  }
+
+  return {
+    answer: "Agent reached maximum turns without completing.",
+    toolCallsMade,
+    stopReason: "max_turns",
+    turns,
+  };
+}
+
+function extractText(content: Anthropic.ContentBlock[]): string {
+  return content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("\n");
+}

@@ -77,11 +77,32 @@ export interface ToolOutput {
   visualization_hint?: "table" | "timeseries" | "bar" | "none";
 }
 
+export interface ToolJsonSchema {
+  type: "object";
+  properties: Record<string, unknown>;
+  required?: string[];
+}
+
 export interface Tool<I extends ToolInput = ToolInput> {
   name: string;
   description: string;
   inputSchema: z.ZodType<I>;
+  // Explicit JSON Schema for the Anthropic API — keep in sync with inputSchema
+  inputJsonSchema: ToolJsonSchema;
   handler: (input: I) => Promise<ToolOutput>;
+}
+
+// Converts a Tool to the shape the Anthropic Messages API expects
+export function toApiTool(tool: Tool): {
+  name: string;
+  description: string;
+  input_schema: ToolJsonSchema;
+} {
+  return {
+    name: tool.name,
+    description: tool.description,
+    input_schema: tool.inputJsonSchema,
+  };
 }
 
 // ─── Action ───────────────────────────────────────────────────────────────────
