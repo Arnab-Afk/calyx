@@ -13,8 +13,10 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
     "@fastify/cors": "^10.0.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@slack/bolt": "^5.0.0",
     "@slack/web-api": "^8.0.0",
+    "commander": "^15.0.0",
     "dotenv": "^17.4.2",
     "fastify": "^5.3.3",
     "ioredis": "^5.6.1",
