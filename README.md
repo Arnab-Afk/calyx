@@ -152,6 +152,12 @@ GitHub App, SSO/RBAC (Clerk/WorkOS), data residency, SOC2-class controls. After 
 
 ---
 
+## Web UI
+
+Slack-style app lives in `apps/web`. Ask Calyx in-channel with `/calyx …` — AI replies can include Grafana-like chart panels. See [`apps/web/README.md`](./apps/web/README.md).
+
+---
+
 ## Run locally
 
 ```bash
