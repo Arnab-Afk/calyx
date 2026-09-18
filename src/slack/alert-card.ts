@@ -1,13 +1,13 @@
 import type { Alert, AnomalySeverity } from "../schemas/index.js";
 import type { AlertState } from "./alert-state.js";
 
-// Shared alert-card template — used by Slack, web, and any future adapter.
-// Returns Slack Block Kit JSON. Other adapters can convert to their own format.
+// Compact alert card: title, severity/status, one punchy summary, two actions.
+// Root cause / recommended action stay on the Alert object for Investigate — not three essays on the card.
 
 const SEVERITY_EMOJI: Record<AnomalySeverity, string> = {
   low: ":information_source:",
   medium: ":warning:",
-  high: ":rotating_light:",
+  high: ":exclamation:",
   critical: ":red_circle:",
 };
 
@@ -19,65 +19,53 @@ const SEVERITY_COLOR: Record<AnomalySeverity, string> = {
 };
 
 export interface AlertCard {
-  // Slack-flavored block kit JSON
   blocks: SlackBlock[];
-  // Side color bar for attachment rendering
   color: string;
-  // Plain-text fallback for notifications
   text: string;
 }
 
-// Minimal typing for the block shapes we produce
 export interface SlackBlock {
   type: string;
   [key: string]: unknown;
 }
 
+function titleCaseType(type: string): string {
+  return type
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function statusLabel(state?: AlertState): string {
+  if (!state || state.status === "active") return "Open";
+  if (state.status === "acknowledged") return "Acknowledged";
+  return "Resolved";
+}
+
 export function buildAlertCard(alert: Alert, state?: AlertState): AlertCard {
   const emoji = SEVERITY_EMOJI[alert.severity];
   const color = SEVERITY_COLOR[alert.severity];
-  const label = alert.severity.toUpperCase();
+  const severity = alert.severity.charAt(0).toUpperCase() + alert.severity.slice(1);
+  const title = `${alert.anomaly.service}: ${titleCaseType(alert.anomaly.type)}`;
 
-  const text = `${emoji} *[${label}] Calyx Alert* — ${alert.anomaly.type.replace(/_/g, " ")} in ${alert.anomaly.service}`;
+  const text = `${emoji} *${title}* — ${severity} · ${statusLabel(state)}`;
 
   const blocks: SlackBlock[] = [
     {
       type: "header",
-      text: {
-        type: "plain_text",
-        text: `${emoji} Calyx Alert — ${label}`,
-        emoji: true,
-      },
+      text: { type: "plain_text", text: title.slice(0, 150), emoji: true },
     },
     {
       type: "section",
       fields: [
-        { type: "mrkdwn", text: `*Service*\n${alert.anomaly.service}` },
-        { type: "mrkdwn", text: `*Type*\n${alert.anomaly.type.replace(/_/g, " ")}` },
-        {
-          type: "mrkdwn",
-          text: `*Detected*\n<!date^${Math.floor(new Date(alert.anomaly.detected_at).getTime() / 1000)}^{date_short_pretty} at {time}|${alert.anomaly.detected_at}>`,
-        },
-        { type: "mrkdwn", text: `*Severity*\n${label}` },
+        { type: "mrkdwn", text: `*Severity:* ${emoji} ${severity}` },
+        { type: "mrkdwn", text: `*Status:* ${statusLabel(state)}` },
       ],
     },
-    { type: "divider" },
     {
       type: "section",
-      text: { type: "mrkdwn", text: `*:mag: Impact*\n${alert.impact}` },
+      text: { type: "mrkdwn", text: alert.impact },
     },
-    {
-      type: "section",
-      text: { type: "mrkdwn", text: `*:bulb: Root cause*\n${alert.root_cause}` },
-    },
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `*:wrench: Recommended action*\n${alert.recommended_action}`,
-      },
-    },
-    { type: "divider" },
     {
       type: "actions",
       elements: [
@@ -90,26 +78,15 @@ export function buildAlertCard(alert: Alert, state?: AlertState): AlertCard {
         },
         {
           type: "button",
-          text: { type: "plain_text", text: "Start an Incident", emoji: true },
-          style: "danger",
+          text: { type: "plain_text", text: "Investigate", emoji: true },
           value: alert.id,
           action_id: "start_incident",
         },
-        ...(state?.status !== "acknowledged" && state?.status !== "resolved"
-          ? [
-              {
-                type: "button",
-                text: { type: "plain_text", text: ":eyes: Acknowledge", emoji: true },
-                value: alert.id,
-                action_id: "ack_alert",
-              },
-            ]
-          : []),
         ...(state?.status !== "resolved"
           ? [
               {
                 type: "button",
-                text: { type: "plain_text", text: ":white_check_mark: Resolve", emoji: true },
+                text: { type: "plain_text", text: "Resolve", emoji: true },
                 value: alert.id,
                 action_id: "resolve_alert",
               },
@@ -117,7 +94,6 @@ export function buildAlertCard(alert: Alert, state?: AlertState): AlertCard {
           : []),
       ],
     },
-    // Status footer — only shown after ack/resolve
     ...(state && state.status !== "active"
       ? [
           {

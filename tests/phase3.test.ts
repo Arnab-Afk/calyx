@@ -5,6 +5,8 @@ import {
   appendToThread,
   buildConversationPrompt,
   clearThread,
+  isKnownThread,
+  lastAssistantContent,
 } from "../src/slack/conversation.js";
 import { AlertSchema, AnomalySchema } from "../src/schemas/index.js";
 import type { Alert } from "../src/schemas/index.js";
@@ -43,33 +45,23 @@ describe("Phase 3 — Alert card", () => {
     expect(card.blocks.length).toBeGreaterThan(3);
   });
 
-  it("card has a header block with severity label", () => {
+  it("card has a header with service and type", () => {
     const card = buildAlertCard(makeAlert({ severity: "critical" }));
     const header = card.blocks.find((b) => b.type === "header");
     expect(header).toBeDefined();
     const headerText = (header as { text: { text: string } }).text.text;
-    expect(headerText).toContain("CRITICAL");
+    expect(headerText).toContain("api");
+    expect(headerText).toMatch(/Error Spike/i);
+    expect(JSON.stringify(card.blocks)).toContain("Critical");
   });
 
-  it("card contains impact text", () => {
+  it("card body is the impact summary, not labeled essays", () => {
     const card = buildAlertCard(makeAlert());
     const json = JSON.stringify(card.blocks);
-    expect(json).toContain("Impact");
     expect(json).toContain("200 users affected");
-  });
-
-  it("card contains root cause text", () => {
-    const card = buildAlertCard(makeAlert());
-    const json = JSON.stringify(card.blocks);
-    expect(json).toContain("Root cause");
-    expect(json).toContain("Null pointer");
-  });
-
-  it("card contains recommended action text", () => {
-    const card = buildAlertCard(makeAlert());
-    const json = JSON.stringify(card.blocks);
-    expect(json).toContain("Recommended action");
-    expect(json).toContain("Roll back");
+    expect(json).not.toContain("*Impact*");
+    expect(json).not.toContain("Root cause");
+    expect(json).not.toContain("Recommended action");
   });
 
   it("card has both action buttons", () => {
@@ -167,6 +159,7 @@ describe("Phase 3 — Thread context", () => {
 
     expect(systemSuffix).toContain("prior question");
     expect(systemSuffix).toContain("prior answer");
+    expect(systemSuffix).toContain("Answer only the new question");
     expect(userMessage).toContain("follow-up question");
     expect(userMessage).toContain("U002");
   });
@@ -182,6 +175,21 @@ describe("Phase 3 — Thread context", () => {
     appendToThread(THREAD_A, { role: "user", content: "msg", userId: "U001", timestamp: "t1" });
     clearThread(THREAD_A);
     expect(getThreadHistory(THREAD_A)).toHaveLength(0);
+    expect(isKnownThread(THREAD_A)).toBe(false);
+  });
+
+  it("isKnownThread and lastAssistantContent track a live thread", () => {
+    expect(isKnownThread(THREAD_A)).toBe(false);
+    appendToThread(THREAD_A, { role: "user", content: "q", userId: "U001", timestamp: "t1" });
+    expect(isKnownThread(THREAD_A)).toBe(true);
+    expect(lastAssistantContent(THREAD_A)).toBeUndefined();
+    appendToThread(THREAD_A, {
+      role: "assistant",
+      content: "Only happening in the U.S.",
+      userId: "calyx-bot",
+      timestamp: "t2",
+    });
+    expect(lastAssistantContent(THREAD_A)).toBe("Only happening in the U.S.");
   });
 });
 

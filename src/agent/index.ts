@@ -9,5 +9,6 @@ export function initAgent(): void {
   registerTool(searchPastIncidentsTool);
 }
 
-export { runAgent } from "./loop.js";
+export { runAgent, agentProvider } from "./loop.js";
+export type { AgentProvider, AgentRunOptions } from "./loop.js";
 export { getAllTools, getTool, executeTool } from "./registry.js";

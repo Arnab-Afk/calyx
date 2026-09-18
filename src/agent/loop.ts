@@ -2,9 +2,38 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getAllTools, executeTool } from "./registry.js";
 import { toApiTool } from "../schemas/index.js";
 import type { ToolInput, ToolOutput } from "../schemas/index.js";
+import { runNvidiaAgent } from "./nvidia.js";
 
-const MODEL = process.env.CALYX_MODEL ?? "claude-opus-5";
 const MAX_TURNS = 10;
+const SLACK_ONCALL_MODEL = "claude-opus-5";
+
+export type AgentProvider = "anthropic" | "nvidia";
+
+export interface AgentRunOptions {
+  /** Slack always passes "anthropic". CLI may pass "nvidia" as a spare. */
+  provider?: AgentProvider;
+  model?: string;
+}
+
+function looksLikeNvidiaModel(model: string): boolean {
+  return /^(nvidia|meta|mistralai|moonshotai)\//.test(model) || /nemotron/i.test(model);
+}
+
+export function agentProvider(override?: AgentProvider): AgentProvider {
+  if (override === "nvidia" || override === "anthropic") return override;
+  const explicit = process.env.CALYX_PROVIDER?.toLowerCase();
+  if (explicit === "nvidia" || explicit === "anthropic") return explicit;
+  const model = process.env.CALYX_MODEL ?? "";
+  if (looksLikeNvidiaModel(model)) return "nvidia";
+  return "anthropic";
+}
+
+function anthropicModel(override?: string): string {
+  if (override && !looksLikeNvidiaModel(override)) return override;
+  const model = process.env.CALYX_MODEL ?? SLACK_ONCALL_MODEL;
+  if (looksLikeNvidiaModel(model)) return SLACK_ONCALL_MODEL;
+  return model;
+}
 
 export interface ToolCallRecord {
   toolName: string;
@@ -24,8 +53,16 @@ export async function runAgent(
   tenantId: string,
   userMessage: string,
   systemPrompt?: string,
-  systemSuffix?: string
+  systemSuffix?: string,
+  maxTokens = 4096,
+  options?: AgentRunOptions
 ): Promise<AgentResponse> {
+  if (agentProvider(options?.provider) === "nvidia") {
+    return runNvidiaAgent(tenantId, userMessage, systemPrompt, systemSuffix, maxTokens);
+  }
+
+  const model = anthropicModel(options?.model);
+  const useAdaptiveThinking = !/haiku/i.test(model);
   const client = new Anthropic();
   const tools = getAllTools().map(toApiTool);
 
@@ -51,9 +88,9 @@ cite specific numbers and service names from the tool results.`;
     turns++;
 
     const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 4096,
-      thinking: { type: "adaptive" },
+      model,
+      max_tokens: maxTokens,
+      ...(useAdaptiveThinking ? { thinking: { type: "adaptive" as const } } : {}),
       system,
       tools,
       messages,

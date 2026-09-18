@@ -109,6 +109,9 @@ services:
       REDIS_URL: redis://redis:6379
       SLACK_PORT: "3001"
       SLACK_SOCKET_MODE: ${SLACK_SOCKET_MODE:-true}
+      # On-call is always Opus, even if .env sets CALYX_PROVIDER=nvidia
+      CALYX_PROVIDER: anthropic
+      CALYX_SLACK_MODEL: claude-opus-5
     ports:
       - "13001:3001"
     depends_on:

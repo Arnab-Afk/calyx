@@ -22,8 +22,27 @@ program
   .description("Ask Calyx a natural-language question about your system")
   .requiredOption("-t, --tenant <id>", "Tenant ID")
   .option("--json", "Output raw JSON")
-  .action(async (question: string, opts: { tenant: string; json?: boolean }) => {
-    const response = await runAgent(opts.tenant, question);
+  .option(
+    "--provider <name>",
+    "anthropic (on-call default) or nvidia (Nemotron spare)"
+  )
+  .action(
+    async (
+      question: string,
+      opts: { tenant: string; json?: boolean; provider?: string }
+    ) => {
+    const provider =
+      opts.provider === "nvidia" || opts.provider === "anthropic"
+        ? opts.provider
+        : undefined;
+    const response = await runAgent(
+      opts.tenant,
+      question,
+      undefined,
+      undefined,
+      4096,
+      provider ? { provider } : undefined
+    );
     if (opts.json) {
       console.log(JSON.stringify(response, null, 2));
     } else {

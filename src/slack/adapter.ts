@@ -1,10 +1,19 @@
 // Slack adapter — thin wrapper over the agent/tool layer.
 // Zero agent logic lives here; this file only handles Slack wire format.
 
-import { App, type AppMentionEvent } from "@slack/bolt";
+import { App, type AppMentionEvent, type GenericMessageEvent } from "@slack/bolt";
+import type { WebClient } from "@slack/web-api";
 import { runAgent } from "../agent/index.js";
 import { buildAlertCard } from "./alert-card.js";
-import { appendToThread, buildConversationPrompt } from "./conversation.js";
+import {
+  appendToThread,
+  buildConversationPrompt,
+  hydrateThread,
+  isKnownThread,
+  lastAssistantContent,
+  persistThread,
+} from "./conversation.js";
+import { shouldHandleUnmentionedReply, stripBotMentions } from "./thread-replies.js";
 import { autoChartType, renderChartForSlack } from "./charts/index.js";
 import { ackAlert, resolveAlert, getAlertState } from "./alert-state.js";
 import {
@@ -23,10 +32,12 @@ import { executeTool } from "../agent/registry.js";
 import { buildStatusOverviewCard } from "./blocks/status-card.js";
 import {
   SLACK_REPLY_INSTRUCTIONS,
+  SLACK_FOLLOWUP_INSTRUCTIONS,
   markdownToSlackBlocks,
   fallbackText,
   buildLogListBlocks,
 } from "./format-answer.js";
+import { quickAck } from "./quick-ack.js";
 import {
   unwrapServiceStats,
   unwrapDailyHealth,
@@ -63,6 +74,137 @@ function pickChartableCall(calls: ToolCallRecord[]): ToolCallRecord | undefined 
     .find((c) => c.output?.visualization_hint && c.output.visualization_hint !== "none");
 }
 
+type SlackSay = (args: {
+  text: string;
+  thread_ts: string;
+  blocks?: object[];
+}) => Promise<unknown>;
+
+async function handleQuestion(opts: {
+  threadTs: string;
+  tenantId: string;
+  userId: string;
+  rawText: string;
+  eventTs: string;
+  channel: string;
+  isFollowUp: boolean;
+  say: SlackSay;
+  client: WebClient;
+}): Promise<void> {
+  const { threadTs, tenantId, userId, rawText, eventTs, channel, isFollowUp, say, client } =
+    opts;
+
+  const { userMessage, systemSuffix } = buildConversationPrompt(threadTs, rawText, userId);
+  const prior = lastAssistantContent(threadTs);
+
+  // Claim the thread immediately so later replies don't need @Calyx,
+  // even if this investigation is still running.
+  appendToThread(threadTs, { role: "user", content: rawText, userId, timestamp: eventTs });
+  void persistThread(threadTs);
+
+  const voice = isFollowUp ? SLACK_FOLLOWUP_INSTRUCTIONS : SLACK_REPLY_INSTRUCTIONS;
+
+  const responsePromise = runAgent(
+    tenantId,
+    userMessage,
+    undefined,
+    `${voice}${systemSuffix}`,
+    isFollowUp ? 400 : 800,
+    {
+      provider: "anthropic",
+      model: process.env.CALYX_SLACK_MODEL ?? "claude-opus-5",
+    }
+  );
+  const ackPromise = quickAck(rawText, isFollowUp, prior);
+
+  const ackText = await ackPromise;
+  await say({
+    text: ackText,
+    thread_ts: threadTs,
+    blocks: [
+      {
+        type: "section",
+        text: { type: "mrkdwn", text: ackText },
+      },
+    ],
+  });
+
+  const response = await responsePromise;
+
+  appendToThread(threadTs, {
+    role: "assistant",
+    content: response.answer,
+    userId: "calyx-bot",
+    timestamp: new Date().toISOString(),
+  });
+  void persistThread(threadTs);
+
+  const statsCall = pickStatsCall(response.toolCallsMade);
+  const stats = unwrapServiceStats(statsCall?.output?.data);
+  const showStatusCard = statsCall?.toolName === "get_service_stats" && stats.length > 0;
+
+  const replyBlocks: object[] = [];
+
+  if (showStatusCard) {
+    const { totalEvents, overallErrorRate } = unwrapTotals(statsCall!.output!.data);
+    replyBlocks.push(
+      ...buildStatusOverviewCard({
+        stats,
+        daily: unwrapDailyHealth(statsCall!.output!.data),
+        totalEvents,
+        overallErrorRate,
+      })
+    );
+  }
+
+  replyBlocks.push(...markdownToSlackBlocks(response.answer));
+
+  let chartResult: Awaited<ReturnType<typeof renderChartForSlack>> | null = null;
+  if (!showStatusCard) {
+    const chartableCall = pickChartableCall(response.toolCallsMade);
+    if (chartableCall?.output) {
+      const chartType = autoChartType(
+        chartableCall.output.visualization_hint ?? "bar",
+        chartableCall.output.data
+      );
+      if (chartType) {
+        chartResult = await renderChartForSlack({
+          type: chartType,
+          data: chartableCall.output.data,
+        }).catch(() => null);
+      }
+    }
+    if (chartResult?.blocks) replyBlocks.push(...chartResult.blocks);
+  }
+
+  if (statsCall) {
+    const services = stats.map((s) => s.service);
+    replyBlocks.push(buildTimeRangeButtons({ toolName: statsCall.toolName, tenantId }));
+    if (statsCall.toolName === "get_service_stats" && services.length > 1) {
+      const drilldown = buildServiceDrilldownButtons(tenantId, services);
+      if (drilldown) replyBlocks.push(drilldown);
+    }
+  }
+
+  await say({
+    text: fallbackText(response.answer),
+    thread_ts: threadTs,
+    blocks: replyBlocks,
+  });
+
+  if (chartResult?.image) {
+    await client.files
+      .uploadV2({
+        channel_id: channel,
+        thread_ts: threadTs,
+        filename: "calyx-chart.png",
+        file: chartResult.image,
+        initial_comment: chartResult.caption,
+      })
+      .catch(() => {});
+  }
+}
+
 export function createSlackApp(): App {
   const app = new App({
     token: process.env.SLACK_BOT_TOKEN,
@@ -81,97 +223,69 @@ export function createSlackApp(): App {
     const threadTs = mentionEvent.thread_ts ?? mentionEvent.ts;
     const tenantId = tenantForTeam(mentionEvent.team ?? "default");
     const userId = mentionEvent.user;
+    const rawText = stripBotMentions(mentionEvent.text);
 
-    const rawText = mentionEvent.text.replace(/<@[A-Z0-9]+>/g, "").trim();
-    const { userMessage, systemSuffix } = buildConversationPrompt(threadTs, rawText, userId);
+    await hydrateThread(threadTs);
+    const isFollowUp = Boolean(mentionEvent.thread_ts) || isKnownThread(threadTs);
 
-    const thinking = await say({ text: "Looking into that...", thread_ts: threadTs });
-
-    const response = await runAgent(
+    await handleQuestion({
+      threadTs,
       tenantId,
-      userMessage,
-      undefined,
-      `${SLACK_REPLY_INSTRUCTIONS}${systemSuffix}`
-    );
-
-    appendToThread(threadTs, { role: "user", content: rawText, userId, timestamp: mentionEvent.ts });
-    appendToThread(threadTs, {
-      role: "assistant",
-      content: response.answer,
-      userId: "calyx-bot",
-      timestamp: new Date().toISOString(),
+      userId,
+      rawText,
+      eventTs: mentionEvent.ts,
+      channel: mentionEvent.channel,
+      isFollowUp,
+      say: say as SlackSay,
+      client,
     });
+  });
 
-    if (thinking.ts) {
-      await client.chat
-        .delete({ channel: mentionEvent.channel, ts: thinking.ts as string })
-        .catch(() => {});
+  // Thread replies and DMs — no @Calyx required once we're already talking.
+  // Slack app must subscribe to message.channels / message.groups / message.im.
+  app.message(async ({ message, say, client, context, body }) => {
+    const msg = message as GenericMessageEvent & {
+      subtype?: string;
+      bot_id?: string;
+      channel_type?: string;
+      team?: string;
+    };
+    const threadTs = msg.thread_ts ?? (msg.channel_type === "im" ? msg.channel : undefined);
+    if (threadTs) await hydrateThread(threadTs);
+
+    if (
+      !shouldHandleUnmentionedReply({
+        subtype: msg.subtype,
+        botId: msg.bot_id,
+        userId: msg.user,
+        text: msg.text,
+        threadTs: msg.thread_ts,
+        messageTs: msg.ts,
+        channelType: msg.channel_type,
+        calyxBotUserId: context.botUserId,
+        knownThread: threadTs ? isKnownThread(threadTs) : false,
+      })
+    ) {
+      return;
     }
 
-    const statsCall = pickStatsCall(response.toolCallsMade);
-    const stats = unwrapServiceStats(statsCall?.output?.data);
-    const showStatusCard = statsCall?.toolName === "get_service_stats" && stats.length > 0;
+    const key = threadTs ?? msg.channel;
+    const teamId =
+      (body as { team_id?: string }).team_id ??
+      (msg as GenericMessageEvent & { team?: string }).team ??
+      "default";
 
-    const replyBlocks: object[] = [];
-
-    if (showStatusCard) {
-      const { totalEvents, overallErrorRate } = unwrapTotals(statsCall!.output!.data);
-      replyBlocks.push(
-        ...buildStatusOverviewCard({
-          stats,
-          daily: unwrapDailyHealth(statsCall!.output!.data),
-          totalEvents,
-          overallErrorRate,
-        })
-      );
-    }
-
-    replyBlocks.push(...markdownToSlackBlocks(response.answer));
-
-    let chartResult: Awaited<ReturnType<typeof renderChartForSlack>> | null = null;
-    if (!showStatusCard) {
-      const chartableCall = pickChartableCall(response.toolCallsMade);
-      if (chartableCall?.output) {
-        const chartType = autoChartType(
-          chartableCall.output.visualization_hint ?? "bar",
-          chartableCall.output.data
-        );
-        if (chartType) {
-          chartResult = await renderChartForSlack({
-            type: chartType,
-            data: chartableCall.output.data,
-          }).catch(() => null);
-        }
-      }
-      if (chartResult?.blocks) replyBlocks.push(...chartResult.blocks);
-    }
-
-    if (statsCall) {
-      const services = stats.map((s) => s.service);
-      replyBlocks.push(buildTimeRangeButtons({ toolName: statsCall.toolName, tenantId }));
-      if (statsCall.toolName === "get_service_stats" && services.length > 1) {
-        const drilldown = buildServiceDrilldownButtons(tenantId, services);
-        if (drilldown) replyBlocks.push(drilldown);
-      }
-    }
-
-    await say({
-      text: fallbackText(response.answer),
-      thread_ts: threadTs,
-      blocks: replyBlocks as Parameters<typeof say>[0]["blocks"],
+    await handleQuestion({
+      threadTs: key,
+      tenantId: tenantForTeam(teamId),
+      userId: msg.user ?? "unknown",
+      rawText: stripBotMentions(msg.text ?? ""),
+      eventTs: msg.ts,
+      channel: msg.channel,
+      isFollowUp: isKnownThread(key) || Boolean(msg.thread_ts),
+      say: say as SlackSay,
+      client,
     });
-
-    if (chartResult?.image) {
-      await client.files
-        .uploadV2({
-          channel_id: mentionEvent.channel,
-          thread_ts: threadTs,
-          filename: "calyx-chart.png",
-          file: chartResult.image,
-          initial_comment: chartResult.caption,
-        })
-        .catch(() => {});
-    }
   });
 
   // ─── Alert: Acknowledge ───────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import {
   markdownToSlackBlocks,
   fallbackText,
   buildLogListBlocks,
+  SLACK_FOLLOWUP_INSTRUCTIONS,
 } from "../src/slack/format-answer.js";
 import { unwrapServiceStats, toStatusBarServices } from "../src/slack/tool-data.js";
 
@@ -117,5 +118,12 @@ describe("unwrapServiceStats", () => {
 
   it("returns empty for log event arrays", () => {
     expect(unwrapServiceStats([{ message: "hi", level: "info" }])).toHaveLength(0);
+  });
+});
+
+describe("Slack voice", () => {
+  it("tells follow-ups to answer in one sentence", () => {
+    expect(SLACK_FOLLOWUP_INSTRUCTIONS).toMatch(/one sentence/i);
+    expect(SLACK_FOLLOWUP_INSTRUCTIONS).toMatch(/Only happening in the U\.S\./);
   });
 });

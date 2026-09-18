@@ -105,6 +105,21 @@ export function toApiTool(tool: Tool): {
   };
 }
 
+// OpenAI / NVIDIA NIM chat-completions tool shape
+export function toOpenAiTool(tool: Tool): {
+  type: "function";
+  function: { name: string; description: string; parameters: ToolJsonSchema };
+} {
+  return {
+    type: "function",
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.inputJsonSchema,
+    },
+  };
+}
+
 // ─── Action ───────────────────────────────────────────────────────────────────
 
 export const ApprovalTier = z.enum(["0", "1", "2"]);
