@@ -30,6 +30,31 @@ function tenantForTeam(teamId: string): string {
   return process.env[`CALYX_TENANT_${teamId}`] ?? teamId;
 }
 
+/** Slack section mrkdwn hard-caps at 3000 chars — split long answers into multiple blocks. */
+const SLACK_SECTION_MAX = 2900;
+
+function chunkMrkdwn(text: string, max = SLACK_SECTION_MAX): string[] {
+  if (text.length <= max) return [text];
+  const chunks: string[] = [];
+  let remaining = text;
+  while (remaining.length > max) {
+    let cut = remaining.lastIndexOf("\n\n", max);
+    if (cut < max * 0.4) cut = remaining.lastIndexOf("\n", max);
+    if (cut < max * 0.4) cut = max;
+    chunks.push(remaining.slice(0, cut).trimEnd());
+    remaining = remaining.slice(cut).trimStart();
+  }
+  if (remaining) chunks.push(remaining);
+  return chunks;
+}
+
+function answerBlocks(answer: string): object[] {
+  return chunkMrkdwn(answer).map((text) => ({
+    type: "section",
+    text: { type: "mrkdwn", text },
+  }));
+}
+
 export function createSlackApp(): App {
   const app = new App({
     token: process.env.SLACK_BOT_TOKEN,
@@ -86,10 +111,8 @@ export function createSlackApp(): App {
       }
     }
 
-    // Build reply blocks
-    const replyBlocks: object[] = [
-      { type: "section", text: { type: "mrkdwn", text: response.answer } },
-    ];
+    // Build reply blocks (Slack section text max 3000 chars)
+    const replyBlocks: object[] = [...answerBlocks(response.answer)];
 
     if (chartResult?.blocks) replyBlocks.push(...chartResult.blocks);
 
@@ -125,7 +148,7 @@ export function createSlackApp(): App {
     }
 
     await say({
-      text: response.answer,
+      text: response.answer.slice(0, 3500),
       thread_ts: threadTs,
       blocks: replyBlocks as Parameters<typeof say>[0]["blocks"],
     });

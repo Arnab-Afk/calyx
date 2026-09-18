@@ -8,10 +8,15 @@
     "dev:consumer": "tsx src/ingestion/consumer.ts",
     "dev:slack": "tsx src/slack/index.ts",
     "dev:mcp": "tsx src/mcp/server.ts",
+    "dev:loki-forwarder": "tsx src/connectors/loki-forwarder.ts",
     "cli": "tsx src/cli/index.ts",
     "migrate": "tsx src/storage/migrate.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "docker:up": "docker compose up --build -d",
+    "docker:up:slack": "docker compose --profile slack up --build -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",

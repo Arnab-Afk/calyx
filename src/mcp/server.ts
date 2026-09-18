@@ -8,10 +8,11 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { getAllTools, executeTool } from "../agent/index.js";
+import { initAgent, getAllTools, executeTool } from "../agent/index.js";
 import type { ToolInput } from "../schemas/index.js";
 
 export function createMcpServer(): Server {
+  initAgent();
   const server = new Server(
     { name: "calyx", version: "0.1.0" },
     { capabilities: { tools: {} } }
@@ -59,6 +60,7 @@ export function createMcpServer(): Server {
 
 // Entry point when run directly: calyx-mcp-server
 export async function startMcpServer(): Promise<void> {
+  initAgent();
   const server = createMcpServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
