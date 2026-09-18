@@ -1,4 +1,5 @@
 import type { Alert, AnomalySeverity } from "../schemas/index.js";
+import type { AlertState } from "./alert-state.js";
 
 // Shared alert-card template — used by Slack, web, and any future adapter.
 // Returns Slack Block Kit JSON. Other adapters can convert to their own format.
@@ -32,7 +33,7 @@ export interface SlackBlock {
   [key: string]: unknown;
 }
 
-export function buildAlertCard(alert: Alert): AlertCard {
+export function buildAlertCard(alert: Alert, state?: AlertState): AlertCard {
   const emoji = SEVERITY_EMOJI[alert.severity];
   const color = SEVERITY_COLOR[alert.severity];
   const label = alert.severity.toUpperCase();
@@ -94,8 +95,45 @@ export function buildAlertCard(alert: Alert): AlertCard {
           value: alert.id,
           action_id: "start_incident",
         },
+        ...(state?.status !== "acknowledged" && state?.status !== "resolved"
+          ? [
+              {
+                type: "button",
+                text: { type: "plain_text", text: ":eyes: Acknowledge", emoji: true },
+                value: alert.id,
+                action_id: "ack_alert",
+              },
+            ]
+          : []),
+        ...(state?.status !== "resolved"
+          ? [
+              {
+                type: "button",
+                text: { type: "plain_text", text: ":white_check_mark: Resolve", emoji: true },
+                value: alert.id,
+                action_id: "resolve_alert",
+              },
+            ]
+          : []),
       ],
     },
+    // Status footer — only shown after ack/resolve
+    ...(state && state.status !== "active"
+      ? [
+          {
+            type: "context",
+            elements: [
+              {
+                type: "mrkdwn",
+                text:
+                  state.status === "resolved"
+                    ? `:white_check_mark: Resolved by <@${state.resolvedBy}>${state.reason ? ` — _${state.reason}_` : ""}`
+                    : `:eyes: Acknowledged by <@${state.acknowledgedBy}>`,
+              },
+            ],
+          },
+        ]
+      : []),
   ];
 
   return { blocks, color, text };
