@@ -2,41 +2,20 @@
 
 import {
   Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  ArcElement,
-  BubbleController,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
+  registerables,
 } from 'chart.js';
 
 let registered = false;
 
+/** Register all Chart.js controllers/scales/elements before any chart mounts. */
 export function ensureChartRegistered() {
   if (registered) return;
-  ChartJS.register(
-    CategoryScale,
-    LinearScale,
-    BarElement,
-    LineElement,
-    PointElement,
-    ArcElement,
-    BubbleController,
-    Title,
-    Tooltip,
-    Legend,
-    Filler,
-  );
+  ChartJS.register(...registerables);
   registered = true;
 }
 
-// Eager register so first chart render never races useEffect
-if (typeof window !== "undefined") {
+// Eager register in the browser so dynamic chart imports never race first paint
+if (typeof window !== 'undefined') {
   ensureChartRegistered();
 }
 
