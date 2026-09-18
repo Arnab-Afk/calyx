@@ -1,169 +1,175 @@
 # Calyx
 
-**Working name for:** an AI-native observability platform, inspired by 
-**Reference:** 
+AI-native observability, then infrastructure control.
 
-Everything below the architecture plan is research on  — the idea, philosophy, features, user flow, and hosting model — kept as background reference for building Calyx.
+**Goal:** autonomous alerts, conversational debugging, coding-agent access — then go further: Calyx can *change* infrastructure (flags, pods, CI/CD, deploys, VMs) behind a hard approval gate.
 
----
-
-## Calyx — Architecture Plan
-
-### Base pipeline
-
-- **Ingestion:** OpenTelemetry-compatible HTTP intake endpoint, with a queue in front (Redis Streams/SQS for MVP, Kafka/Redpanda at scale) to decouple ingestion from processing.
-- **Storage:** ClickHouse for the event store (built for the aggregation-heavy queries an AI agent generates), paired with a vector index (pgvector or ClickHouse's own vector search) for semantic memory of past incidents. Postgres + pgvector is a fine simpler starting point.
-- **AI agent layer:** Claude with a small set of tools — `query_logs`, `search_code`, `get_deploy_history`, `search_past_incidents` — orchestrated with the Anthropic SDK's tool-use loop, or LangGraph if multi-step retry/state handling is needed.
-- **Background agents:** durable job orchestration (Temporal, or cron + queue worker for MVP) running statistical anomaly detection (rolling averages/stddev on error rate, latency) with the LLM deciding whether to escalate and drafting the root-cause narrative.
-- **Interfaces:** Slack app (primary entry point, Slack Bolt SDK), web dashboard (Next.js), CLI (thin wrapper over the REST/GraphQL API), and an MCP server exposing the same tools to coding agents like Claude Code and Cursor.
-- **Integrations & multi-tenancy:** GitHub App for repo access and PR-based fixes; tenant isolation via `tenant_id` + row-level security (or physical separation if data residency is required); auth via Clerk/WorkOS for SSO/RBAC.
-
-### Execution & control layer (VMs, CI/CD, deployments)
-
-Extending Calyx from "reads your system and suggests fixes" to "can actually change your infrastructure" is a much bigger trust and safety surface than pure observability, and needs its own layer rather than just more agent tools — a bad read gives a wrong answer, a bad write takes down production.
-
-**Where execution runs:** a lightweight operator inside the customer's own VPC or cluster, not Calyx's SaaS backend holding every customer's cloud credentials directly. Similar to the Datadog Agent or GitOps controllers like ArgoCD/Flux — Calyx's brain decides *what* should happen and sends a command; the operator, holding only narrowly-scoped local credentials, executes it. This also makes the sale easier: "send us your logs" is an easy yes, "give us write access to prod" is a much harder one unless the credentials never leave the customer's network.
-
-**Flow:** Calyx brain (cloud) → approval gate → execution operator (runs inside customer VPC/cluster) → fans out to VMs & Kubernetes, CI/CD pipelines, or feature flags.
-
-**Tiered approval gate** (the most important design decision here):
-- *Tier 0 — suggest only.* Agent proposes the action in Slack, a human clicks "run it." Start here for anything risky (deploy rollback, VM resize).
-- *Tier 1 — pre-approved playbooks.* Customer configures specific safe actions to run without a human in the loop, e.g. "auto-restart a pod on OOM" or "auto-rollback if error rate exceeds X% within 5 minutes of a deploy." Scoped, reversible, opted into explicitly.
-- *Tier 2 — bounded autonomy.* Fully autonomous, but only within hard limits the customer sets (e.g. autoscale between 2–10 instances, never touch anything tagged `prod-critical`).
-- Every action, proposed or executed, gets logged with who/what triggered it and a way to undo it. Reversibility is a hard requirement before anything graduates out of Tier 0.
-
-**Concrete integrations per target:**
-- *VMs / containers:* Kubernetes API (scoped service account) for pod restarts, deployment scaling, rollback to a previous ReplicaSet. AWS EC2 / GCP Compute SDKs for raw VM start/stop/resize.
-- *CI/CD:* GitHub Actions API (`workflow_dispatch`, cancel run, re-run failed job); GitLab CI and CircleCI have equivalent REST APIs.
-- *Deployment platforms:* Vercel, Render, Railway, Fly.io each expose a deploy/rollback API — worth native integrations given the target audience of fast-moving teams.
-- *Feature flags:* LaunchDarkly/Unleash APIs. Flipping a flag is instant, cheap, and fully reversible — the best candidate for early Tier 1/2 autonomy, well before trusting the agent with a VM resize or deploy rollback.
-
-**Build order:** get the observability core solid first, then add execution in order of increasing risk — feature-flag toggles → pod restarts/scaling → CI/CD triggers → deployment rollbacks → VM provisioning. Each stage stays at Tier 0 (suggest-only) until real usage data justifies moving it up a tier.
+Act II is Calyx’s own layer. Do not mix them: a wrong read is a wrong answer; a wrong write takes down production.
 
 ---
 
-#  — AI-Native Observability
+## The loop we are building
 
-**Website:** 
-**Tagline:** The AI-native observability platform for fast-moving engineering teams
+```
+logs land → detectors watch (no monitor config)
+         → LLM investigates (impact / root cause / recommended action)
+         → Slack card in the team channel
+         → humans (and later coding agents) debug in the thread
+         → optional: propose a fix (PR) or an infra action
+         → human approves → operator executes in the customer’s network
+         → incident + outcome saved as memory
+```
 
-## The Core Idea
+People never need a dashboard. Slack, CLI, and MCP are three doors to the **same** tools.
 
- is pitched as a rethink of observability for the AI era. Instead of dashboards, query languages, and hand-configured monitors,  positions itself as an AI agent that lives inside a team's communication tools, watches production continuously, and answers questions about system health in plain language — for both human engineers and AI coding agents.
-
-The product is built around three pillars, shown on the homepage as a tabbed sequence:
-
-1. **Autonomous Alerts** — self-configuring alerts that need no setup and only escalate when something truly matters.
-2. **Conversational Debugging** — asking questions about the system in natural language instead of digging through telemetry.
-3. **Coding Agents Welcome** — deep integration with coding agents like Claude Code, Codex, and Cursor, so AI agents (not just humans) can investigate and even fix issues.
-
----
-
-## The Manifesto ('s Philosophy)
-
- frames itself as more than a product — it's presented as a philosophy for observability in an AI-driven world, laid out across three arguments:
-
-### 1. Less Is More
-Observability tools have spent a decade accumulating features, dashboards, and configuration options, but this complexity hasn't made systems more reliable — it's mostly added cognitive load. These tools were built for platform specialists, not the product engineers who now also operate what they build. Since observability is fundamentally about answering questions ("Why is production down?", "Who is affected?", "What changed?", "How do we fix it?"),  argues the best interface for that job is chat, not dashboards or config files.
-
-### 2. Logs Are All You Need
-The traditional "three pillars" of observability — logs, metrics, and traces — are treated as redundant. Metrics and traces require brittle instrumentation and produce outputs (aggregations, flame graphs) that are hard for most people to read. Logs, by contrast, are simple to write and read, and match how humans naturally narrate events. 's argument is that logs, metrics, and traces are all just different shapes of the same underlying thing — events — so logs alone can be used to reconstruct the other two. What used to be a weakness of logs (their unstructured, freeform nature) becomes a strength in the AI era, since AI is good at extracting meaning from unstructured text at scale. Remaining challenges like cost and instrumentation gaps are addressed with summarization/compression/retention strategies and AI-driven auto-instrumentation.
-
-### 3. Monitoring Is Dead
-Static, threshold-based monitoring is described as fundamentally broken: tedious to maintain, prone to misfires, and reactive by nature (monitors get written after an incident already happened). 's answer is "Autonomous Alerts" — AI that continuously watches production, investigates anomalies on its own, and only surfaces an alert when it's actually worth a human's attention.
-
-**Closing line of the manifesto:** *"Less noise. Less overhead. Less complexity. More clarity. More confidence. More speed."*
+**Philosophy:** chat is the UI; logs are the primitive; static monitors are a failure mode. If a feature needs a threshold config screen, it is off-brief.
 
 ---
 
-## Feature Breakdown
+## Two acts
 
-### 1. Autonomous Alerts
-A persistent AI agent that sits in a team's chat tool (e.g., Slack), watches the system, and pages people only when necessary.
+### Act I — Observe and explain (observe, explain, hand off code)
 
-- **Zero-setup detection categories:**
-  - *Error spikes* — correlates sudden error-rate jumps with recent deploys and names the likely cause.
-  - *Slow queries* — flags degrading query performance and points to the specific table/query/missing index.
-  - *Failed deploys* — monitors rollouts end-to-end and explains *why* a health check failed, not just that it did.
-  - *Silent failures* — detects the absence of expected activity (e.g., no webhooks processed, no jobs running).
-  - *Frustrated users* — correlates rage clicks, repeated form submissions, and support tickets to catch UX issues before churn.
-  - *Runaway costs* — watches cloud spend in real time and flags anomalous spikes (e.g., a cache-miss storm inflating egress costs).
-- **Sample alert format:** Each alert includes a severity/status, an "Impact" summary, a "Root cause" explanation, and a "Recommended action" — essentially a mini incident report generated automatically.
-- **Memory** —  is said to learn from every incident: it remembers what broke, what fixed it, and what warning signs preceded it, and it adapts its baselines as the system evolves rather than relying on static thresholds.
-- **Signals** — it correlates many kinds of input into one timeline: commits/deploys, internal Slack conversations, and customer support tickets, so alerts come with full context instead of a single noisy metric.
-- **Other built-ins:** automatic error clustering (grouping thousands of related errors into one alert), a real-time system status view, and native integrations with Slack, PagerDuty, incident.io, email, and webhooks.
+Three pillars:
 
-### 2. Conversational Debugging
-The pitch here is "forget dashboards" — engineers (and teammates) ask questions about the system in plain language and get back root causes, visualizations, and suggested fixes, without needing a query language.
+| Pillar | What “done” feels like |
+|---|---|
+| **Autonomous alerts** | Zero setup. Six detector families. A Slack card with severity, status, impact, root cause, recommended action. No spam on a persisting issue. |
+| **Conversational debugging** | `@Calyx why is checkout 500ing?` in the thread. Agent picks a chart or table. Several people can swarm the same incident. |
+| **Coding agents welcome** | Same tools via CLI + MCP. Skills: investigate-error, check-system-health, trace-request. Later: launch Cursor/Claude to open a PR. |
 
-- **Query types supported:** error investigation, change correlation (linking deploys/config changes to performance shifts), root cause analysis, impact assessment (blast radius — how many users/requests/regions affected), trend analysis, and general system diagnostics.
-- **Dynamic visualizations** — rather than a fixed dashboard,  is said to generate exactly the chart, table, or diagram a given question calls for (e.g., a latency question returns a chart, an impacted-users question returns a table), and these outputs can be shared or forked with teammates like a chat thread.
-- **Multiplayer / swarm on incidents** — because it lives in shared chat channels, multiple teammates can question and investigate an incident together in the same thread.
-- **Additional context features:**
-  - *Code Search* —  is described as understanding the actual codebase/repositories/architecture, not just logs, so answers can reference real code.
-  - *Perfect Memory* — retains history of past incidents, deployments, and errors, and is said to get more useful the longer a team uses it.
-  - *Integrations* — connects to existing dev tools (code hosting, communication platforms) rather than requiring new workflows.
+**Alert card (the core UI object):** title, severity, status (open/resolved), impact, root cause, recommended action, buttons (`Investigate` / `Start an Incident`).
 
-### 3. Coding Agents Welcome
-Positions  as observability built for AI agents as much as for humans — explicitly naming Claude Code, Codex, and Cursor as supported.
+**Detectors (zero-setup):** error spikes → silent failures → slow queries → failed deploys → frustrated users → runaway costs.
 
-- **CLI capabilities:** ask natural-language questions from the terminal, run structured log queries, search past debugging threads by keyword, tail/stream logs live, connect new data sources through a guided setup, and manage/list projects and environments — all from the command line.
-- **Agent "skills"** highlighted: `investigate-error` (full root-cause tracing tied to deploys and related incidents), `check-system-health` (instant cross-environment status check), and `trace-request` (following a single request across the whole stack to find bottlenecks).
-- **Built for agent consumption:**
-  - *Agent-Friendly Docs* — documentation structured specifically to be machine-readable by AI agents.
-  - *MCP Server* — native Model Context Protocol support so coding agents can query logs, search threads, and investigate errors without leaving the IDE.
-  - *Robust API* — full REST and GraphQL API coverage so every feature is scriptable/automatable.
-- A homepage demo shows the agent going a step further than just diagnosing: after being asked in chat to fix a Lambda timeout,  is shown launching a Cursor cloud agent that opens an actual pull request to make the fix — i.e., the loop goes from "alert" → "diagnosis" → "AI-authored code fix," with a human still reviewing/merging the PR.
+**Query intents:** error investigation, change correlation, root cause, blast radius, trends, system diagnostics.
 
----
+**CLI shape to match:** `calyx ask`, `calyx logs query|tail`, `calyx threads search`, `calyx data-sources connect`, `calyx projects list`.
 
-## The User Flow
+Full competitor notes live at the bottom of this file.
 
-The site's demos (mainly the Slack-style chat panels used throughout the homepage and feature pages) sketch out a fairly consistent end-to-end flow for how a team actually experiences the product:
+### Act II — Infrastructure control (after the loop is trusted)
 
-### 1. Something happens in production
- is passively watching logs, deploys, errors, support tickets, and chat in the background — no monitors to configure ahead of time.
+Calyx’s brain decides *what* should happen. A **customer-side operator** (not Calyx SaaS holding cloud keys) executes it.
 
-### 2.  posts an alert into the team's chat channel
-Instead of a raw metric breach, the alert arrives as a structured mini-report with four parts: **Severity/Status**, **Impact** (what's happening and to whom), **Root cause** ('s own investigation, already correlated with recent deploys/config changes), and **Recommended action** (a concrete fix, sometimes literally the command to run). Two action buttons sit under the alert: *View in * and *Start an Incident*.
+```
+Calyx brain → approval gate → operator (customer VPC/cluster) → flags / K8s / CI / deploys / VMs
+```
 
-### 3. The team interrogates the alert in plain language, right in the thread
-Engineers reply to the bot with follow-up questions instead of switching tools — e.g. *"Can we determine when this became a problem?"* or *"How many customers are affected?"*  answers inline, generating exactly the chart, table, or diagram the question calls for (a latency question gets a chart, an impacted-users question gets a table). Multiple teammates can pile into the same thread at once ("swarm on incidents"), so debugging becomes a shared, forkable conversation rather than one person alone in a dashboard.
+| Tier | Behavior |
+|---|---|
+| **0 — suggest only** | Propose in Slack, human clicks Run. Default for anything risky. |
+| **1 — playbooks** | Customer opts into specific reversible actions (restart pod on OOM, rollback if error rate spikes after a deploy). |
+| **2 — bounded autonomy** | Auto inside hard limits (scale 2–10, never touch `prod-critical`). |
 
-### 4. The user hands the fix off to a coding agent, without leaving chat
-Someone tags a coding agent directly in the thread — e.g. *"@Calyx can you tell @Cursor to increase timeout on the api lambda"*.  launches a cloud coding agent (Cursor, Claude Code, etc.), which opens a real pull request, and posts the PR link back into the same thread for review.
+Every action: `dry_run` → policy → `execute` → immutable audit → `undo` if reversible.
 
-### 5. The loop closes
-A human reviews/merges the PR, the incident is marked resolved, and the whole exchange — root cause, discussion, and fix — is retained as searchable history ("Perfect Memory"), so the next time something similar happens,  can surface it automatically.
-
-### Parallel flow: engineers working from the terminal or IDE
-For people who live in the CLI/IDE instead of chat, the same underlying flow is exposed as commands rather than conversation:
-- ` messages send "<question>" --wait` → ask a question and get a root-cause answer with recommended fixes.
-- ` logs query ...` / ` logs tail ...` → search or stream logs directly.
-- ` threads search "<keyword>"` → pull up a past debugging conversation instead of starting from scratch.
-- ` data-sources connect` → onboard a new service in a few guided prompts.
-- Under the hood, this same capability is exposed to AI coding agents themselves via an MCP server, so an agent like Claude Code can run this whole investigate → diagnose → fix loop autonomously inside the IDE.
-
-**In short:** the flow is designed to never pull the user out of where they already are — alert → conversation → fix all happen inside Slack (or the terminal/IDE), instead of requiring a trip to a separate observability dashboard.
+**Risk order (do not skip ahead):** feature flags → pod restart/scale → CI/CD triggers → deploy rollback → VM start/stop/resize.
 
 ---
 
-## Other Product Claims
+## Where the repo is today
 
-- **Instrumentation:** "Instrument in minutes" — claims to support ingesting logs in any format from any cloud/technology, positioned as low-effort rather than invasive.
-- **Ecosystem fit:** "Works with your apps" — designed to plug into a team's existing chat and incident-response tools rather than becoming a separate destination.
-- **Security & compliance:** claims SOC 2, ISO 27001, HIPAA, and GDPR compliance, plus data residency controls (choice of storage region/data center), end-to-end encryption in transit and at rest, and role-based access control (RBAC) with audit trails.
+The **skeleton** of both acts exists. The **product loop is not closed**.
+
+| Layer | In the repo | Still missing for a real demo |
+|---|---|---|
+| Ingestion | `POST /v1/logs`, Redis stream, Loki forwarder | Broader formats, projects/envs as first-class |
+| Storage | Postgres events (`tenant_id` on every row) | Incident store, thread memory, ClickHouse later |
+| Agent | Claude + `query_logs`, `get_service_stats`, `search_past_incidents` | Change correlation, blast radius, code search, request trace |
+| Detection | Error-rate stddev detector, dedup helper | Wire to Slack; silent-failure and the rest of the six |
+| Slack | Adapter, alert card, charts, thread replies, approval modal | Detector → investigated card posting; status; Start Incident |
+| CLI / MCP | Thin wrappers over the same tools | `logs tail`, `threads search`, data-source connect |
+| Execution | Action interface, policy tiers, audit log, flag-toggle stub | Real operator, real integrations, Slack “Run it” on live alerts |
+
+Shared contracts live in `src/schemas/` (`Event`, `Anomaly`, `Alert`, `Tool`, `Action`). New detectors, tools, and transports stay additive. Do not invent a second shape per layer.
 
 ---
 
-## Company Snapshot
+## Path
 
-- **Backers/advisors** listed on the site include people associated with Mastra, MLOps Community, Daytona, LangChain, Brex, Codegen, Fastino, Browserbase, Vercel, Cockroach Labs, Graphite, Anthropic, Untapped Capital, Replit, and Homebrew.
-- **Manifesto publish date:** March 16, 2026.
-- **Site sections:** Home, About, Careers, Blog, Features (Autonomous Alerts / Conversational Debugging / Coding Agents Welcome), plus legal pages (Privacy, Terms, DPA).
+Build in this order. Each stage has a **demo you can feel**, not just passing tests. Rough sizing assumes one person shipping on the existing codebase.
+
+### Act I — close the observe loop
+
+| Stage | Focus | Demo when done | Size |
+|---|---|---|---|
+| **1. Close the live loop** | Detection run → LLM writes impact/root cause/action → post Slack card → replies in that thread use the agent | Inject an error spike, get a real card, ask “when did this start?” in-thread | **Now** (1–2 weeks) |
+| **2. Conversational debugging** | Golden questions; charts from `visualization_hint`; first **chain diagram** (failure across services) as Slack blocks | “What’s broken?”, “who is affected?”, “why are webhooks failing?” shows a causal chain | 1–2 weeks |
+| **3. More detectors** | Silent failure (absence of expected events), then slow queries from log attributes | Stop a worker; Calyx pages “nothing is flowing” without a threshold | 1–2 weeks |
+| **4. Memory** | Persist alerts, Slack thread ids, resolutions; `search_past_incidents` hits real history | Second similar spike cites the first incident | 1 week |
+| **5. CLI / MCP parity** | `ask`, `logs query/tail`, `threads search`; MCP used from Cursor against seeded data | Coding agent investigates without opening Slack | 1 week |
+| **6. Signals** | Ingest deploys/commits as events (GitHub webhooks). Correlate “what changed?” | Alert names the deploy, not just the error rate | 1–2 weeks |
+| **7. Code + agent handoff** | `search_code` via GitHub App; optional “open a PR” via Cursor/Claude cloud agent | Thread: “increase the timeout” → PR link | After 1–6 |
+
+Skip frustrated-users and cost detectors until you have those signals. Skip a web dashboard indefinitely unless Slack/CLI are actually used.
+
+### Act II — let it change infrastructure
+
+Start only when Stage 1 alerts are trusted (low false positives, humans click through).
+
+| Stage | Focus | Demo when done |
+|---|---|---|
+| **8. Slack-gated flag toggle** | Wire existing Action + approval modal to a real flag API (or a fake in-cluster flag). Always Tier 0. | Card says “disable `new-checkout`”; human runs it; audit row exists; undo works |
+| **9. Customer operator** | Tiny process in the user’s network; brain sends commands, operator holds creds | Same flag toggle, credentials never in Calyx’s env |
+| **10. Kubernetes** | Restart pod, scale deployment, rollback ReplicaSet — still Tier 0 | OOM loop → “restart payments-worker?” → Run |
+| **11. CI/CD** | GitHub Actions `workflow_dispatch` / re-run failed job | “re-run the failed deploy workflow” |
+| **12. Deploy platforms** | Render/Railway/Fly/Vercel rollback APIs | “roll back web-api to previous deploy” |
+| **13. VMs** | Start/stop/resize with hard tags and limits | Last, and only after undo is real |
+
+Nothing leaves Tier 0 until you have weeks of “the suggestion was right.” Then promote **one** playbook to Tier 1.
+
+```
+NOW                         OBSERVE LOOP                          CALYX-ONLY
+ |---- 1 live loop ---- 2 chat ---- 3 detectors ---- 4 memory ----|
+                              |---- 5 CLI/MCP ---- 6 deploys ---- 7 PRs ----|
+                                                                    |---- 8 flags ---- 9 operator ---- 10 K8s ---- 11 CI ---- 12 rollback ---- 13 VMs ----|
+```
+
+Detailed build/validate notes: [`calyx-notes.md`](./calyx-notes.md).
 
 ---
 
-## One-Line Summary
+## Architecture (target)
 
- is an AI-agent-first observability platform that replaces dashboards and manually configured monitors with a chat-based system that autonomously watches production, explains problems in plain language to both humans and coding agents, and can hand off fixes directly to tools like Cursor or Claude Code.
+### Observe
+
+- **Ingestion:** OpenTelemetry-compatible HTTP intake (`/v1/logs`), queue in front (Redis Streams now; Kafka later).
+- **Storage:** Postgres now; ClickHouse when agent queries get aggregation-heavy. Vector index later for incident memory.
+- **Agent:** Anthropic tool-use loop. Tools in a central registry. Slack / CLI / MCP are adapters only.
+- **Detection:** Detectors emit `Anomaly`. A separate step decides whether to page and asks the LLM to write the card. New detector = new function, same shape.
+- **Interfaces:** Slack first. CLI + MCP same tools. Web app only if something cannot live in chat.
+
+### Control
+
+- **Operator** inside the customer VPC/cluster (Datadog-agent / GitOps pattern).
+- **Policy** in front of every `Action` (`dry_run`, `execute`, `undo`).
+- **Audit log** immutable; reversibility required before an action can leave Tier 0.
+
+### Later (not the path)
+
+GitHub App, SSO/RBAC (Clerk/WorkOS), data residency, SOC2-class controls. After someone else is sending production logs.
+
+---
+
+## Run locally
+
+```bash
+cp .env.example .env          # ANTHROPIC_API_KEY; Slack vars if using Slack
+docker compose up --build
+curl http://localhost:13000/health
+```
+
+Host ports: ingestion `13000`, Slack `13001` (profile `slack`), Postgres `15432`, Redis `16379`.
+
+```bash
+npm test
+npm run dev:ingestion
+npm run dev:consumer
+npm run dev:slack
+npm run dev:mcp
+npx tsx src/cli/index.ts ask -t demo "why are errors spiking?"
+```
+
+---
+

@@ -14,7 +14,7 @@ import {
   sparkline,
   trendArrow,
 } from "./text-status-bar.js";
-import type { ServiceStats } from "../../storage/events.js";
+import { unwrapServiceStats, toStatusBarServices } from "../tool-data.js";
 import type { TimeSeries } from "./error-timeseries.js";
 import type { AnomalyPoint } from "./anomaly-scatter.js";
 
@@ -46,7 +46,7 @@ export interface ChartResult {
 export async function renderChartForSlack(req: ChartRequest): Promise<ChartResult> {
   switch (req.type) {
     case "service-health-bars": {
-      const stats = req.data as ServiceStats[];
+      const stats = unwrapServiceStats(req.data);
       const image = await serviceHealthBars(stats, { title: req.title });
       const worst = [...stats].sort((a, b) => b.error_rate - a.error_rate)[0];
       return {
@@ -80,7 +80,7 @@ export async function renderChartForSlack(req: ChartRequest): Promise<ChartResul
     }
 
     case "event-volume-bar": {
-      const stats = req.data as ServiceStats[];
+      const stats = unwrapServiceStats(req.data);
       const image = await eventVolumeBar(stats, { title: req.title });
       const total = stats.reduce((s, r) => s + r.total, 0);
       return {
@@ -124,12 +124,16 @@ export async function renderChartForSlack(req: ChartRequest): Promise<ChartResul
     }
 
     case "text-status-bars": {
-      const services = req.data as {
-        service: string;
-        errorRate: number;
-        total: number;
-        errorCount: number;
-      }[];
+      const stats = unwrapServiceStats(req.data);
+      const services =
+        stats.length > 0
+          ? toStatusBarServices(stats)
+          : (req.data as {
+              service: string;
+              errorRate: number;
+              total: number;
+              errorCount: number;
+            }[]);
       const blocks = buildStatusBarsMessage(services);
       return {
         blocks,
@@ -152,18 +156,20 @@ export function autoChartType(
   if (hint === "timeseries") return "error-timeseries";
 
   if (hint === "bar") {
-    const d = data as Record<string, unknown>;
-    if (Array.isArray(d?.stats)) return "service-health-bars";
+    if (unwrapServiceStats(data).length > 0) return "service-health-bars";
     return "event-volume-bar";
   }
 
   if (hint === "table") {
-    // If it's a stats array, render text bars (no file upload needed)
-    const arr = Array.isArray(data) ? data : (data as Record<string, unknown>)?.stats;
-    if (Array.isArray(arr) && arr[0] && "error_rate" in arr[0]) {
+    const stats = unwrapServiceStats(data);
+    if (stats.length > 0 && "error_rate" in stats[0]) {
       return "text-status-bars";
     }
-    return null; // render as formatted text table
+    const arr = Array.isArray(data) ? data : [];
+    if (arr[0] && typeof arr[0] === "object" && "error_rate" in arr[0]) {
+      return "text-status-bars";
+    }
+    return null;
   }
 
   return null;

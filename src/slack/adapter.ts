@@ -11,7 +11,6 @@ import {
   storePendingAction,
   getPendingAction,
   removePendingAction,
-  generateActionId,
 } from "./pending-actions.js";
 import { buildApprovalModal } from "./modals/approval.js";
 import {
@@ -22,37 +21,39 @@ import { buildServiceDrilldownButtons } from "./blocks/service-drilldown.js";
 import { executeAction } from "../execution/executor.js";
 import { executeTool } from "../agent/registry.js";
 import { renderChartForSlack as renderChart } from "./charts/index.js";
+import { buildStatusBarsMessage } from "./charts/text-status-bar.js";
+import {
+  SLACK_REPLY_INSTRUCTIONS,
+  markdownToSlackBlocks,
+  fallbackText,
+  buildLogListBlocks,
+} from "./format-answer.js";
+import {
+  unwrapServiceStats,
+  toStatusBarServices,
+  asLogEvents,
+} from "./tool-data.js";
 import type { Alert } from "../schemas/index.js";
-import type { ServiceStats } from "../storage/events.js";
+import type { ToolCallRecord } from "../agent/loop.js";
 
 // Tenant lookup: for MVP, every workspace maps to one tenant.
 function tenantForTeam(teamId: string): string {
   return process.env[`CALYX_TENANT_${teamId}`] ?? teamId;
 }
 
-/** Slack section mrkdwn hard-caps at 3000 chars — split long answers into multiple blocks. */
-const SLACK_SECTION_MAX = 2900;
-
-function chunkMrkdwn(text: string, max = SLACK_SECTION_MAX): string[] {
-  if (text.length <= max) return [text];
-  const chunks: string[] = [];
-  let remaining = text;
-  while (remaining.length > max) {
-    let cut = remaining.lastIndexOf("\n\n", max);
-    if (cut < max * 0.4) cut = remaining.lastIndexOf("\n", max);
-    if (cut < max * 0.4) cut = max;
-    chunks.push(remaining.slice(0, cut).trimEnd());
-    remaining = remaining.slice(cut).trimStart();
-  }
-  if (remaining) chunks.push(remaining);
-  return chunks;
+function pickStatsCall(calls: ToolCallRecord[]): ToolCallRecord | undefined {
+  return (
+    calls.find((c) => c.toolName === "get_service_stats") ??
+    calls.find((c) => c.toolName === "query_logs")
+  );
 }
 
-function answerBlocks(answer: string): object[] {
-  return chunkMrkdwn(answer).map((text) => ({
-    type: "section",
-    text: { type: "mrkdwn", text },
-  }));
+function pickChartableCall(calls: ToolCallRecord[]): ToolCallRecord | undefined {
+  const stats = [...calls].reverse().find((c) => c.toolName === "get_service_stats" && c.output);
+  if (stats) return stats;
+  return [...calls]
+    .reverse()
+    .find((c) => c.output?.visualization_hint && c.output.visualization_hint !== "none");
 }
 
 export function createSlackApp(): App {
@@ -75,11 +76,16 @@ export function createSlackApp(): App {
     const userId = mentionEvent.user;
 
     const rawText = mentionEvent.text.replace(/<@[A-Z0-9]+>/g, "").trim();
-    const { userMessage } = buildConversationPrompt(threadTs, rawText, userId);
+    const { userMessage, systemSuffix } = buildConversationPrompt(threadTs, rawText, userId);
 
     const thinking = await say({ text: "Looking into that...", thread_ts: threadTs });
 
-    const response = await runAgent(tenantId, userMessage);
+    const response = await runAgent(
+      tenantId,
+      userMessage,
+      undefined,
+      `${SLACK_REPLY_INSTRUCTIONS}${systemSuffix}`
+    );
 
     appendToThread(threadTs, { role: "user", content: rawText, userId, timestamp: mentionEvent.ts });
     appendToThread(threadTs, {
@@ -95,60 +101,42 @@ export function createSlackApp(): App {
         .catch(() => {});
     }
 
-    // Determine if we have chartable tool output
-    const chartableCall = [...response.toolCallsMade]
-      .reverse()
-      .find((c) => c.output?.visualization_hint && c.output.visualization_hint !== "none");
+    const chartableCall = pickChartableCall(response.toolCallsMade);
 
     let chartResult: Awaited<ReturnType<typeof renderChartForSlack>> | null = null;
     if (chartableCall?.output) {
       const chartType = autoChartType(
-        chartableCall.output.visualization_hint!,
+        chartableCall.output.visualization_hint ?? "bar",
         chartableCall.output.data
       );
       if (chartType) {
-        chartResult = await renderChartForSlack({ type: chartType, data: chartableCall.output.data }).catch(() => null);
+        chartResult = await renderChartForSlack({
+          type: chartType,
+          data: chartableCall.output.data,
+        }).catch(() => null);
       }
     }
 
-    // Build reply blocks (Slack section text max 3000 chars)
-    const replyBlocks: object[] = [...answerBlocks(response.answer)];
+    const replyBlocks: object[] = [...markdownToSlackBlocks(response.answer)];
 
     if (chartResult?.blocks) replyBlocks.push(...chartResult.blocks);
 
-    // Time-range quick-filter — shown after stats tool calls
-    const statsCall = response.toolCallsMade.find((c) =>
-      c.toolName === "get_service_stats" || c.toolName === "query_logs"
-    );
+    const statsCall = pickStatsCall(response.toolCallsMade);
     if (statsCall) {
-      const statsData = statsCall.output?.data as ServiceStats[] | undefined;
-      const services = Array.isArray(statsData) ? statsData.map((s) => s.service) : [];
+      const services = unwrapServiceStats(statsCall.output?.data).map((s) => s.service);
 
       replyBlocks.push(
         buildTimeRangeButtons({ toolName: statsCall.toolName, tenantId })
       );
 
-      // Service drill-down buttons (only for multi-service stats)
       if (statsCall.toolName === "get_service_stats" && services.length > 1) {
         const drilldown = buildServiceDrilldownButtons(tenantId, services);
         if (drilldown) replyBlocks.push(drilldown);
       }
     }
 
-    if (response.toolCallsMade.length > 0) {
-      replyBlocks.push({
-        type: "context",
-        elements: [
-          {
-            type: "mrkdwn",
-            text: `_Used tools: ${[...new Set(response.toolCallsMade.map((t) => t.toolName))].join(", ")}_`,
-          },
-        ],
-      });
-    }
-
     await say({
-      text: response.answer.slice(0, 3500),
+      text: fallbackText(response.answer),
       thread_ts: threadTs,
       blocks: replyBlocks as Parameters<typeof say>[0]["blocks"],
     });
@@ -323,7 +311,6 @@ export function createSlackApp(): App {
     const { from, to } = hoursToTimeRange(hours);
     const threadTs = actionBody.message.thread_ts ?? actionBody.message.ts;
 
-    // Re-run the tool with the new time window
     const input = toolName === "get_service_stats"
       ? { tenant_id: tenantId, service, from, to }
       : { tenant_id: tenantId, from, to, limit: 50 };
@@ -341,21 +328,35 @@ export function createSlackApp(): App {
       return;
     }
 
+    const label = hours < 24 ? `${hours}h` : hours === 168 ? "7d" : `${hours / 24}d`;
+    const stats = unwrapServiceStats(result.output.data);
     const hint = result.output.visualization_hint;
     const chartType = hint && hint !== "none" ? autoChartType(hint, result.output.data) : null;
     const chartResult = chartType
       ? await renderChart({ type: chartType, data: result.output.data }).catch(() => null)
       : null;
 
-    const label = hours < 24 ? `${hours}h` : hours === 168 ? "7d" : `${hours}h`;
-    const replyBlocks: object[] = [
-      {
+    const replyBlocks: object[] = [];
+
+    if (toolName === "get_service_stats" && stats.length > 0) {
+      replyBlocks.push({
+        type: "context",
+        elements: [{ type: "mrkdwn", text: `Last *${label}*` }],
+      });
+      replyBlocks.push(...buildStatusBarsMessage(toStatusBarServices(stats)));
+    } else if (toolName === "query_logs") {
+      replyBlocks.push(
+        ...buildLogListBlocks(asLogEvents(result.output.data), `Logs — last ${label}`)
+      );
+    } else {
+      replyBlocks.push({
         type: "section",
-        text: { type: "mrkdwn", text: `*${toolName.replace(/_/g, " ")} — last ${label}*\n${result.output.summary}` },
-      },
-      ...(chartResult?.blocks ?? []),
-      buildTimeRangeButtons({ toolName, tenantId, service }),
-    ];
+        text: { type: "mrkdwn", text: `*Last ${label}*\n${result.output.summary}` },
+      });
+    }
+
+    if (chartResult?.blocks) replyBlocks.push(...chartResult.blocks);
+    replyBlocks.push(buildTimeRangeButtons({ toolName, tenantId, service }));
 
     await client.chat
       .postMessage({
@@ -399,7 +400,6 @@ export function createSlackApp(): App {
     };
     const threadTs = actionBody.message.thread_ts ?? actionBody.message.ts;
 
-    // Fetch stats for just this service
     const statsResult = await executeTool("get_service_stats", {
       tenant_id: tenantId,
       service,
@@ -408,7 +408,7 @@ export function createSlackApp(): App {
     const replyBlocks: object[] = [
       {
         type: "header",
-        text: { type: "plain_text", text: `↗ ${service}`, emoji: false },
+        text: { type: "plain_text", text: `↗ ${service}`.slice(0, 150), emoji: false },
       },
       {
         type: "section",
@@ -419,9 +419,8 @@ export function createSlackApp(): App {
       },
     ];
 
-    // Gauge chart for error rate
     if (statsResult.ok) {
-      const stats = statsResult.output.data as ServiceStats[];
+      const stats = unwrapServiceStats(statsResult.output.data);
       const svc = stats[0];
       if (svc) {
         replyBlocks.push(buildTimeRangeButtons({ toolName: "get_service_stats", tenantId, service }));

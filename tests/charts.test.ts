@@ -156,6 +156,15 @@ describe("renderChartForSlack — PNG charts", () => {
     expect(result.caption).toContain("api-gateway");
   });
 
+  it("service-health-bars accepts wrapped { stats } tool output", async () => {
+    const result = await renderChartForSlack({
+      type: "service-health-bars",
+      data: { stats: STATS, total_events: 2000, overall_error_rate: 3.2 },
+    });
+    expect(result.image).toBeInstanceOf(Buffer);
+    expect(result.image!.slice(0, 4).toString("hex")).toBe("89504e47");
+  });
+
   it("level-donut produces a PNG buffer", async () => {
     const result = await renderChartForSlack({
       type: "level-donut",

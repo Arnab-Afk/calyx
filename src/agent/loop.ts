@@ -23,12 +23,13 @@ export interface AgentResponse {
 export async function runAgent(
   tenantId: string,
   userMessage: string,
-  systemPrompt?: string
+  systemPrompt?: string,
+  systemSuffix?: string
 ): Promise<AgentResponse> {
   const client = new Anthropic();
   const tools = getAllTools().map(toApiTool);
 
-  const system =
+  const base =
     systemPrompt ??
     `You are Calyx, an AI observability assistant. You help engineering teams understand what is
 happening in their production systems by analyzing logs and metrics. The tenant you are
@@ -36,6 +37,8 @@ assisting has tenant_id: "${tenantId}". Always use this tenant_id when calling t
 
 When you cannot find data, say so clearly rather than guessing. When you do find data,
 cite specific numbers and service names from the tool results.`;
+
+  const system = systemSuffix ? `${base}\n${systemSuffix}` : base;
 
   const messages: Anthropic.MessageParam[] = [
     { role: "user", content: userMessage },
