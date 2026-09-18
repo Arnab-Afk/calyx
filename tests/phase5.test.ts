@@ -13,13 +13,15 @@ const TENANT = "mcp-cli-tests";
 
 // ─── Seed ─────────────────────────────────────────────────────────────────────
 
+let _evSeq = 0;
 function ev(service: string, level: Event["level"], message: string): Event {
   return EventSchema.parse({
     tenant_id: TENANT,
     service,
     level,
     message,
-    timestamp: new Date().toISOString(),
+    // Add a unique offset so duplicate messages don't dedup
+    timestamp: new Date(Date.now() + _evSeq++).toISOString(),
   });
 }
 
