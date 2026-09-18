@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getAllTools, executeTool } from "./registry.js";
 import { toApiTool } from "../schemas/index.js";
-import type { ToolInput } from "../schemas/index.js";
+import type { ToolInput, ToolOutput } from "../schemas/index.js";
 
 const MODEL = process.env.CALYX_MODEL ?? "claude-opus-5";
 const MAX_TURNS = 10;
@@ -10,6 +10,7 @@ export interface ToolCallRecord {
   toolName: string;
   input: ToolInput;
   result: { ok: boolean; summary?: string; error?: string };
+  output?: ToolOutput;
 }
 
 export interface AgentResponse {
@@ -76,6 +77,7 @@ cite specific numbers and service names from the tool results.`;
             result: result.ok
               ? { ok: true, summary: result.output.summary }
               : { ok: false, error: result.error },
+            output: result.ok ? result.output : undefined,
           };
           toolCallsMade.push(record);
 

@@ -8,6 +8,7 @@ import {
   appendToThread,
   buildConversationPrompt,
 } from "./conversation.js";
+import { autoChartType, renderChartForSlack } from "./charts/index.js";
 import type { Alert } from "../schemas/index.js";
 
 // Tenant lookup: for MVP, every workspace maps to one tenant.
@@ -75,29 +76,66 @@ export function createSlackApp(): App {
         .catch(() => {}); // ignore if it fails
     }
 
+    // Build the main reply blocks
+    const replyBlocks: object[] = [
+      {
+        type: "section",
+        text: { type: "mrkdwn", text: response.answer },
+      },
+    ];
+
+    // Find the last tool output that has a visualization hint we can chart
+    const chartableCall = [...response.toolCallsMade]
+      .reverse()
+      .find((c) => c.output?.visualization_hint && c.output.visualization_hint !== "none");
+
+    let chartResult: Awaited<ReturnType<typeof renderChartForSlack>> | null = null;
+    if (chartableCall?.output) {
+      const hint = chartableCall.output.visualization_hint!;
+      const chartType = autoChartType(hint, chartableCall.output.data);
+      if (chartType) {
+        chartResult = await renderChartForSlack({
+          type: chartType,
+          data: chartableCall.output.data,
+        }).catch(() => null);
+      }
+    }
+
+    // Inline text chart blocks go directly into the reply
+    if (chartResult?.blocks) {
+      replyBlocks.push(...chartResult.blocks);
+    }
+
+    if (response.toolCallsMade.length > 0) {
+      replyBlocks.push({
+        type: "context",
+        elements: [
+          {
+            type: "mrkdwn",
+            text: `_Used tools: ${[...new Set(response.toolCallsMade.map((t) => t.toolName))].join(", ")}_`,
+          },
+        ],
+      });
+    }
+
     await say({
       text: response.answer,
       thread_ts: threadTs,
-      blocks: [
-        {
-          type: "section",
-          text: { type: "mrkdwn", text: response.answer },
-        },
-        ...(response.toolCallsMade.length > 0
-          ? [
-              {
-                type: "context",
-                elements: [
-                  {
-                    type: "mrkdwn",
-                    text: `_Used tools: ${[...new Set(response.toolCallsMade.map((t) => t.toolName))].join(", ")}_`,
-                  },
-                ],
-              },
-            ]
-          : []),
-      ],
+      blocks: replyBlocks as Parameters<typeof say>[0]["blocks"],
     });
+
+    // Upload PNG chart as a file snippet (no inline image blocks needed)
+    if (chartResult?.image) {
+      await client.files
+        .uploadV2({
+          channel_id: mentionEvent.channel,
+          thread_ts: threadTs,
+          filename: "calyx-chart.png",
+          file: chartResult.image,
+          initial_comment: chartResult.caption,
+        })
+        .catch(() => {}); // non-fatal: chart is nice-to-have
+    }
   });
 
   // Button action — view alert
