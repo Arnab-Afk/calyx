@@ -13,11 +13,12 @@ export function buildServiceDrilldownButtons(
   return {
     type: "actions",
     block_id: "service_drilldown",
-    elements: visible.map((svc) => ({
+    elements: visible.map((svc, i) => ({
       type: "button",
-      text: { type: "plain_text", text: `↗ ${svc}`, emoji: false },
+      text: { type: "plain_text", text: `↗ ${svc}`.slice(0, 75), emoji: false },
       value: JSON.stringify({ tenantId, service: svc }),
-      action_id: "drill_down_service",
+      // Slack requires unique action_ids within a message
+      action_id: `drill_down_service__${i}`,
     })),
   };
 }

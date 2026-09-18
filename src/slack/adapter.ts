@@ -387,7 +387,7 @@ export function createSlackApp(): App {
 
   // ─── Service drill-down ───────────────────────────────────────────────────────
 
-  app.action("drill_down_service", async ({ ack, body, client }) => {
+  app.action(/^drill_down_service/, async ({ ack, body, client }) => {
     await ack();
     const actionBody = body as {
       actions: { value: string }[];
