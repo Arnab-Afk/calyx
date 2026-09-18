@@ -96,14 +96,19 @@ export const Header = ({ channelName }: HeaderProps) => {
   };
 
   return (
-    <div className="flex h-[49px] items-center overflow-hidden border-b bg-white px-4">
+    <div className="flex h-[49px] items-center overflow-hidden border-b border-white/10 bg-black/40 px-4 backdrop-blur-xl">
       <ConfirmDialog />
 
       <Dialog>
         <DialogTrigger asChild>
-          <Button disabled={memberLoading} variant="ghost" className="w-auto overflow-hidden px-2 text-lg font-semibold" size="sm">
+          <Button
+            disabled={memberLoading}
+            variant="ghost"
+            className="w-auto overflow-hidden px-2 font-[family-name:var(--font-display)] text-lg font-semibold text-white hover:bg-white/5 hover:text-white"
+            size="sm"
+          >
             <span className="truncate"># {channelName}</span>
-            <FaChevronDown className="ml-2 size-2.5" />
+            <FaChevronDown className="ml-2 size-2.5 text-white/50" />
           </Button>
         </DialogTrigger>
 

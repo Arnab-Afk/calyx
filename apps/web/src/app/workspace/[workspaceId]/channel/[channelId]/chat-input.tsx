@@ -159,8 +159,8 @@ export const ChatInput = ({ placeholder }: ChatInputProps) => {
   return (
     <div className="w-full px-5">
       {isCalyxThinking && (
-        <div className="mb-2 flex items-center gap-2 rounded-lg bg-[#1a1d21] px-3 py-2 text-sm text-[#2eb67d]">
-          <Bot className="size-4 animate-pulse" />
+        <div className="sazabi-glass mb-2 flex items-center gap-2 rounded-xl border border-[var(--sazabi-border)] px-3 py-2 text-sm text-[var(--sazabi-mention)]">
+          <Bot className="size-4 animate-pulse text-[var(--sazabi-crimson)]" />
           Calyx is thinking…
         </div>
       )}

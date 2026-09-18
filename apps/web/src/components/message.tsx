@@ -144,6 +144,41 @@ export const Message = ({
     );
   };
 
+  if (calyxData && !isEditing) {
+    return (
+      <>
+        <ConfirmDialog />
+        <div
+          className={cn(
+            'group relative px-5 py-1.5',
+            isRemovingMessage && 'origin-bottom scale-y-0 transform bg-rose-500/20 transition-all duration-200',
+          )}
+        >
+          <CalyxMessage data={calyxData} createdAt={createdAt} />
+          <div className="max-w-2xl pl-1">
+            <Reactions data={reactions} onChange={handleReaction} />
+            <ThreadBar
+              count={threadCount}
+              image={threadImage}
+              name={threadName}
+              timestamp={threadTimestamp}
+              onClick={() => onOpenMessage(id)}
+            />
+          </div>
+          <Toolbar
+            isAuthor={isAuthor}
+            isPending={isPending}
+            handleEdit={() => setEditingId(id)}
+            handleThread={() => onOpenMessage(id)}
+            handleDelete={handleDelete}
+            handleReaction={handleReaction}
+            hideThreadButton={hideThreadButton}
+          />
+        </div>
+      </>
+    );
+  }
+
   if (isCompact) {
     return (
       <>
@@ -151,15 +186,15 @@ export const Message = ({
 
         <div
           className={cn(
-            'group relative flex flex-col gap-2 p-1.5 px-5 hover:bg-gray-100/60',
-            isEditing && 'bg-[#f2c74433] hover:bg-[#f2c74433]',
-            isRemovingMessage && 'origin-bottom scale-y-0 transform bg-rose-500/50 transition-all duration-200',
+            'group relative flex flex-col gap-2 px-5 py-1',
+            isEditing && 'rounded-lg bg-[var(--sazabi-crimson)]/10',
+            isRemovingMessage && 'origin-bottom scale-y-0 transform bg-rose-500/20 transition-all duration-200',
           )}
         >
-          <div className="flex items-start gap-2">
+          <div className="flex items-start gap-3">
             <Hint label={formatFullTime(new Date(createdAt))}>
-              <button className="w-[40px] text-center text-sm leading-[22px] text-muted-foreground opacity-0 hover:underline group-hover:opacity-100">
-                {format(new Date(createdAt), 'hh:mm')}
+              <button className="w-10 pt-2 text-center text-[11px] leading-none text-white/30 opacity-0 transition group-hover:opacity-100 hover:text-white/60 hover:underline">
+                {format(new Date(createdAt), 'h:mm')}
               </button>
             </Hint>
 
@@ -174,12 +209,10 @@ export const Message = ({
                 />
               </div>
             ) : (
-              <div className="flex w-full flex-col">
-                {calyxData ? <CalyxMessage data={calyxData} /> : <Renderer value={body} />}
+              <div className="sazabi-glass sazabi-scanlines min-w-0 flex-1 rounded-xl px-3.5 py-2.5">
+                <Renderer value={body} />
                 <Thumbnail url={image} />
-
-                {updatedAt ? <span className="text-xs text-muted-foreground">(edited)</span> : null}
-
+                {updatedAt ? <span className="text-xs text-white/35">(edited)</span> : null}
                 <Reactions data={reactions} onChange={handleReaction} />
                 <ThreadBar
                   count={threadCount}
@@ -214,53 +247,50 @@ export const Message = ({
 
       <div
         className={cn(
-          'group relative flex flex-col gap-2 p-1.5 px-5 hover:bg-gray-100/60',
-          isEditing && 'bg-[#f2c74433] hover:bg-[#f2c74433]',
-          isRemovingMessage && 'origin-bottom scale-y-0 transform bg-rose-500/50 transition-all duration-200',
+          'group relative flex flex-col gap-2 px-5 py-1.5',
+          isEditing && 'rounded-lg bg-[var(--sazabi-crimson)]/10',
+          isRemovingMessage && 'origin-bottom scale-y-0 transform bg-rose-500/20 transition-all duration-200',
         )}
       >
-        <div className="flex items-start gap-2">
-          <button onClick={() => onOpenProfile(memberId)}>
-            <Avatar>
-              <AvatarImage alt={authorName} src={authorImage} />
+        {isEditing ? (
+          <div className="size-full pl-12">
+            <Editor
+              onSubmit={handleUpdate}
+              disabled={isPending}
+              defaultValue={JSON.parse(body)}
+              onCancel={() => setEditingId(null)}
+              variant="update"
+            />
+          </div>
+        ) : (
+          <div className="sazabi-glass sazabi-scanlines flex items-start gap-3 rounded-xl px-3.5 py-3">
+            <button onClick={() => onOpenProfile(memberId)} className="shrink-0">
+              <Avatar className="size-9 rounded-md">
+                <AvatarImage alt={authorName} src={authorImage} className="sazabi-avatar rounded-md" />
+                <AvatarFallback className="rounded-md bg-[var(--sazabi-crimson)]/30 font-[family-name:var(--font-display)] text-white">
+                  {avatarFallback}
+                </AvatarFallback>
+              </Avatar>
+            </button>
 
-              <AvatarFallback>{avatarFallback}</AvatarFallback>
-            </Avatar>
-          </button>
-
-          {isEditing ? (
-            <div className="size-full">
-              <Editor
-                onSubmit={handleUpdate}
-                disabled={isPending}
-                defaultValue={JSON.parse(body)}
-                onCancel={() => setEditingId(null)}
-                variant="update"
-              />
-            </div>
-          ) : (
-            <div className="flex w-full flex-col overflow-hidden">
-              <div className="text-sm">
-                <button onClick={() => onOpenProfile(memberId)} className="font-bold text-primary hover:underline">
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <div className="mb-1 flex items-baseline gap-2">
+                <button
+                  onClick={() => onOpenProfile(memberId)}
+                  className="font-[family-name:var(--font-display)] text-[14px] font-semibold text-white hover:underline"
+                >
                   {authorName}
                 </button>
-
-                <span>&nbsp;&nbsp;</span>
-
                 <Hint label={formatFullTime(new Date(createdAt))}>
-                  <button className="text-xs text-muted-foreground hover:underline">{format(new Date(createdAt), 'h:mm a')}</button>
+                  <button className="text-[12px] text-white/40 hover:underline">
+                    {format(new Date(createdAt), 'h:mm a')}
+                  </button>
                 </Hint>
               </div>
 
-              {calyxData ? (
-                <CalyxMessage data={calyxData} />
-              ) : (
-                <Renderer value={body} />
-              )}
+              <Renderer value={body} />
               <Thumbnail url={image} />
-
-              {updatedAt ? <span className="text-xs text-muted-foreground">(edited)</span> : null}
-
+              {updatedAt ? <span className="text-xs text-white/35">(edited)</span> : null}
               <Reactions data={reactions} onChange={handleReaction} />
               <ThreadBar
                 count={threadCount}
@@ -270,8 +300,8 @@ export const Message = ({
                 onClick={() => onOpenMessage(id)}
               />
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {!isEditing && (
           <Toolbar

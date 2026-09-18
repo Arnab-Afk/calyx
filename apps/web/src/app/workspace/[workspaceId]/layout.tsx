@@ -26,7 +26,7 @@ const WorkspaceIdLayout = ({ children }: Readonly<PropsWithChildren>) => {
         <Sidebar />
 
         <ResizablePanelGroup direction="horizontal" autoSaveId="slack-clone-workspace-layout">
-          <ResizablePanel defaultSize={20} minSize={11} className="bg-[#5E2C5F]">
+          <ResizablePanel defaultSize={20} minSize={11} className="bg-[#101014]">
             <WorkspaceSidebar />
           </ResizablePanel>
 

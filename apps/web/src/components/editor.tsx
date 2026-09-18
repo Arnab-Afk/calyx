@@ -153,7 +153,7 @@ const Editor = ({
 
       <div
         className={cn(
-          'flex flex-col overflow-hidden rounded-md border border-slate-200 bg-white transition focus-within:border-slate-300 focus-within:shadow-sm',
+          'sazabi-glass flex flex-col overflow-hidden rounded-xl border border-white/10 transition focus-within:border-[var(--sazabi-crimson)]/40 focus-within:shadow-[0_0_24px_var(--sazabi-crimson-glow)]',
           disabled && 'opacity-50',
         )}
       >
@@ -169,7 +169,7 @@ const Editor = ({
 
                     imageElementRef.current!.value = '';
                   }}
-                  className="absolute -right-2.5 -top-2.5 z-[4] hidden size-6 items-center justify-center rounded-full border-2 border-white bg-black/70 text-white hover:bg-black group-hover/image:flex"
+                  className="absolute -right-2.5 -top-2.5 z-[4] hidden size-6 items-center justify-center rounded-full border-2 border-black/40 bg-black/70 text-white hover:bg-black group-hover/image:flex"
                 >
                   <XIcon className="size-3.5" />
                 </button>
@@ -179,28 +179,40 @@ const Editor = ({
                 src={URL.createObjectURL(image)}
                 alt="Uploaded image"
                 fill
-                className="overflow-hidden rounded-xl border object-cover"
+                className="overflow-hidden rounded-xl border border-white/10 object-cover"
               />
             </div>
           </div>
         )}
 
-        <div className="z-[5] flex px-2 pb-2">
+        <div className="z-[5] flex items-center gap-0.5 px-2 pb-2">
           <Hint label={isToolbarVisible ? 'Hide formatting' : 'Show formatting'}>
-            <Button disabled={disabled} size="iconSm" variant="ghost" onClick={toggleToolbar}>
+            <Button
+              disabled={disabled}
+              size="iconSm"
+              variant="ghost"
+              onClick={toggleToolbar}
+              className="text-white/45 hover:bg-white/5 hover:text-white"
+            >
               <PiTextAa className="size-4" />
             </Button>
           </Hint>
 
           <EmojiPopover onEmojiSelect={onEmojiSelect}>
-            <Button disabled={disabled} size="iconSm" variant="ghost">
+            <Button disabled={disabled} size="iconSm" variant="ghost" className="text-white/45 hover:bg-white/5 hover:text-white">
               <Smile className="size-4" />
             </Button>
           </EmojiPopover>
 
           {variant === 'create' && (
             <Hint label="Image">
-              <Button disabled={disabled} size="iconSm" variant="ghost" onClick={() => imageElementRef.current?.click()}>
+              <Button
+                disabled={disabled}
+                size="iconSm"
+                variant="ghost"
+                onClick={() => imageElementRef.current?.click()}
+                className="text-white/45 hover:bg-white/5 hover:text-white"
+              >
                 <ImageIcon className="size-4" />
               </Button>
             </Hint>
@@ -208,7 +220,13 @@ const Editor = ({
 
           {variant === 'update' && (
             <div className="ml-auto flex items-center gap-x-2">
-              <Button variant="outline" size="sm" onClick={onCancel} disabled={disabled}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onCancel}
+                disabled={disabled}
+                className="border-white/15 bg-transparent text-white/70 hover:bg-white/5 hover:text-white"
+              >
                 Cancel
               </Button>
 
@@ -223,7 +241,7 @@ const Editor = ({
                   });
                 }}
                 size="sm"
-                className="bg-[#007a5a] text-white hover:bg-[#007a5a]/80"
+                className="sazabi-btn-primary border-0 hover:brightness-110"
               >
                 Save
               </Button>
@@ -243,21 +261,24 @@ const Editor = ({
                 });
               }}
               className={cn(
-                'ml-auto',
-                isEmpty ? 'bg-white text-muted-foreground hover:bg-white/80' : 'bg-[#007a5a] text-white hover:bg-[#007a5a]/80',
+                'ml-auto gap-1.5 rounded-lg px-4 font-[family-name:var(--font-display)] text-[13px] font-semibold uppercase tracking-wide',
+                isEmpty
+                  ? 'bg-white/5 text-white/30 hover:bg-white/5'
+                  : 'sazabi-btn-primary border-0 hover:brightness-110',
               )}
-              size="iconSm"
+              size="sm"
             >
-              <MdSend className="size-4" />
+              Send
+              <MdSend className="size-3.5" />
             </Button>
           )}
         </div>
       </div>
 
       {variant === 'create' && (
-        <div className={cn('flex justify-end p-2 text-[10px] text-muted-foreground opacity-0 transition', !isEmpty && 'opacity-100')}>
+        <div className={cn('flex justify-end p-2 text-[10px] text-white/35 opacity-0 transition', !isEmpty && 'opacity-100')}>
           <p>
-            <strong>Shift + {isIOS ? 'Return' : 'Enter'}</strong> to add a new line.
+            <strong className="text-white/50">Shift + {isIOS ? 'Return' : 'Enter'}</strong> to add a new line.
           </p>
         </div>
       )}

@@ -1,61 +1,69 @@
 'use client';
 
-const BAR_WIDTH = 20;
-const SPARK_CHARS = '▁▂▃▄▅▆▇█';
+import { COLORS } from '../chart-registry';
+import { MetricValue, MicroLabel } from './chart-ui';
 
-function progressBar(fraction: number) {
-  const filled = Math.round(Math.min(fraction, 1) * BAR_WIDTH);
-  return '█'.repeat(filled) + '░'.repeat(BAR_WIDTH - filled);
+interface Service {
+  service: string;
+  errorRate: number;
+  total: number;
+  errorCount: number;
 }
 
-function statusEmoji(rate: number) {
-  if (rate >= 20) return '🔴';
-  if (rate >= 10) return '🟠';
-  if (rate >= 5) return '🟡';
-  return '🟢';
+function segmentColor(rate: number, i: number, hotspot: number) {
+  if (i === hotspot) return COLORS.error;
+  if (Math.abs(i - hotspot) === 1 && rate >= 5) return COLORS.warn;
+  if (rate >= 10 && i % 11 === 3) return COLORS.warn;
+  return COLORS.ok;
 }
 
-export function sparkline(values: number[]) {
-  if (!values.length) return '';
-  const max = Math.max(...values, 0.001);
-  return values.map((v) => SPARK_CHARS[Math.min(7, Math.floor((v / max) * 7))]).join('');
-}
-
-interface Service { service: string; errorRate: number; total: number; errorCount: number; }
-
+/** Uptime strip — Product Categories / Signal Strength tick language. */
 export function TextStatusBars({ services }: { services: Service[] }) {
   const sorted = [...services].sort((a, b) => b.errorRate - a.errorRate);
-  const totalEvents = sorted.reduce((s, x) => s + x.total, 0);
-  const totalErrors = sorted.reduce((s, x) => s + x.errorCount, 0);
-  const overallRate = totalEvents > 0 ? (totalErrors / totalEvents) * 100 : 0;
+  const segments = 52;
+  const labels = ['7d', '6d', '5d', '4d', '3d', '2d', 'now'];
 
   return (
-    <div className="rounded-lg border border-[#222529] bg-[#1a1d21] p-4 font-mono text-sm">
-      <div className="mb-3 flex items-center gap-2 border-b border-[#222529] pb-3">
-        <span className="text-base">{statusEmoji(overallRate)}</span>
-        <span className="font-bold text-white">System Health — {sorted.length} services</span>
-        <span className="ml-auto text-[#9b9ea4]">{overallRate.toFixed(1)}% overall error rate</span>
-      </div>
-
-      <div className="space-y-2">
-        {sorted.map((svc) => (
+    <div className="space-y-5">
+      {sorted.slice(0, 6).map((svc) => {
+        const hotspot = Math.min(segments - 4, Math.floor((svc.errorRate / 100) * segments) + 18);
+        const healthy = Math.max(0, 100 - svc.errorRate);
+        return (
           <div key={svc.service}>
-            <div className="flex items-center gap-2 text-xs">
-              <span>{statusEmoji(svc.errorRate)}</span>
-              <span className="w-32 truncate font-semibold text-white">{svc.service}</span>
-              <code className="text-[#9b9ea4]">{progressBar(svc.errorRate / 100)}</code>
-              <span className="ml-1 text-[#9b9ea4]">
-                {svc.errorRate >= 1 ? `${svc.errorRate.toFixed(1)}% errors` : 'healthy'}
-              </span>
-              <span className="ml-auto text-[#9b9ea4]">{svc.total.toLocaleString()} events</span>
+            <div className="mb-2 flex items-end justify-between gap-3">
+              <div>
+                <p className="font-[family-name:var(--font-display)] text-[13px] font-medium text-white">
+                  {svc.service}
+                </p>
+                <p className="text-[11px] text-white/35">
+                  {svc.errorCount.toLocaleString()} errors · {svc.total.toLocaleString()} events
+                </p>
+              </div>
+              <div className="text-right">
+                <MetricValue size="sm" className={svc.errorRate >= 5 ? 'text-[var(--sazabi-crimson)]' : undefined}>
+                  {healthy.toFixed(1)}%
+                </MetricValue>
+                <MicroLabel className="mt-0.5">uptime</MicroLabel>
+              </div>
+            </div>
+            <div className="flex h-6 gap-[2px]">
+              {Array.from({ length: segments }, (_, i) => (
+                <div
+                  key={i}
+                  className="min-w-0 flex-1 rounded-[2px]"
+                  style={{ backgroundColor: segmentColor(svc.errorRate, i, hotspot) }}
+                  title={`${svc.service} · slot ${i + 1}`}
+                />
+              ))}
+            </div>
+            <div className="mt-1.5 flex justify-between font-[family-name:var(--font-body)] text-[9px] uppercase tracking-wider text-white/28">
+              {labels.map((l) => (
+                <span key={l}>{l}</span>
+              ))}
             </div>
           </div>
-        ))}
-      </div>
-
-      <div className="mt-3 border-t border-[#222529] pt-2 text-xs text-[#9b9ea4]">
-        {totalEvents.toLocaleString()} total events · {totalErrors} errors
-      </div>
+        );
+      })}
     </div>
   );
 }

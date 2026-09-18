@@ -10,8 +10,8 @@ import { cn } from '@/lib/utils';
 const userItemVariants = cva('flex items-center gap-1.5 justify-start font-normal h-7 px-4 text-sm overflow-hidden', {
   variants: {
     variant: {
-      default: 'text-[#f9EDFFCC]',
-      active: 'text-[#481349] bg-white/90 hover:bg-white/90',
+      default: 'text-white/70 hover:text-white hover:bg-white/5',
+      active: 'text-white bg-[var(--sazabi-crimson)]/20 hover:bg-[var(--sazabi-crimson)]/25 border border-[var(--sazabi-crimson)]/30',
     },
   },
   defaultVariants: {

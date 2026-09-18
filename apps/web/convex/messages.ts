@@ -318,75 +318,356 @@ export const remove = mutation({
   },
 });
 
-/** Dev helper: post a sample Calyx AI reply with a Grafana-style chart (no auth). */
+/** Dev helper: post one sample Calyx reply per chart type (+ dynamics demos). */
 export const seedCalyxDemoReply = mutation({
   args: {
     workspaceId: v.id('workspaces'),
     channelId: v.id('channels'),
-    memberId: v.id('members'),
+    memberId: v.optional(v.id('members')),
   },
   handler: async (ctx, args) => {
-    const chartData = JSON.stringify([
-      {
-        label: 'checkout-api',
-        points: [
-          { time: '00:00', value: 0.4 },
-          { time: '00:05', value: 0.6 },
-          { time: '00:10', value: 1.2 },
-          { time: '00:15', value: 4.8 },
-          { time: '00:20', value: 7.1 },
-          { time: '00:25', value: 5.3 },
-          { time: '00:30', value: 2.1 },
-        ],
-      },
-      {
-        label: 'payments-worker',
-        points: [
-          { time: '00:00', value: 0.2 },
-          { time: '00:05', value: 0.3 },
-          { time: '00:10', value: 0.5 },
-          { time: '00:15', value: 1.8 },
-          { time: '00:20', value: 3.4 },
-          { time: '00:25', value: 2.9 },
-          { time: '00:30', value: 1.1 },
-        ],
-      },
-    ]);
+    let memberId = args.memberId;
+    if (!memberId) {
+      const member = await ctx.db
+        .query('members')
+        .withIndex('by_workspace_id', (q) => q.eq('workspaceId', args.workspaceId))
+        .first();
+      if (!member) throw new Error('No members in workspace — sign in once first.');
+      memberId = member._id;
+    }
 
-    const answer = [
-      'Hey — sample **Calyx** reply with a Grafana-style panel.',
-      '',
-      '**What I see:** error rate on `checkout-api` spiked ~00:15 (0.6% → **7.1%**), with `payments-worker` following.',
-      '',
-      '| Service | Peak | Status |',
-      '|---|---|---|',
-      '| checkout-api | 7.1% | elevated |',
-      '| payments-worker | 3.4% | elevated |',
-      '',
-      '**Likely cause:** deploy correlation window — recommend checking last release + DB pool saturation.',
-      '',
-      '_This message exercises the chart modification only; Slack chrome is unchanged._',
-    ].join('\n');
+    const quillBody = (text: string) => JSON.stringify({ ops: [{ insert: `${text}\n` }] });
 
-    const calyxData = {
-      query: 'hi — show me a sample observability chart',
-      answer,
-      chartType: 'error-timeseries',
-      chartData,
-      toolNames: ['query_logs', 'get_service_stats'],
-      tenantId: 'default',
+    const post = async (
+      answer: string,
+      chartType: string,
+      chartData: unknown,
+      tools: string[],
+      query?: string,
+    ) => {
+      return await ctx.db.insert('messages', {
+        memberId: memberId!,
+        body: quillBody(`[Calyx] ${answer.slice(0, 160)}`),
+        channelId: args.channelId,
+        workspaceId: args.workspaceId,
+        calyxData: {
+          query: query ?? answer.slice(0, 80),
+          answer,
+          chartType,
+          chartData: JSON.stringify(chartData),
+          toolNames: tools,
+          tenantId: 'default',
+        },
+      });
     };
 
-    const body = JSON.stringify({
-      ops: [{ insert: `[Calyx] ${answer.slice(0, 180)}…\n` }],
-    });
+    const ids: Id<'messages'>[] = [];
 
-    return await ctx.db.insert('messages', {
-      memberId: args.memberId,
-      body,
-      channelId: args.channelId,
-      workspaceId: args.workspaceId,
-      calyxData,
-    });
+    ids.push(
+      await ctx.db.insert('messages', {
+        memberId,
+        body: quillBody('— Calyx chart gallery seed — scroll for every panel type —'),
+        channelId: args.channelId,
+        workspaceId: args.workspaceId,
+      }),
+    );
+
+    // Deploy correlation
+    ids.push(
+      await post(
+        [
+          'Error rate jumped right after deploy `checkout@a3f91c`.',
+          '',
+          '**Impact:** checkout 5xx elevated. **Root cause:** likely bad release. **Action:** rollback candidate.',
+          '',
+          'Click two points on the chart to brush a re-query window.',
+        ].join('\n'),
+        'deploy-correlation',
+        {
+          series: [
+            {
+              label: 'error %',
+              points: [
+                { time: '9:00', value: 0.4 },
+                { time: '9:05', value: 0.5 },
+                { time: '9:10', value: 0.6 },
+                { time: '9:11', value: 4.2 },
+                { time: '9:15', value: 5.1 },
+                { time: '9:20', value: 3.8 },
+                { time: '9:25', value: 1.2 },
+              ],
+            },
+          ],
+          deploys: [{ time: '9:11', label: 'checkout@a3f91c', sha: 'a3f91c' }],
+        },
+        ['query_logs', 'list_deploys'],
+        'did the deploy cause this?',
+      ),
+    );
+
+    // Blast radius
+    ids.push(
+      await post(
+        'Blast radius from `checkout-api` — payments and search are correlated. Click a node to focus.',
+        'blast-radius',
+        {
+          nodes: [
+            { id: 'checkout', label: 'checkout', severity: 0.95, x: 28, y: 45 },
+            { id: 'payments', label: 'payments', severity: 0.7, x: 55, y: 28 },
+            { id: 'search', label: 'search', severity: 0.45, x: 62, y: 62 },
+            { id: 'auth', label: 'auth', severity: 0.15, x: 18, y: 72 },
+            { id: 'inventory', label: 'inventory', severity: 0.25, x: 78, y: 48 },
+          ],
+          edges: [
+            { from: 'checkout', to: 'payments', weight: 0.9 },
+            { from: 'checkout', to: 'search', weight: 0.6 },
+            { from: 'payments', to: 'inventory', weight: 0.4 },
+            { from: 'auth', to: 'checkout', weight: 0.2 },
+          ],
+          cursors: [
+            { name: 'Hadley', x: 40, y: 38, color: '#5ec8ff' },
+            { name: 'Ryo', x: 58, y: 55, color: '#f5c542' },
+          ],
+        },
+        ['get_service_stats', 'correlate_errors'],
+        'blast radius for checkout',
+      ),
+    );
+
+    // Trace waterfall
+    ids.push(
+      await post(
+        'Trace for a failing checkout request — `payments` span is the slow culprit.',
+        'trace-waterfall',
+        {
+          traceId: 'tr_9f2a1c88',
+          totalMs: 4200,
+          spans: [
+            { service: 'edge', operation: 'POST /checkout', startMs: 0, durationMs: 4200, status: 'error' },
+            { service: 'checkout', operation: 'CreateOrder', startMs: 40, durationMs: 4100, status: 'slow' },
+            { service: 'payments', operation: 'ChargeCard', startMs: 180, durationMs: 3600, status: 'error' },
+            { service: 'postgres', operation: 'INSERT orders', startMs: 120, durationMs: 45, status: 'ok' },
+            { service: 'redis', operation: 'GET cart', startMs: 50, durationMs: 8, status: 'ok' },
+          ],
+        },
+        ['trace_request'],
+        'trace this checkout failure',
+      ),
+    );
+
+    // Silent failure heatmap
+    ids.push(
+      await post(
+        'Silent failures: `/checkout/confirm` still gets traffic but conversions died after 10:00.',
+        'silent-failure-heatmap',
+        {
+          endpoints: ['/api/search', '/checkout', '/checkout/confirm', '/pay'],
+          hours: ['08', '09', '10', '11', '12', '13'],
+          cells: [
+            [0.05, 0.08, 0.1, 0.07, 0.06, 0.05],
+            [0.1, 0.12, 0.35, 0.4, 0.3, 0.2],
+            [0.08, 0.1, 0.85, 0.9, 0.88, 0.8],
+            [0.05, 0.06, 0.2, 0.25, 0.15, 0.1],
+          ],
+        },
+        ['detect_silent_failures'],
+        'any silent failures?',
+      ),
+    );
+
+    // SLO burn
+    ids.push(
+      await post(
+        'Checkout availability SLO is burning fast — **38m** to breach if burn holds.',
+        'slo-burn',
+        {
+          sloName: 'checkout availability',
+          target: 99.9,
+          current: 99.72,
+          burnRate1h: 14.2,
+          burnRate6h: 3.1,
+          minutesToBreach: 38,
+        },
+        ['get_slo'],
+        'SLO burn for checkout',
+      ),
+    );
+
+    // Log signatures
+    ids.push(
+      await post(
+        'Top exception fingerprints in the last hour — `NullReferenceException` dominates.',
+        'log-signatures',
+        {
+          signatures: [
+            {
+              fingerprint: 'NullReferenceException',
+              count: 842,
+              trend: [12, 18, 22, 40, 90, 120, 180],
+              sample: 'CheckoutService.Confirm at line 214',
+            },
+            {
+              fingerprint: 'TimeoutException',
+              count: 210,
+              trend: [30, 28, 35, 40, 38, 42, 45],
+              sample: 'payments-worker ChargeCard',
+            },
+            {
+              fingerprint: 'SqlException: deadlock',
+              count: 64,
+              trend: [2, 4, 3, 8, 12, 10, 14],
+              sample: 'orders INSERT contention',
+            },
+          ],
+        },
+        ['query_logs'],
+        'top error signatures',
+      ),
+    );
+
+    // Cost runaway
+    ids.push(
+      await post(
+        'Egress spend diverged from baseline after the log fan-out change — **+42%** projected overrun.',
+        'cost-runaway',
+        {
+          unit: '$',
+          projectedOverrunPct: 42,
+          points: [
+            { time: 'Mon', spend: 120, baseline: 118 },
+            { time: 'Tue', spend: 125, baseline: 120 },
+            { time: 'Wed', spend: 180, baseline: 122 },
+            { time: 'Thu', spend: 210, baseline: 124 },
+            { time: 'Fri', spend: 240, baseline: 126 },
+          ],
+        },
+        ['query_cost'],
+        'cost runaway this week?',
+      ),
+    );
+
+    // Incident timeline
+    ids.push(
+      await post(
+        'Incident `#inc-914` timeline — still **open**. Pin this while the swarm works.',
+        'incident-timeline',
+        {
+          incidentId: '#inc-914',
+          status: 'open',
+          events: [
+            { at: '9:11', actor: 'system', label: 'Detector fired', detail: 'error spike checkout-api' },
+            { at: '9:12', actor: 'calyx', label: 'Alert card posted', detail: 'severity high' },
+            { at: '9:14', actor: 'human', label: 'Hadley joined thread' },
+            { at: '9:16', actor: 'calyx', label: 'Root cause hypothesis', detail: 'deploy a3f91c correlation' },
+            { at: '9:18', actor: 'human', label: 'Rollback requested' },
+          ],
+        },
+        ['search_past_incidents'],
+        'show incident timeline',
+      ),
+    );
+
+    // Approval / dry-run
+    ids.push(
+      await post(
+        'I can roll back `checkout` to the previous replica set. Dry-run first — then you approve.',
+        'approval-card',
+        {
+          action: 'deploy.rollback',
+          target: 'checkout@a3f91c → checkout@9be210',
+          risk: 'high',
+          reversible: true,
+          blastEstimate: '~2m partial unavailability on checkout',
+          dryRunSummary: [
+            'scale checkout-canary to 0',
+            'route 100% traffic to checkout@9be210',
+            'verify error rate < 1% for 3m',
+            'emit audit event rollback.requested',
+          ],
+        },
+        ['propose_action'],
+        'rollback checkout deploy',
+      ),
+    );
+
+    // Compare window
+    ids.push(
+      await post(
+        "Compare **this deploy** vs **last Tuesday** — today's p99 is clearly worse after 9:11.",
+        'compare-window',
+        {
+          labelA: 'This deploy',
+          labelB: 'Last Tue',
+          pointsA: [
+            { time: '9:00', value: 0.4 },
+            { time: '9:05', value: 0.5 },
+            { time: '9:11', value: 4.8 },
+            { time: '9:15', value: 3.2 },
+            { time: '9:20', value: 2.1 },
+          ],
+          pointsB: [
+            { time: '9:00', value: 0.35 },
+            { time: '9:05', value: 0.4 },
+            { time: '9:11', value: 0.45 },
+            { time: '9:15', value: 0.5 },
+            { time: '9:20', value: 0.42 },
+          ],
+        },
+        ['query_metrics'],
+        'compare to last tuesday',
+      ),
+    );
+
+    // Memory recall
+    ids.push(
+      await post(
+        'Looks a lot like **#inc-482** from last month — same NullRef + deploy correlation pattern.',
+        'memory-recall',
+        {
+          incidentId: '#inc-482',
+          title: 'Checkout NullRef after payments deploy',
+          when: '18 Aug',
+          similarity: 0.87,
+          summary: 'Resolved by rolling back payments-worker; root cause was missing null check on cart total.',
+        },
+        ['search_past_incidents'],
+        'have we seen this before?',
+      ),
+    );
+
+    // Keep a couple classic types too
+    ids.push(
+      await post(
+        'Service health strips for the watched set.',
+        'text-status-bars',
+        [
+          { service: 'Payment App', errorRate: 8.2, total: 12040, errorCount: 987 },
+          { service: 'E-Commerce API', errorRate: 3.1, total: 8840, errorCount: 274 },
+        ],
+        ['get_service_stats'],
+      ),
+    );
+
+    ids.push(
+      await post(
+        '`NullReferenceException` in `CheckoutService` — spike at **9:11**.',
+        'error-timeseries',
+        [
+          {
+            label: 'errors',
+            points: [
+              { time: '9:03', value: 0.8 },
+              { time: '9:07', value: 1.1 },
+              { time: '9:11', value: 5.0 },
+              { time: '9:15', value: 2.4 },
+              { time: '9:19', value: 0.9 },
+            ],
+          },
+        ],
+        ['query_logs'],
+      ),
+    );
+
+    return { count: ids.length, ids };
   },
 });

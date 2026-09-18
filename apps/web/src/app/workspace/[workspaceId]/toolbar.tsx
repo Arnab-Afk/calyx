@@ -58,7 +58,7 @@ export const Toolbar = () => {
   }, []);
 
   return (
-    <nav className="flex h-10 items-center justify-between bg-[#481349] p-1.5">
+    <nav className="flex h-10 items-center justify-between border-b border-white/10 bg-[#0c0c0e] p-1.5">
       <div className="flex-1" aria-hidden />
 
       <div className="min-w-[280px] max-w-[642px] shrink grow-[2]">
