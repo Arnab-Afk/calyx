@@ -317,3 +317,76 @@ export const remove = mutation({
     return args.id;
   },
 });
+
+/** Dev helper: post a sample Calyx AI reply with a Grafana-style chart (no auth). */
+export const seedCalyxDemoReply = mutation({
+  args: {
+    workspaceId: v.id('workspaces'),
+    channelId: v.id('channels'),
+    memberId: v.id('members'),
+  },
+  handler: async (ctx, args) => {
+    const chartData = JSON.stringify([
+      {
+        label: 'checkout-api',
+        points: [
+          { time: '00:00', value: 0.4 },
+          { time: '00:05', value: 0.6 },
+          { time: '00:10', value: 1.2 },
+          { time: '00:15', value: 4.8 },
+          { time: '00:20', value: 7.1 },
+          { time: '00:25', value: 5.3 },
+          { time: '00:30', value: 2.1 },
+        ],
+      },
+      {
+        label: 'payments-worker',
+        points: [
+          { time: '00:00', value: 0.2 },
+          { time: '00:05', value: 0.3 },
+          { time: '00:10', value: 0.5 },
+          { time: '00:15', value: 1.8 },
+          { time: '00:20', value: 3.4 },
+          { time: '00:25', value: 2.9 },
+          { time: '00:30', value: 1.1 },
+        ],
+      },
+    ]);
+
+    const answer = [
+      'Hey — sample **Calyx** reply with a Grafana-style panel.',
+      '',
+      '**What I see:** error rate on `checkout-api` spiked ~00:15 (0.6% → **7.1%**), with `payments-worker` following.',
+      '',
+      '| Service | Peak | Status |',
+      '|---|---|---|',
+      '| checkout-api | 7.1% | elevated |',
+      '| payments-worker | 3.4% | elevated |',
+      '',
+      '**Likely cause:** deploy correlation window — recommend checking last release + DB pool saturation.',
+      '',
+      '_This message exercises the chart modification only; Slack chrome is unchanged._',
+    ].join('\n');
+
+    const calyxData = {
+      query: 'hi — show me a sample observability chart',
+      answer,
+      chartType: 'error-timeseries',
+      chartData,
+      toolNames: ['query_logs', 'get_service_stats'],
+      tenantId: 'default',
+    };
+
+    const body = JSON.stringify({
+      ops: [{ insert: `[Calyx] ${answer.slice(0, 180)}…\n` }],
+    });
+
+    return await ctx.db.insert('messages', {
+      memberId: args.memberId,
+      body,
+      channelId: args.channelId,
+      workspaceId: args.workspaceId,
+      calyxData,
+    });
+  },
+});

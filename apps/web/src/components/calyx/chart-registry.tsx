@@ -35,6 +35,11 @@ export function ensureChartRegistered() {
   registered = true;
 }
 
+// Eager register so first chart render never races useEffect
+if (typeof window !== "undefined") {
+  ensureChartRegistered();
+}
+
 /** Grafana-inspired dark panel tokens (message charts only). */
 export const COLORS = {
   background: '#111217',

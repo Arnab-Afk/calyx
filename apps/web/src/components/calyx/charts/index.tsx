@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { Loader } from 'lucide-react';
-import { GrafanaPanel } from '../chart-registry';
+import { GrafanaPanel, ensureChartRegistered } from '../chart-registry';
 
 const ServiceHealthBars = dynamic(() => import('./service-health-bars').then((m) => ({ default: m.ServiceHealthBars })), { ssr: false, loading: () => <ChartLoader /> });
 const LevelDonut = dynamic(() => import('./level-donut').then((m) => ({ default: m.LevelDonut })), { ssr: false, loading: () => <ChartLoader /> });
@@ -38,6 +38,7 @@ const TITLES: Record<string, string> = {
 };
 
 export function CalyxChart({ type, data, title }: ChartProps) {
+  ensureChartRegistered();
   if (!data) return null;
 
   const panelTitle = title ?? TITLES[type] ?? 'Observability';

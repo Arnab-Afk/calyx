@@ -1,7 +1,6 @@
 'use client';
 
 import { Doughnut } from 'react-chartjs-2';
-import { useEffect } from 'react';
 import { ensureChartRegistered, COLORS, DARK_DEFAULTS } from '../chart-registry';
 
 const LEVEL_COLORS: Record<string, string> = {
@@ -13,7 +12,7 @@ const LEVEL_COLORS: Record<string, string> = {
 };
 
 export function LevelDonut({ byLevel }: { byLevel: Record<string, number> }) {
-  useEffect(() => { ensureChartRegistered(); }, []);
+  ensureChartRegistered();
 
   const entries = Object.entries(byLevel).filter(([, v]) => v > 0);
 

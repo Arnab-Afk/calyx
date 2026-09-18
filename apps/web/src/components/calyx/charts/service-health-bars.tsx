@@ -1,7 +1,6 @@
 'use client';
 
 import { Bar } from 'react-chartjs-2';
-import { useEffect } from 'react';
 import { ensureChartRegistered, COLORS, DARK_DEFAULTS } from '../chart-registry';
 
 interface ServiceStat {
@@ -19,7 +18,7 @@ function zoneColor(rate: number) {
 }
 
 export function ServiceHealthBars({ stats }: { stats: ServiceStat[] }) {
-  useEffect(() => { ensureChartRegistered(); }, []);
+  ensureChartRegistered();
 
   const sorted = [...stats].sort((a, b) => b.error_rate - a.error_rate);
 

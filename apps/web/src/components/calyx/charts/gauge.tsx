@@ -1,7 +1,6 @@
 'use client';
 
 import { Doughnut } from 'react-chartjs-2';
-import { useEffect } from 'react';
 import { ensureChartRegistered, COLORS, DARK_DEFAULTS } from '../chart-registry';
 
 function zoneColor(pct: number) {
@@ -12,7 +11,7 @@ function zoneColor(pct: number) {
 }
 
 export function Gauge({ value, label = 'Value', maxValue = 100 }: { value: number; label?: string; maxValue?: number }) {
-  useEffect(() => { ensureChartRegistered(); }, []);
+  ensureChartRegistered();
 
   const clamped = Math.min(value, maxValue);
   const color = zoneColor((clamped / maxValue) * 100);

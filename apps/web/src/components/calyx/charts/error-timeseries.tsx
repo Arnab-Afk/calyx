@@ -1,14 +1,13 @@
 'use client';
 
 import { Line } from 'react-chartjs-2';
-import { useEffect } from 'react';
 import { ensureChartRegistered, COLORS, DARK_DEFAULTS } from '../chart-registry';
 
 interface TimePoint { time: string; value: number; }
 interface TimeSeries { label: string; points: TimePoint[]; color?: string; }
 
 export function ErrorTimeseries({ series }: { series: TimeSeries[] }) {
-  useEffect(() => { ensureChartRegistered(); }, []);
+  ensureChartRegistered();
 
   const labels = series[0]?.points.map((p) => p.time) ?? [];
 

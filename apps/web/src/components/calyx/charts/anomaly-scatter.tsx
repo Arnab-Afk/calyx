@@ -1,13 +1,12 @@
 'use client';
 
 import { Bubble } from 'react-chartjs-2';
-import { useEffect } from 'react';
 import { ensureChartRegistered, COLORS, DARK_DEFAULTS } from '../chart-registry';
 
 interface AnomalyPoint { time: string; errorRate: number; volume: number; service: string; isAnomaly?: boolean; }
 
 export function AnomalyScatter({ points }: { points: AnomalyPoint[] }) {
-  useEffect(() => { ensureChartRegistered(); }, []);
+  ensureChartRegistered();
 
   const services = [...new Set(points.map((p) => p.service))];
   const allTimes = [...new Set(points.map((p) => p.time))];
