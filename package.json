@@ -6,6 +6,9 @@
   "scripts": {
     "dev:ingestion": "tsx src/ingestion/server.ts",
     "dev:consumer": "tsx src/ingestion/consumer.ts",
+    "dev:slack": "tsx src/slack/index.ts",
+    "dev:mcp": "tsx src/mcp/server.ts",
+    "cli": "tsx src/cli/index.ts",
     "migrate": "tsx src/storage/migrate.ts",
     "test": "vitest run",
     "test:watch": "vitest"
