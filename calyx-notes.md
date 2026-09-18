@@ -167,6 +167,8 @@ Do not start until Stage 1 cards are trusted on real (or realistic) traffic.
 
 **Rule:** the model never picks a Chart.js type and never uploads pixels. Tools return `data` + `visualization_hint`. The Slack adapter already does this for charts; diagrams join the same `ChartResult` (`image` and/or `blocks` + `caption`).
 
+**Slack is not a dashboard.**  marketing shows 7-day colored ticks and a green “all systems operational” banner inside a chat frame. Slack cannot host hoverable Chart.js. Their “interactive” bit in Slack is buttons + thread questions; a “View in ” web view is where hover/zoom would live. Calyx status replies should be that card (banner, service pills, 7-day ticks) plus 1h/24h/7d and service buttons — not a dual-axis PNG and not an essay.
+
 **Diagram payload** (add `diagram` to `visualization_hint` when the first renderer lands):
 
 ```ts

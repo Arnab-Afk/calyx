@@ -1,5 +1,5 @@
-// Horizontal status bar chart — one bar per service, colored by error rate.
-// Great answer to "how is the system doing?" or "which services are unhealthy?"
+// Horizontal bars — error rate % only. Do not mix volume on the same axis
+// (Chart.js dual-axis + indexAxis:y swaps labels and hides a 0.01% rate).
 
 import { renderChart, COLORS, type RenderOptions } from "./renderer.js";
 import type { ServiceStats } from "../../storage/events.js";
@@ -31,15 +31,6 @@ export async function serviceHealthBars(
             borderRadius: 4,
             borderSkipped: false,
           },
-          {
-            label: "Total events",
-            data: sorted.map((s) => s.total),
-            backgroundColor: COLORS.series[0] + "33",
-            borderColor: COLORS.series[0],
-            borderWidth: 1,
-            borderRadius: 4,
-            yAxisID: "yTotal",
-          },
         ],
       },
       options: {
@@ -48,12 +39,7 @@ export async function serviceHealthBars(
           x: {
             title: { display: true, text: "Error rate %", color: COLORS.subtext },
             min: 0,
-          },
-          yTotal: {
-            type: "linear",
-            position: "right",
-            title: { display: true, text: "Total events", color: COLORS.subtext },
-            grid: { drawOnChartArea: false },
+            suggestedMax: Math.max(5, ...sorted.map((s) => s.error_rate)),
           },
         },
       },
@@ -61,7 +47,7 @@ export async function serviceHealthBars(
     {
       width: 800,
       height: Math.max(300, 80 + labels.length * 50),
-      title: opts.title ?? "Service Health Overview",
+      title: opts.title ?? "Error rate by service",
     }
   );
 }

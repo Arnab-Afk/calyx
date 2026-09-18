@@ -200,6 +200,95 @@ export async function getServiceStats(
   });
 }
 
+export type DayHealthStatus = "ok" | "warn" | "error" | "empty";
+
+export interface DailyBucket {
+  date: string; // YYYY-MM-DD UTC
+  status: DayHealthStatus;
+  total: number;
+  error_count: number;
+  warn_count: number;
+}
+
+export interface ServiceDailyHealth {
+  service: string;
+  days: DailyBucket[];
+}
+
+export function bucketStatus(total: number, errorCount: number, warnCount: number): DayHealthStatus {
+  if (total <= 0) return "empty";
+  const errorRate = (errorCount / total) * 100;
+  const warnRate = (warnCount / total) * 100;
+  if (errorRate >= 1 || errorCount >= 5) return "error";
+  if (errorCount > 0 || warnRate >= 5) return "warn";
+  return "ok";
+}
+
+function utcDayKeys(days: number, end = new Date()): string[] {
+  const keys: string[] = [];
+  const endUtc = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+  for (let i = days - 1; i >= 0; i--) {
+    keys.push(new Date(endUtc - i * 86400000).toISOString().slice(0, 10));
+  }
+  return keys;
+}
+
+/** Last N UTC days of per-service health, with empty days filled in. */
+export async function getServiceDailyHealth(
+  tenant_id: string,
+  opts: { service?: string; days?: number } = {}
+): Promise<ServiceDailyHealth[]> {
+  const days = Math.min(Math.max(opts.days ?? 7, 1), 14);
+  const keys = utcDayKeys(days);
+  const from = `${keys[0]}T00:00:00.000Z`;
+  const to = `${keys[keys.length - 1]}T23:59:59.999Z`;
+
+  const pool = getPool();
+  const conditions = ["tenant_id = $1", "timestamp >= $2", "timestamp <= $3"];
+  const params: unknown[] = [tenant_id, from, to];
+  if (opts.service) {
+    conditions.push("service = $4");
+    params.push(opts.service);
+  }
+
+  const result = await pool.query(
+    `SELECT service,
+            to_char(date_trunc('day', timestamp AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS day,
+            COUNT(*) AS total,
+            COUNT(*) FILTER (WHERE level IN ('error','fatal')) AS error_count,
+            COUNT(*) FILTER (WHERE level = 'warn') AS warn_count
+     FROM events
+     WHERE ${conditions.join(" AND ")}
+     GROUP BY service, day
+     ORDER BY service, day`,
+    params
+  );
+
+  const byService = new Map<string, Map<string, DailyBucket>>();
+  for (const row of result.rows) {
+    const total = parseInt(row.total, 10);
+    const error_count = parseInt(row.error_count, 10);
+    const warn_count = parseInt(row.warn_count, 10);
+    if (!byService.has(row.service)) byService.set(row.service, new Map());
+    byService.get(row.service)!.set(row.day, {
+      date: row.day,
+      status: bucketStatus(total, error_count, warn_count),
+      total,
+      error_count,
+      warn_count,
+    });
+  }
+
+  const services = [...byService.keys()].sort();
+  return services.map((service) => ({
+    service,
+    days: keys.map((date) => {
+      const hit = byService.get(service)?.get(date);
+      return hit ?? { date, status: "empty", total: 0, error_count: 0, warn_count: 0 };
+    }),
+  }));
+}
+
 export async function getDistinctServices(tenant_id: string): Promise<string[]> {
   const pool = getPool();
   const result = await pool.query(

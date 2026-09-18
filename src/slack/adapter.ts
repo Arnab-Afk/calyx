@@ -20,8 +20,7 @@ import {
 import { buildServiceDrilldownButtons } from "./blocks/service-drilldown.js";
 import { executeAction } from "../execution/executor.js";
 import { executeTool } from "../agent/registry.js";
-import { renderChartForSlack as renderChart } from "./charts/index.js";
-import { buildStatusBarsMessage } from "./charts/text-status-bar.js";
+import { buildStatusOverviewCard } from "./blocks/status-card.js";
 import {
   SLACK_REPLY_INSTRUCTIONS,
   markdownToSlackBlocks,
@@ -30,7 +29,8 @@ import {
 } from "./format-answer.js";
 import {
   unwrapServiceStats,
-  toStatusBarServices,
+  unwrapDailyHealth,
+  unwrapTotals,
   asLogEvents,
 } from "./tool-data.js";
 import type { Alert } from "../schemas/index.js";
@@ -41,16 +41,23 @@ function tenantForTeam(teamId: string): string {
   return process.env[`CALYX_TENANT_${teamId}`] ?? teamId;
 }
 
-function pickStatsCall(calls: ToolCallRecord[]): ToolCallRecord | undefined {
-  return (
-    calls.find((c) => c.toolName === "get_service_stats") ??
-    calls.find((c) => c.toolName === "query_logs")
+function pickWidestStatsCall(calls: ToolCallRecord[]): ToolCallRecord | undefined {
+  const statsCalls = calls.filter((c) => c.toolName === "get_service_stats" && c.output);
+  if (statsCalls.length === 0) return undefined;
+  return statsCalls.reduce((best, c) =>
+    unwrapServiceStats(c.output?.data).length >= unwrapServiceStats(best.output?.data).length
+      ? c
+      : best
   );
 }
 
+function pickStatsCall(calls: ToolCallRecord[]): ToolCallRecord | undefined {
+  return pickWidestStatsCall(calls) ?? calls.find((c) => c.toolName === "query_logs");
+}
+
 function pickChartableCall(calls: ToolCallRecord[]): ToolCallRecord | undefined {
-  const stats = [...calls].reverse().find((c) => c.toolName === "get_service_stats" && c.output);
-  if (stats) return stats;
+  const widest = pickWidestStatsCall(calls);
+  if (widest) return widest;
   return [...calls]
     .reverse()
     .find((c) => c.output?.visualization_hint && c.output.visualization_hint !== "none");
@@ -101,34 +108,47 @@ export function createSlackApp(): App {
         .catch(() => {});
     }
 
-    const chartableCall = pickChartableCall(response.toolCallsMade);
+    const statsCall = pickStatsCall(response.toolCallsMade);
+    const stats = unwrapServiceStats(statsCall?.output?.data);
+    const showStatusCard = statsCall?.toolName === "get_service_stats" && stats.length > 0;
 
-    let chartResult: Awaited<ReturnType<typeof renderChartForSlack>> | null = null;
-    if (chartableCall?.output) {
-      const chartType = autoChartType(
-        chartableCall.output.visualization_hint ?? "bar",
-        chartableCall.output.data
+    const replyBlocks: object[] = [];
+
+    if (showStatusCard) {
+      const { totalEvents, overallErrorRate } = unwrapTotals(statsCall!.output!.data);
+      replyBlocks.push(
+        ...buildStatusOverviewCard({
+          stats,
+          daily: unwrapDailyHealth(statsCall!.output!.data),
+          totalEvents,
+          overallErrorRate,
+        })
       );
-      if (chartType) {
-        chartResult = await renderChartForSlack({
-          type: chartType,
-          data: chartableCall.output.data,
-        }).catch(() => null);
-      }
     }
 
-    const replyBlocks: object[] = [...markdownToSlackBlocks(response.answer)];
+    replyBlocks.push(...markdownToSlackBlocks(response.answer));
 
-    if (chartResult?.blocks) replyBlocks.push(...chartResult.blocks);
+    let chartResult: Awaited<ReturnType<typeof renderChartForSlack>> | null = null;
+    if (!showStatusCard) {
+      const chartableCall = pickChartableCall(response.toolCallsMade);
+      if (chartableCall?.output) {
+        const chartType = autoChartType(
+          chartableCall.output.visualization_hint ?? "bar",
+          chartableCall.output.data
+        );
+        if (chartType) {
+          chartResult = await renderChartForSlack({
+            type: chartType,
+            data: chartableCall.output.data,
+          }).catch(() => null);
+        }
+      }
+      if (chartResult?.blocks) replyBlocks.push(...chartResult.blocks);
+    }
 
-    const statsCall = pickStatsCall(response.toolCallsMade);
     if (statsCall) {
-      const services = unwrapServiceStats(statsCall.output?.data).map((s) => s.service);
-
-      replyBlocks.push(
-        buildTimeRangeButtons({ toolName: statsCall.toolName, tenantId })
-      );
-
+      const services = stats.map((s) => s.service);
+      replyBlocks.push(buildTimeRangeButtons({ toolName: statsCall.toolName, tenantId }));
       if (statsCall.toolName === "get_service_stats" && services.length > 1) {
         const drilldown = buildServiceDrilldownButtons(tenantId, services);
         if (drilldown) replyBlocks.push(drilldown);
@@ -330,20 +350,23 @@ export function createSlackApp(): App {
 
     const label = hours < 24 ? `${hours}h` : hours === 168 ? "7d" : `${hours / 24}d`;
     const stats = unwrapServiceStats(result.output.data);
-    const hint = result.output.visualization_hint;
-    const chartType = hint && hint !== "none" ? autoChartType(hint, result.output.data) : null;
-    const chartResult = chartType
-      ? await renderChart({ type: chartType, data: result.output.data }).catch(() => null)
-      : null;
+    const { totalEvents, overallErrorRate } = unwrapTotals(result.output.data);
 
     const replyBlocks: object[] = [];
 
     if (toolName === "get_service_stats" && stats.length > 0) {
       replyBlocks.push({
         type: "context",
-        elements: [{ type: "mrkdwn", text: `Last *${label}*` }],
+        elements: [{ type: "mrkdwn", text: `Window: last *${label}*` }],
       });
-      replyBlocks.push(...buildStatusBarsMessage(toStatusBarServices(stats)));
+      replyBlocks.push(
+        ...buildStatusOverviewCard({
+          stats,
+          daily: unwrapDailyHealth(result.output.data),
+          totalEvents,
+          overallErrorRate,
+        })
+      );
     } else if (toolName === "query_logs") {
       replyBlocks.push(
         ...buildLogListBlocks(asLogEvents(result.output.data), `Logs — last ${label}`)
@@ -355,7 +378,6 @@ export function createSlackApp(): App {
       });
     }
 
-    if (chartResult?.blocks) replyBlocks.push(...chartResult.blocks);
     replyBlocks.push(buildTimeRangeButtons({ toolName, tenantId, service }));
 
     await client.chat
@@ -366,18 +388,6 @@ export function createSlackApp(): App {
         blocks: replyBlocks as never,
       })
       .catch(() => {});
-
-    if (chartResult?.image) {
-      await client.files
-        .uploadV2({
-          channel_id: actionBody.channel.id,
-          thread_ts: threadTs,
-          filename: "calyx-chart.png",
-          file: chartResult.image,
-          initial_comment: chartResult.caption,
-        })
-        .catch(() => {});
-    }
   };
 
   app.action("time_range_1h", timeRangeHandler);
@@ -410,39 +420,32 @@ export function createSlackApp(): App {
         type: "header",
         text: { type: "plain_text", text: `↗ ${service}`.slice(0, 150), emoji: false },
       },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: statsResult.ok ? statsResult.output.summary : `No data for ${service}.`,
-        },
-      },
     ];
 
     if (statsResult.ok) {
-      const stats = unwrapServiceStats(statsResult.output.data);
-      const svc = stats[0];
-      if (svc) {
-        replyBlocks.push(buildTimeRangeButtons({ toolName: "get_service_stats", tenantId, service }));
-
-        const gaugeResult = await renderChart({
-          type: "gauge",
-          title: `${service} — error rate`,
-          data: { value: svc.error_rate, label: "Error rate %", maxValue: 100 },
-        }).catch(() => null);
-
-        if (gaugeResult?.image) {
-          await client.files
-            .uploadV2({
-              channel_id: actionBody.channel.id,
-              thread_ts: threadTs,
-              filename: `${service}-gauge.png`,
-              file: gaugeResult.image,
-              initial_comment: gaugeResult.caption,
-            })
-            .catch(() => {});
-        }
+      const svcStats = unwrapServiceStats(statsResult.output.data);
+      const { totalEvents, overallErrorRate } = unwrapTotals(statsResult.output.data);
+      if (svcStats.length > 0) {
+        replyBlocks.push(
+          ...buildStatusOverviewCard({
+            stats: svcStats,
+            daily: unwrapDailyHealth(statsResult.output.data),
+            totalEvents,
+            overallErrorRate,
+          })
+        );
+      } else {
+        replyBlocks.push({
+          type: "section",
+          text: { type: "mrkdwn", text: statsResult.output.summary },
+        });
       }
+      replyBlocks.push(buildTimeRangeButtons({ toolName: "get_service_stats", tenantId, service }));
+    } else {
+      replyBlocks.push({
+        type: "section",
+        text: { type: "mrkdwn", text: `No data for ${service}.` },
+      });
     }
 
     await client.chat

@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { getServiceStats, getDistinctServices } from "../../storage/events.js";
+import {
+  getServiceStats,
+  getDistinctServices,
+  getServiceDailyHealth,
+} from "../../storage/events.js";
 import type { Tool, ToolOutput } from "../../schemas/index.js";
 
 const InputSchema = z.object({
@@ -43,9 +47,19 @@ async function handler(input: Input): Promise<ToolOutput> {
       `${totalErrors} errors overall (${overallErrorRate}% error rate). ` +
       `Services: ${stats.map((s) => s.service).join(", ")}.`;
 
+  const daily = await getServiceDailyHealth(input.tenant_id, {
+    service: input.service,
+    days: 7,
+  });
+
   return {
     summary,
-    data: { stats, total_events: totalEvents, overall_error_rate: overallErrorRate },
+    data: {
+      stats,
+      total_events: totalEvents,
+      overall_error_rate: overallErrorRate,
+      daily,
+    },
     visualization_hint: "bar",
   };
 }

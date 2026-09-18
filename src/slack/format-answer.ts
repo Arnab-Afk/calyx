@@ -5,9 +5,11 @@ export const SLACK_REPLY_INSTRUCTIONS = `
 You are posting in Slack. Use Slack mrkdwn, not GitHub markdown:
 - Bold is *single asterisks*. Never use **double asterisks**.
 - Do not use # headings or markdown tables — they show up as raw characters.
-- Lead with the finding in 1–2 sentences, then short labeled sections
-  (*What we found*, *Why it matters*, *What to do*).
-- Use bullets. Stay scannable. Do not write a report or mention tool names.
+- A status card (banner, services, 7-day ticks) is attached separately. Do not repeat
+  event counts, error rates, or service lists that the card already shows.
+- Health/status questions: at most 3 short bullets of things the card cannot show
+  (e.g. a noisy probe path, a recovered burst). No essays, no "things I can't confirm".
+- Other questions: 1–2 sentence takeaway, then bullets. Do not mention tool names.
 `;
 
 const SLACK_SECTION_MAX = 2900;
