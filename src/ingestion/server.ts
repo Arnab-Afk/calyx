@@ -2,6 +2,7 @@ import "dotenv/config";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { logsRoute } from "./routes/v1/logs.js";
+import { askRoute } from "./routes/v1/ask.js";
 import { closePool } from "../storage/client.js";
 import { closeRedis } from "./queue.js";
 
@@ -9,6 +10,7 @@ const app = Fastify({ logger: true });
 
 await app.register(cors);
 await app.register(logsRoute);
+await app.register(askRoute);
 
 app.get("/health", async () => ({ status: "ok" }));
 
