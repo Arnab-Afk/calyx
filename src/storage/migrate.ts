@@ -96,6 +96,47 @@ CREATE TABLE IF NOT EXISTS github_connections (
   connected_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE INDEX IF NOT EXISTS github_connections_tenant_repo
+  ON github_connections (tenant_id, repo);
+
+CREATE TABLE IF NOT EXISTS github_commits (
+  tenant_id    TEXT        NOT NULL,
+  project_id   UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  repo         TEXT        NOT NULL,
+  sha          TEXT        NOT NULL,
+  ref          TEXT,
+  message      TEXT        NOT NULL,
+  author       TEXT,
+  committed_at TIMESTAMPTZ NOT NULL,
+  url          TEXT,
+  received_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (project_id, sha)
+);
+
+CREATE INDEX IF NOT EXISTS github_commits_tenant_time
+  ON github_commits (tenant_id, committed_at DESC);
+
+CREATE TABLE IF NOT EXISTS github_deployments (
+  tenant_id     TEXT        NOT NULL,
+  project_id    UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  repo          TEXT        NOT NULL,
+  deployment_id TEXT        NOT NULL,
+  sha           TEXT,
+  ref           TEXT,
+  environment   TEXT,
+  status        TEXT        NOT NULL,
+  description   TEXT,
+  target_url    TEXT,
+  deployed_at   TIMESTAMPTZ NOT NULL,
+  received_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (project_id, deployment_id)
+);
+
+CREATE INDEX IF NOT EXISTS github_deployments_tenant_time
+  ON github_deployments (tenant_id, deployed_at DESC);
+CREATE INDEX IF NOT EXISTS github_deployments_tenant_sha
+  ON github_deployments (tenant_id, sha);
+
 CREATE TABLE IF NOT EXISTS slack_bindings (
   project_id     UUID        NOT NULL PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
   tenant_id      TEXT        NOT NULL,

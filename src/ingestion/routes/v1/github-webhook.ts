@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { getGithubConnection } from "../../../storage/projects.js";
 import { enqueueEvents } from "../../queue.js";
 import type { Event } from "../../../schemas/index.js";
+import { upsertGithubCommits, upsertGithubDeployment } from "../../../storage/github.js";
 
 function timingSafeEqualStr(a: string, b: string): boolean {
   const ab = Buffer.from(a);
@@ -11,7 +12,7 @@ function timingSafeEqualStr(a: string, b: string): boolean {
   return crypto.timingSafeEqual(ab, bb);
 }
 
-function verifyGithubSignature(secret: string, rawBody: string, signature: string | undefined): boolean {
+export function verifyGithubSignature(secret: string, rawBody: string, signature: string | undefined): boolean {
   if (!signature?.startsWith("sha256=")) return false;
   const expected = `sha256=${crypto.createHmac("sha256", secret).update(rawBody).digest("hex")}`;
   return timingSafeEqualStr(expected, signature);
@@ -54,6 +55,19 @@ export async function githubWebhookRoute(app: FastifyInstance): Promise<void> {
       const commits = (body.commits as Array<Record<string, unknown>> | undefined) ?? [];
       const ref = String(body.ref ?? "");
       const pusher = (body.pusher as { name?: string } | undefined)?.name ?? "unknown";
+      const durableCommits = commits.slice(0, 100).map((c) => ({
+        tenantId: conn.tenantId,
+        projectId,
+        repo: conn.repo,
+        sha: String(c.id),
+        ref,
+        message: String(c.message ?? ""),
+        author: String((c.author as { username?: string; name?: string } | undefined)?.username ??
+          (c.author as { name?: string } | undefined)?.name ?? pusher),
+        committedAt: String(c.timestamp ?? now),
+        url: typeof c.url === "string" ? c.url : undefined,
+      }));
+      if (durableCommits.length > 0) await upsertGithubCommits(durableCommits);
       for (const c of commits.slice(0, 20)) {
         events.push({
           tenant_id: conn.tenantId,
@@ -89,14 +103,28 @@ export async function githubWebhookRoute(app: FastifyInstance): Promise<void> {
       }
     } else if (eventName === "deployment_status" || eventName === "deployment") {
       const deployment = (body.deployment as Record<string, unknown> | undefined) ?? body;
-      const state = String(
-        (body.deployment_status as { state?: string } | undefined)?.state ??
-          deployment.environment ??
-          "unknown"
-      );
+      const deploymentStatus = body.deployment_status as Record<string, unknown> | undefined;
+      if (deployment.id === undefined || deployment.id === null) {
+        return reply.status(422).send({ error: "GitHub deployment is missing id" });
+      }
+      const state = String(deploymentStatus?.state ?? "created");
+      const deployedAt = String(deploymentStatus?.created_at ?? deployment.created_at ?? now);
+      await upsertGithubDeployment({
+        tenantId: conn.tenantId,
+        projectId,
+        repo: conn.repo,
+        deploymentId: String(deployment.id),
+        sha: typeof deployment.sha === "string" ? deployment.sha : undefined,
+        ref: typeof deployment.ref === "string" ? deployment.ref : undefined,
+        environment: typeof deployment.environment === "string" ? deployment.environment : undefined,
+        status: state,
+        description: typeof deploymentStatus?.description === "string" ? deploymentStatus.description : undefined,
+        targetUrl: typeof deploymentStatus?.target_url === "string" ? deploymentStatus.target_url : undefined,
+        deployedAt,
+      });
       events.push({
         tenant_id: conn.tenantId,
-        timestamp: now,
+        timestamp: deployedAt,
         service: "github",
         level: state === "failure" || state === "error" ? "error" : "info",
         message: `deploy ${state}: ${conn.repo}`,

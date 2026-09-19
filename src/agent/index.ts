@@ -3,6 +3,7 @@ import { askTool } from "./tools/ask.js";
 import { queryLogsTool } from "./tools/query_logs.js";
 import { getServiceStatsTool } from "./tools/get_service_stats.js";
 import { getAlertContextTool } from "./tools/get_alert_context.js";
+import { getChangeContextTool } from "./tools/get_change_context.js";
 import { getIncidentTool } from "./tools/get_incident.js";
 import { listIncidentsTool } from "./tools/list_incidents.js";
 import { listServicesTool } from "./tools/list_services.js";
@@ -16,6 +17,7 @@ export function initAgent(): void {
   if (!getTool(queryLogsTool.name)) registerTool(queryLogsTool);
   if (!getTool(getServiceStatsTool.name)) registerTool(getServiceStatsTool);
   if (!getTool(getAlertContextTool.name)) registerTool(getAlertContextTool);
+  if (!getTool(getChangeContextTool.name)) registerTool(getChangeContextTool);
   if (!getTool(getIncidentTool.name)) registerTool(getIncidentTool);
   if (!getTool(listIncidentsTool.name)) registerTool(listIncidentsTool);
   if (!getTool(listServicesTool.name)) registerTool(listServicesTool);

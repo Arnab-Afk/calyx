@@ -14,6 +14,7 @@ The current tools are:
 | `ask` | Run the same evidence-grounded Calyx investigation used by web, Slack, and CLI |
 | `query_logs` | Query historical logs by service, level, and time range |
 | `get_alert_context` | Continue an alert investigation by ID with nearby error evidence |
+| `get_change_context` | Correlate durable GitHub deployments and commits within an incident window |
 | `get_incident` | Retrieve a durable incident with linked alerts and evidence snapshots |
 | `get_service_stats` | Compare service event counts and error rates |
 | `list_services` | Discover which services have sent logs for the authenticated tenant |

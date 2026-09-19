@@ -146,6 +146,7 @@ describe("Phase 5 — MCP server", () => {
 
     expect(result.tools.map((tool) => tool.name)).toEqual([
       "get_alert_context",
+      "get_change_context",
       "get_incident",
       "list_incidents",
       "search_incidents",
