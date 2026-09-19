@@ -9,6 +9,8 @@ import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { authenticateApiKey, bearerToken, type McpPrincipal } from "./auth.js";
 import { createMcpServer } from "./server.js";
 import { closePool } from "../storage/client.js";
+import { recordAuditEvent } from "../storage/audit.js";
+import { consumeAnonymousMcpRateLimit, consumeMcpRateLimit } from "./rate-limit.js";
 
 interface Session {
   transport: StreamableHTTPServerTransport;
@@ -22,6 +24,23 @@ const maxBodyBytes = 1024 * 1024;
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(body));
+}
+
+function requestAuditContext(req: IncomingMessage) {
+  return {
+    ipAddress: req.socket.remoteAddress,
+    userAgent: Array.isArray(req.headers["user-agent"])
+      ? req.headers["user-agent"][0]
+      : req.headers["user-agent"],
+  };
+}
+
+async function auditSafely(event: Parameters<typeof recordAuditEvent>[0]): Promise<void> {
+  try {
+    await recordAuditEvent(event);
+  } catch (error) {
+    console.error("Failed to record audit event", error);
+  }
 }
 
 function unauthorized(res: ServerResponse): void {
@@ -67,7 +86,46 @@ async function authenticate(req: IncomingMessage): Promise<{ token: string; prin
 
 async function handleMcp(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const authentication = await authenticate(req);
-  if (!authentication) return unauthorized(res);
+  if (!authentication) {
+    const anonymousLimit = await consumeAnonymousMcpRateLimit(
+      req.socket.remoteAddress ?? "unknown"
+    );
+    res.setHeader("x-ratelimit-limit", anonymousLimit.limit);
+    res.setHeader("x-ratelimit-remaining", anonymousLimit.remaining);
+    res.setHeader("x-ratelimit-reset", anonymousLimit.resetAt);
+    if (!anonymousLimit.allowed) {
+      res.setHeader(
+        "retry-after",
+        Math.max(1, Math.ceil((Date.parse(anonymousLimit.resetAt) - Date.now()) / 1000))
+      );
+      return sendJson(res, 429, { error: "Authentication rate limit exceeded" });
+    }
+    await auditSafely({
+      actorType: "mcp_credential",
+      action: "mcp.authentication",
+      success: false,
+      metadata: { reason: "invalid_or_missing_token" },
+      ...requestAuditContext(req),
+    });
+    return unauthorized(res);
+  }
+
+  const rateLimit = await consumeMcpRateLimit(authentication.principal.credentialId);
+  res.setHeader("x-ratelimit-limit", rateLimit.limit);
+  res.setHeader("x-ratelimit-remaining", rateLimit.remaining);
+  res.setHeader("x-ratelimit-reset", rateLimit.resetAt);
+  if (!rateLimit.allowed) {
+    res.setHeader("retry-after", Math.max(1, Math.ceil((Date.parse(rateLimit.resetAt) - Date.now()) / 1000)));
+    await auditSafely({
+      tenantId: authentication.principal.tenantId,
+      actorType: "mcp_credential",
+      actorId: authentication.principal.credentialId,
+      action: "mcp.rate_limited",
+      success: false,
+      ...requestAuditContext(req),
+    });
+    return sendJson(res, 429, { error: "MCP request rate limit exceeded" });
+  }
 
   const sessionHeader = req.headers["mcp-session-id"];
   const sessionId = Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader;
@@ -82,7 +140,19 @@ async function handleMcp(req: IncomingMessage, res: ServerResponse): Promise<voi
 
   let session = sessionId ? sessions.get(sessionId) : undefined;
   if (session) {
-    if (session.credentialId !== authentication.principal.credentialId) return unauthorized(res);
+    if (session.credentialId !== authentication.principal.credentialId) {
+      await auditSafely({
+        tenantId: authentication.principal.tenantId,
+        actorType: "mcp_credential",
+        actorId: authentication.principal.credentialId,
+        action: "mcp.session_access",
+        resourceType: "mcp_session",
+        resourceId: sessionId,
+        success: false,
+        ...requestAuditContext(req),
+      });
+      return unauthorized(res);
+    }
   } else if (req.method === "POST" && !sessionId && isInitializeRequest(body)) {
     const server = createMcpServer(authentication.principal);
     let transport!: StreamableHTTPServerTransport;
@@ -118,6 +188,17 @@ async function handleMcp(req: IncomingMessage, res: ServerResponse): Promise<voi
 
   (req as IncomingMessage & { auth?: AuthInfo }).auth = authInfo(authentication.token, authentication.principal);
   await session.transport.handleRequest(req as IncomingMessage & { auth?: AuthInfo }, res, body);
+  await auditSafely({
+    tenantId: authentication.principal.tenantId,
+    actorType: "mcp_credential",
+    actorId: authentication.principal.credentialId,
+    action: "mcp.request",
+    resourceType: "mcp_session",
+    resourceId: sessionId ?? session.transport.sessionId,
+    success: res.statusCode < 400,
+    metadata: { method: req.method },
+    ...requestAuditContext(req),
+  });
 }
 
 export function createMcpHttpServer() {

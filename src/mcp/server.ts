@@ -12,6 +12,7 @@ import {
 import { initAgent, getAllTools, executeTool } from "../agent/index.js";
 import type { ToolInput, ToolJsonSchema } from "../schemas/index.js";
 import { authenticateApiKey, type McpPrincipal, type McpScope } from "./auth.js";
+import { recordAuditEvent } from "../storage/audit.js";
 
 export interface McpContext extends McpPrincipal {}
 
@@ -69,12 +70,32 @@ export function createMcpServer(context: McpContext): Server {
     const { name, arguments: args } = request.params;
     const requiredScope = TOOL_SCOPES[name];
     if (!requiredScope) {
+      await recordAuditEvent({
+        tenantId: context.tenantId,
+        actorType: "mcp_credential",
+        actorId: context.credentialId,
+        action: "mcp.tool_call",
+        resourceType: "mcp_tool",
+        resourceId: name,
+        success: false,
+        metadata: { reason: "unknown_tool" },
+      }).catch((error) => console.error("Failed to audit MCP tool call", error));
       return {
         content: [{ type: "text", text: `Error: unknown or unavailable tool: ${name}` }],
         isError: true,
       };
     }
     if (!context.scopes.includes(requiredScope)) {
+      await recordAuditEvent({
+        tenantId: context.tenantId,
+        actorType: "mcp_credential",
+        actorId: context.credentialId,
+        action: "mcp.tool_call",
+        resourceType: "mcp_tool",
+        resourceId: name,
+        success: false,
+        metadata: { reason: "missing_scope", requiredScope },
+      }).catch((error) => console.error("Failed to audit MCP tool call", error));
       return {
         content: [{ type: "text", text: `Forbidden: missing ${requiredScope} scope` }],
         isError: true,
@@ -83,6 +104,16 @@ export function createMcpServer(context: McpContext): Server {
 
     const input = { ...(args ?? {}), tenant_id: context.tenantId } as ToolInput;
     const result = await executeTool(name, input);
+    await recordAuditEvent({
+      tenantId: context.tenantId,
+      actorType: "mcp_credential",
+      actorId: context.credentialId,
+      action: "mcp.tool_call",
+      resourceType: "mcp_tool",
+      resourceId: name,
+      success: result.ok,
+      ...(!result.ok && { metadata: { error: result.error.slice(0, 500) } }),
+    }).catch((error) => console.error("Failed to audit MCP tool call", error));
     if (!result.ok) {
       return {
         content: [{ type: "text", text: `Error: ${result.error}` }],

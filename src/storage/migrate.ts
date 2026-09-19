@@ -198,6 +198,42 @@ CREATE TABLE IF NOT EXISTS alert_deliveries (
 CREATE INDEX IF NOT EXISTS alert_deliveries_pending
   ON alert_deliveries (available_at ASC)
   WHERE status IN ('pending','failed');
+
+CREATE TABLE IF NOT EXISTS audit_events (
+  id            UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  tenant_id     TEXT,
+  actor_type    TEXT        NOT NULL,
+  actor_id      TEXT,
+  action        TEXT        NOT NULL,
+  resource_type TEXT,
+  resource_id   TEXT,
+  success       BOOLEAN     NOT NULL,
+  metadata      JSONB       NOT NULL DEFAULT '{}',
+  ip_address    INET,
+  user_agent    TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS audit_events_tenant_time
+  ON audit_events (tenant_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS mcp_rate_limits (
+  credential_id UUID        NOT NULL REFERENCES mcp_api_keys(id) ON DELETE CASCADE,
+  window_start  TIMESTAMPTZ NOT NULL,
+  request_count INTEGER     NOT NULL,
+  PRIMARY KEY (credential_id, window_start)
+);
+
+CREATE TABLE IF NOT EXISTS mcp_anonymous_rate_limits (
+  identifier    TEXT        NOT NULL,
+  window_start  TIMESTAMPTZ NOT NULL,
+  request_count INTEGER     NOT NULL,
+  PRIMARY KEY (identifier, window_start)
+);
+
+CREATE INDEX IF NOT EXISTS mcp_rate_limits_window ON mcp_rate_limits (window_start);
+CREATE INDEX IF NOT EXISTS mcp_anonymous_rate_limits_window
+  ON mcp_anonymous_rate_limits (window_start);
 `;
 
 async function migrate(): Promise<void> {
