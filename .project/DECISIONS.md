@@ -121,3 +121,23 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Because.** Alert detection can evolve independently from incident investigation, while snapshots preserve what was known at each detector occurrence.
 
 **Consequence.** Each new alert currently opens one incident automatically; future correlation can attach multiple alerts to an incident through the existing link table. Removing the compatibility tool requires a versioned release.
+
+---
+
+## D-007 — Deliver autonomous alerts through a durable outbox
+
+**Date:** 2026-09-19
+**Status:** accepted
+
+**Context.** Detection must run without a user request and notifications must survive process crashes, provider outages, and restarts. Calling Slack directly inside detector code would couple evidence generation to presentation and lose failed deliveries.
+
+**Options considered.**
+- **Post directly from the detector** — minimal, but failures are lost and provider latency blocks detection.
+- **Use an in-memory retry queue** — decouples code but loses state on restart and cannot coordinate workers.
+- **Persist an alert delivery outbox** — supports deduplication, retries, leases, and independent destination handlers.
+
+**Decision.** We chose a PostgreSQL outbox keyed by alert, destination, and target. The scheduler discovers recently active tenant/services, persists detection results, enqueues configured tenant destinations, and separately claims deliveries with `SKIP LOCKED`.
+
+**Because.** Evidence remains canonical even when notification providers fail, and tenant-to-channel routing is explicit rather than inferred from client input.
+
+**Consequence.** Slack is the first delivery handler. Web delivery remains disabled until an authenticated workspace notification target exists. Failed deliveries retry with backoff up to five attempts.
