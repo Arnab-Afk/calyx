@@ -230,6 +230,7 @@ describe("Phase 2 — Tool layer golden questions", () => {
     const data = result.output.data as unknown[];
     expect(data).toHaveLength(0);
     expect(result.output.summary).toMatch(/no log events/i);
+    expect(result.output.summary).toContain("api, db, worker");
   });
 
   // 10. get_service_stats for nonexistent service returns empty
@@ -243,6 +244,36 @@ describe("Phase 2 — Tool layer golden questions", () => {
     const { stats } = result.output.data as { stats: unknown[] };
     expect(stats).toHaveLength(0);
     expect(result.output.summary).toMatch(/no stats/i);
+  });
+
+  it("list_services returns the tenant's observed services", async () => {
+    const result = await executeTool("list_services", { tenant_id: TENANT });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.output.data).toEqual({
+      services: ["api", "db", "worker"],
+      count: 3,
+      has_data: true,
+    });
+  });
+
+  it("new tenants receive actionable empty-data guidance", async () => {
+    const tenantId = `${TENANT}-empty`;
+    const queryResult = await executeTool("query_logs", { tenant_id: tenantId });
+    expect(queryResult.ok).toBe(true);
+    if (!queryResult.ok) return;
+    expect(queryResult.output.data).toEqual([]);
+    expect(queryResult.output.summary).toMatch(/no log data.*ingest/i);
+
+    const servicesResult = await executeTool("list_services", { tenant_id: tenantId });
+    expect(servicesResult.ok).toBe(true);
+    if (!servicesResult.ok) return;
+    expect(servicesResult.output.data).toEqual({
+      services: [],
+      count: 0,
+      has_data: false,
+    });
+    expect(servicesResult.output.summary).toMatch(/no services.*ingest/i);
   });
 
   // 11. Fatal events across all services

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { queryEvents } from "../../storage/events.js";
+import { getDistinctServices, queryEvents } from "../../storage/events.js";
 import type { Tool, ToolOutput } from "../../schemas/index.js";
 
 const InputSchema = z.object({
@@ -26,8 +26,18 @@ async function handler(input: Input): Promise<ToolOutput> {
   });
 
   if (rows.length === 0) {
+    const services = await getDistinctServices(input.tenant_id);
+    let summary: string;
+    if (services.length === 0) {
+      summary =
+        "No log data is available for this tenant yet. Ingest at least one log event, then try again.";
+    } else if (input.service && !services.includes(input.service)) {
+      summary = `No log events matched service "${input.service}". Known services: ${services.join(", ")}.`;
+    } else {
+      summary = `No log events matched the query. Known services: ${services.join(", ")}. Try a wider time range or fewer filters.`;
+    }
     return {
-      summary: "No log events matched the query.",
+      summary,
       data: [],
       visualization_hint: "table",
     };

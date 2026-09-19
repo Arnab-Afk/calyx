@@ -19,6 +19,7 @@ const TOOL_SCOPES: Record<string, McpScope> = {
   ask: "incidents:ask",
   query_logs: "logs:read",
   get_service_stats: "logs:read",
+  list_services: "logs:read",
   search_past_incidents: "logs:read",
   tail_logs: "logs:read",
 };

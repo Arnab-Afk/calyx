@@ -100,7 +100,7 @@ Scope `incidents:ask` already exists but is unused.
 
 | Tool | Backed by | Why |
 |---|---|---|
-| `list_services` | `getDistinctServices` | “What did I connect?” |
+| `list_services` ✅ | `getDistinctServices` | “What did I connect?” |
 | `get_alert_context` *(stub ok)* | detection + recent error spike | Bridge alert → IDE (“investigate this”) |
 | Rename plan for `search_past_incidents` | when real incidents table lands | Don’t fake an incidents product |
 
