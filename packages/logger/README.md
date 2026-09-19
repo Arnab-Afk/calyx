@@ -1,11 +1,11 @@
-# `@calyx/logger`
+# `calyx-logger`
 
 Ship frontend (and Node) logs to Calyx with env vars — no Vercel Pro drain required.
 
 ## Install
 
 ```bash
-npm i @calyx/logger
+npm i calyx-logger
 ```
 
 ## 1. Create a frontend source
@@ -40,7 +40,7 @@ VITE_CALYX_SOURCE_TOKEN=calyx_src_…
 // app/instrumentation-client.ts  (Next.js 15+)
 // or app/layout.tsx / a client providers file
 'use client'
-import { init } from '@calyx/logger/browser'
+import { init } from 'calyx-logger/browser'
 
 init()
 ```
@@ -55,7 +55,7 @@ That turns on:
 Manual logs:
 
 ```ts
-import { error, info, captureException } from '@calyx/logger/browser'
+import { error, info, captureException } from 'calyx-logger/browser'
 
 info('checkout opened')
 error('payment failed', { orderId: '…' })
@@ -65,7 +65,7 @@ captureException(err)
 ## Node / server (no DOM hooks)
 
 ```ts
-import { createClient } from '@calyx/logger'
+import { createClient } from 'calyx-logger'
 
 const log = createClient() // reads CALYX_INTAKE_URL + CALYX_SOURCE_TOKEN
 log.error('job failed', { jobId: '…' })
@@ -92,5 +92,5 @@ npm publish --access public
 ```bash
 cd packages/logger && npm run build && npm link
 # in your Next app
-npm link @calyx/logger
+npm link calyx-logger
 ```

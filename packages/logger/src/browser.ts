@@ -22,7 +22,7 @@ function isBrowser(): boolean {
  * @example
  * ```ts
  * // app/layout.tsx or instrumentation-client.ts
- * import { init } from '@calyx/logger/browser'
+ * import { init } from 'calyx-logger/browser'
  * init()
  * ```
  */
@@ -33,7 +33,7 @@ export function init(options: InitOptions = {}): CalyxClient | null {
   if (!config) {
     if (typeof console !== "undefined") {
       console.warn(
-        "[@calyx/logger] missing intakeUrl/token — set NEXT_PUBLIC_CALYX_INTAKE_URL and NEXT_PUBLIC_CALYX_SOURCE_TOKEN"
+        "[calyx-logger] missing intakeUrl/token — set NEXT_PUBLIC_CALYX_INTAKE_URL and NEXT_PUBLIC_CALYX_SOURCE_TOKEN"
       );
     }
     return null;

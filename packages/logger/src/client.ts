@@ -38,10 +38,10 @@ export class CalyxClient {
 
   constructor(options: CalyxClientOptions) {
     if (!options.intakeUrl?.trim()) {
-      throw new Error("@calyx/logger: intakeUrl is required");
+      throw new Error("calyx-logger: intakeUrl is required");
     }
     if (!options.token?.trim()) {
-      throw new Error("@calyx/logger: token is required");
+      throw new Error("calyx-logger: token is required");
     }
 
     this.intakeUrl = options.intakeUrl.replace(/\/$/, "");
@@ -131,7 +131,7 @@ export class CalyxClient {
         // Put back once so a transient outage doesn't drop forever.
         this.queue.unshift(...batch);
         if (typeof console !== "undefined") {
-          console.warn(`[@calyx/logger] intake ${res.status}`);
+          console.warn(`[calyx-logger] intake ${res.status}`);
         }
       }
     } catch {

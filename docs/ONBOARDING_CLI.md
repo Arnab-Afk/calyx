@@ -55,12 +55,12 @@ npm run cli -- slack connect --project my-app
 npm run cli -- slack test --project my-app
 ```
 
-## Frontend SDK (`@calyx/logger`)
+## Frontend SDK (`calyx-logger`)
 
 No Vercel Pro required — instrument the browser:
 
 ```bash
-npm i @calyx/logger
+npm i calyx-logger
 ```
 
 ```env
@@ -70,7 +70,7 @@ NEXT_PUBLIC_CALYX_SOURCE_TOKEN=calyx_src_…   # from: calyx sources create --ro
 
 ```ts
 'use client'
-import { init } from '@calyx/logger/browser'
+import { init } from 'calyx-logger/browser'
 init()
 ```
 
@@ -167,6 +167,6 @@ Management routes require `Authorization: Bearer calyx_mgmt_…`.
 
 - Web onboarding UI
 - Full GitHub App OAuth
-- Published npm release of `@calyx/logger` (package exists in `packages/logger`)
+- Published npm release of `calyx-logger` (package exists in `packages/logger`)
 - Autonomous detector → Slack loop (use `slack test` for connectivity)
 - Auto-provisioning drains via Vercel API (dashboard paste of URL + secret for now)

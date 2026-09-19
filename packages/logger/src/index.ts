@@ -13,7 +13,7 @@ export function createClient(options: Partial<CalyxClientOptions> = {}): CalyxCl
   const config = resolveConfigFromEnv(options);
   if (!config) {
     throw new Error(
-      "@calyx/logger: set CALYX_INTAKE_URL and CALYX_SOURCE_TOKEN (or pass intakeUrl + token)"
+      "calyx-logger: set CALYX_INTAKE_URL and CALYX_SOURCE_TOKEN (or pass intakeUrl + token)"
     );
   }
   return new CalyxClient(config);

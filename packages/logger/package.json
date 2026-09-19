@@ -1,5 +1,5 @@
 {
-  "name": "@calyx/logger",
+  "name": "calyx-logger",
   "version": "0.1.0",
   "description": "Ship frontend (and Node) logs to Calyx intake with one init() and env vars.",
   "license": "MIT",
