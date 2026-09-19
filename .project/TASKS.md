@@ -4,7 +4,7 @@
 
 ## In progress
 
-- [ ] Replace the aspirational `search_past_incidents` behavior with a real durable incident/evidence model and explicit compatibility plan.
+- [ ] Schedule detection across active tenant services and dispatch durable alert IDs into Slack/web without coupling detection to presentation.
 
 ## Next
 
@@ -23,6 +23,7 @@
 
 ## Done
 
+- [x] Add durable incidents/evidence with `list_incidents`, `get_incident`, and `search_incidents`; deprecate the raw-log compatibility tool explicitly — 2026-09-19
 - [x] Persist tenant-scoped detector alerts and expose `get_alert_context` with nearby error evidence — 2026-09-19
 - [x] Add tenant-scoped MCP `list_services` and actionable empty-tenant/filter guidance — 2026-09-19
 - [x] Add the scoped MCP `ask` wrapper over the shared Calyx investigation loop — 2026-09-19

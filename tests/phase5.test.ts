@@ -144,8 +144,15 @@ describe("Phase 5 — MCP server", () => {
       tools: { name: string; inputSchema: { properties: Record<string, unknown> } }[];
     };
 
-    expect(result.tools.map((tool) => tool.name)).toEqual(["get_alert_context"]);
-    expect(result.tools[0].inputSchema.properties).not.toHaveProperty("tenant_id");
+    expect(result.tools.map((tool) => tool.name)).toEqual([
+      "get_alert_context",
+      "get_incident",
+      "list_incidents",
+      "search_incidents",
+    ]);
+    for (const tool of result.tools) {
+      expect(tool.inputSchema.properties).not.toHaveProperty("tenant_id");
+    }
   });
 
   it("exposes ask only with incidents:ask and keeps tenant_id private", async () => {
