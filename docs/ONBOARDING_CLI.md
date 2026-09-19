@@ -138,6 +138,12 @@ curl -X POST "http://127.0.0.1:13000/v1/drains/vercel/<sourceId>" \
   -d "$BODY"
 ```
 
+## GitHub change correlation
+
+Configure the printed webhook URL and secret for `push`, `deployment`, and `deployment_status` events. Calyx verifies every HMAC-SHA256 signature and persists commits and deployment state separately from raw observability events. Incident investigations can query the resulting evidence with the tenant-scoped `get_change_context` tool.
+
+Repository webhooks work without a GitHub App. GitHub App installation OAuth and automatic webhook provisioning remain a separate integration step.
+
 ## CloudWatch Logs
 
 Create a tenant-bound source, then follow [CLOUDWATCH_INGESTION.md](./CLOUDWATCH_INGESTION.md) to configure the forwarding Lambda:

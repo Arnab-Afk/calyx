@@ -4,11 +4,11 @@
 
 ## In progress
 
-- [ ] Complete GitHub repository, deployment, and commit correlation.
+- [ ] Add human-approved remediation and coding-agent pull-request handoff.
 
 ## Next
 
-- [ ] Add human-approved remediation and coding-agent pull-request handoff.
+- [ ] Add GitHub App installation OAuth and automatic webhook provisioning.
 
 ## Backlog
 
@@ -18,6 +18,7 @@
 
 ## Done
 
+- [x] Persist GitHub commits/deployments and expose tenant-scoped change correlation — 2026-09-20
 - [x] Add authenticated CloudWatch Logs subscription ingestion and onboarding — 2026-09-20
 - [x] Publish the standalone `calyx-mcp@0.1.0` stdio bridge to npm — 2026-09-20
 - [x] Package the standalone `calyx-mcp` stdio-to-hosted bridge so clients need no repository checkout — 2026-09-19
