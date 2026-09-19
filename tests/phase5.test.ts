@@ -53,7 +53,7 @@ afterAll(async () => {
 // ─── MCP server tests ─────────────────────────────────────────────────────────
 
 describe("Phase 5 — MCP server", () => {
-  it("ListTools returns all 3 registered tools", async () => {
+  it("ListTools returns the registered read tools", async () => {
     const server = createMcpServer();
     // Invoke the handler directly — no transport needed for unit tests
     const handler = (server as unknown as {
@@ -68,6 +68,7 @@ describe("Phase 5 — MCP server", () => {
     const names = new Set(result.tools.map((t: { name: string }) => t.name));
     expect(names.has("query_logs")).toBe(true);
     expect(names.has("get_service_stats")).toBe(true);
+    expect(names.has("list_services")).toBe(true);
     expect(names.has("search_past_incidents")).toBe(true);
   });
 

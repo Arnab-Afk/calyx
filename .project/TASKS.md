@@ -4,7 +4,7 @@
 
 ## In progress
 
-- [ ] Add the scoped MCP `ask` tool as a thin wrapper over the shared Calyx investigation loop, returning evidence tool calls and chart hints.
+- [ ] Define the persisted alert-context contract needed to hand an autonomous alert into web, Slack, and MCP without creating a second notification system.
 
 ## Next
 
@@ -23,6 +23,8 @@
 
 ## Done
 
+- [x] Add tenant-scoped MCP `list_services` and actionable empty-tenant/filter guidance — 2026-09-19
+- [x] Add the scoped MCP `ask` wrapper over the shared Calyx investigation loop — 2026-09-19
 - [x] Ship scoped MCP stdio and authenticated Streamable HTTP with cursor-based live logs, client documentation, and end-to-end tests — 2026-09-19
 - [x] Establish the initial product scope and MCP transport/auth decisions — 2026-09-19
 - [x] Build the original ingestion, agent, Slack, CLI, detection, execution, and web skeleton — 2026-09-19

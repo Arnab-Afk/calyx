@@ -14,6 +14,7 @@ The current tools are:
 | `ask` | Run the same evidence-grounded Calyx investigation used by web, Slack, and CLI |
 | `query_logs` | Query historical logs by service, level, and time range |
 | `get_service_stats` | Compare service event counts and error rates |
+| `list_services` | Discover which services have sent logs for the authenticated tenant |
 | `search_past_incidents` | Search historical evidence by keywords |
 | `tail_logs` | Long-poll newly ingested events; pass `next_cursor` into the next call |
 
