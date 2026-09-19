@@ -1,10 +1,11 @@
-// Detection runner: fetches time-windowed stats and dispatches anomalies.
-// Dispatch is a separate step — the runner just emits Anomaly objects.
+// Detection runner: fetches time-windowed stats and records detected anomalies.
+// Notification dispatch remains separate from durable alert-context persistence.
 
 import pg from "pg";
 import type { Anomaly } from "../schemas/index.js";
 import type { Detector, TimeWindow } from "./types.js";
 import { errorRateDetector } from "./detectors/error-rate.js";
+import { recordAlertContext } from "../storage/alerts.js";
 
 const WINDOW_MINUTES = 5;
 const BASELINE_WINDOWS = 12; // 12 × 5min = 1 hour of baseline
@@ -71,6 +72,7 @@ export async function detectForService(
     anomalies.push(...detect(current, baseline));
   }
 
+  await Promise.all(anomalies.map((anomaly) => recordAlertContext(pool, anomaly)));
   return anomalies;
 }
 

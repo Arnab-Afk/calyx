@@ -69,7 +69,7 @@ function extractAnswer(
   return content;
 }
 
-async function chat(messages: ChatMessage[], maxTokens: number): Promise<ChatCompletion> {
+async function chat(messages: ChatMessage[], maxTokens: number, excludedTools: Set<string>): Promise<ChatCompletion> {
   const thinking = thinkingEnabled();
   const budget = reasoningBudget();
   // Thinking tokens count against max_tokens; Slack's 400/800 will starve the answer.
@@ -81,7 +81,7 @@ async function chat(messages: ChatMessage[], maxTokens: number): Promise<ChatCom
     max_tokens: tokenCap,
     temperature: 1,
     top_p: 0.95,
-    tools: getAllTools().map(toOpenAiTool),
+    tools: getAllTools().filter((tool) => !excludedTools.has(tool.name)).map(toOpenAiTool),
     tool_choice: "auto",
     chat_template_kwargs: { enable_thinking: thinking },
   };
@@ -126,7 +126,8 @@ export async function runNvidiaAgent(
   userMessage: string,
   systemPrompt?: string,
   systemSuffix?: string,
-  maxTokens = 4096
+  maxTokens = 4096,
+  excludeTools: string[] = []
 ): Promise<AgentResponse> {
   const base =
     systemPrompt ??
@@ -145,11 +146,12 @@ cite specific numbers and service names from the tool results.`;
   ];
 
   const toolCallsMade: ToolCallRecord[] = [];
+  const excludedTools = new Set(["ask", ...excludeTools]);
   let turns = 0;
 
   while (turns < MAX_TURNS) {
     turns++;
-    const response = await chat(messages, maxTokens);
+    const response = await chat(messages, maxTokens, excludedTools);
     const choice = response.choices?.[0];
     const message = choice?.message;
     const finish = choice?.finish_reason ?? "unknown";
@@ -163,7 +165,7 @@ cite specific numbers and service names from the tool results.`;
       });
 
       for (const call of toolCalls) {
-        const input = parseArgs(call.function.arguments);
+        const input = { ...parseArgs(call.function.arguments), tenant_id: tenantId };
         const result = await executeTool(call.function.name, input);
         const record: ToolCallRecord = {
           toolName: call.function.name,

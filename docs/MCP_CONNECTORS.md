@@ -11,10 +11,18 @@ The current tools are:
 
 | Tool | Purpose |
 |---|---|
+| `ask` | Run the same evidence-grounded Calyx investigation used by web, Slack, and CLI |
 | `query_logs` | Query historical logs by service, level, and time range |
+| `get_alert_context` | Continue an alert investigation by ID with nearby error evidence |
+| `get_incident` | Retrieve a durable incident with linked alerts and evidence snapshots |
 | `get_service_stats` | Compare service event counts and error rates |
-| `search_past_incidents` | Search historical evidence by keywords |
+| `list_services` | Discover which services have sent logs for the authenticated tenant |
+| `list_incidents` | List durable incidents by status or service |
+| `search_incidents` | Search durable incidents by title, summary, or service |
+| `search_past_incidents` | Deprecated raw-log keyword compatibility search |
 | `tail_logs` | Long-poll newly ingested events; pass `next_cursor` into the next call |
+
+`search_past_incidents` is retained for existing clients but searches raw logs. New clients should use `search_incidents`; removal requires a versioned compatibility release rather than an in-place behavior change.
 
 The authenticated tenant is injected by the server. `tenant_id` is intentionally absent from the public tool schemas and cannot be overridden by a client.
 
@@ -26,7 +34,7 @@ DATABASE_URL=postgres://calyx:calyx@localhost:15432/calyx npm run migrate
 
 # Create a token. It is displayed once; only its SHA-256 hash is stored.
 DATABASE_URL=postgres://calyx:calyx@localhost:15432/calyx \
-  npm run mcp:key -- create --tenant default --name "local-agent" --scopes logs:read
+  npm run mcp:key -- create --tenant default --name "local-agent" --scopes logs:read,incidents:read,incidents:ask
 
 DATABASE_URL=postgres://calyx:calyx@localhost:15432/calyx \
 MCP_PORT=13002 \

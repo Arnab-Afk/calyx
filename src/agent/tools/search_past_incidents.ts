@@ -58,9 +58,8 @@ async function handler(input: Input): Promise<ToolOutput> {
 export const searchPastIncidentsTool: Tool<Input> = {
   name: "search_past_incidents",
   description:
-    "Search historical log events by keyword to find past incidents similar to a current issue. " +
-    "Useful for finding if an error has occurred before, identifying patterns, or understanding " +
-    "the history of a particular failure mode. Searches across all services for the tenant.",
+    "Deprecated compatibility tool: search historical raw log evidence by keyword. " +
+    "Use search_incidents for durable incidents. This tool remains temporarily available so existing clients do not break.",
   inputSchema: InputSchema,
   inputJsonSchema: {
     type: "object",

@@ -53,7 +53,7 @@ afterAll(async () => {
 // ─── MCP server tests ─────────────────────────────────────────────────────────
 
 describe("Phase 5 — MCP server", () => {
-  it("ListTools returns all 3 registered tools", async () => {
+  it("ListTools returns the registered read tools", async () => {
     const server = createMcpServer();
     // Invoke the handler directly — no transport needed for unit tests
     const handler = (server as unknown as {
@@ -68,6 +68,7 @@ describe("Phase 5 — MCP server", () => {
     const names = new Set(result.tools.map((t: { name: string }) => t.name));
     expect(names.has("query_logs")).toBe(true);
     expect(names.has("get_service_stats")).toBe(true);
+    expect(names.has("list_services")).toBe(true);
     expect(names.has("search_past_incidents")).toBe(true);
   });
 
@@ -127,6 +128,49 @@ describe("Phase 5 — MCP server", () => {
     const services = data.stats.map((s) => s.service);
     expect(services).toContain("web");
     expect(services).toContain("db");
+  });
+
+  it("exposes alert context only with incidents:read", async () => {
+    const server = createScopedMcpServer({
+      credentialId: "incident-key",
+      tenantId: TENANT,
+      name: "incident-test",
+      scopes: ["incidents:read"],
+    });
+    const handler = (server as unknown as {
+      _requestHandlers: Map<string, (req: unknown) => Promise<unknown>>;
+    })._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
+    const result = (await handler?.({ method: "tools/list", params: {} })) as {
+      tools: { name: string; inputSchema: { properties: Record<string, unknown> } }[];
+    };
+
+    expect(result.tools.map((tool) => tool.name)).toEqual([
+      "get_alert_context",
+      "get_incident",
+      "list_incidents",
+      "search_incidents",
+    ]);
+    for (const tool of result.tools) {
+      expect(tool.inputSchema.properties).not.toHaveProperty("tenant_id");
+    }
+  });
+
+  it("exposes ask only with incidents:ask and keeps tenant_id private", async () => {
+    const server = createScopedMcpServer({
+      credentialId: "ask-key",
+      tenantId: TENANT,
+      name: "ask-test",
+      scopes: ["incidents:ask"],
+    });
+    const handler = (server as unknown as {
+      _requestHandlers: Map<string, (req: unknown) => Promise<unknown>>;
+    })._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
+    const result = (await handler?.({ method: "tools/list", params: {} })) as {
+      tools: { name: string; inputSchema: { properties: Record<string, unknown> } }[];
+    };
+
+    expect(result.tools.map((tool) => tool.name)).toEqual(["ask"]);
+    expect(result.tools[0].inputSchema.properties).not.toHaveProperty("tenant_id");
   });
 
   it("MCP tool descriptions match the central registry", () => {

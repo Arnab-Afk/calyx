@@ -16,8 +16,14 @@ import { authenticateApiKey, type McpPrincipal, type McpScope } from "./auth.js"
 export interface McpContext extends McpPrincipal {}
 
 const TOOL_SCOPES: Record<string, McpScope> = {
+  ask: "incidents:ask",
+  get_alert_context: "incidents:read",
+  get_incident: "incidents:read",
+  list_incidents: "incidents:read",
+  search_incidents: "incidents:read",
   query_logs: "logs:read",
   get_service_stats: "logs:read",
+  list_services: "logs:read",
   search_past_incidents: "logs:read",
   tail_logs: "logs:read",
 };
@@ -34,7 +40,7 @@ function publicInputSchema(schema: ToolJsonSchema): ToolJsonSchema {
 
 function canUseTool(context: McpContext, toolName: string): boolean {
   const required = TOOL_SCOPES[toolName];
-  return required === undefined || context.scopes.includes(required);
+  return required !== undefined && context.scopes.includes(required);
 }
 
 export function createMcpServer(context: McpContext): Server {
@@ -61,9 +67,16 @@ export function createMcpServer(context: McpContext): Server {
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
-    if (!canUseTool(context, name)) {
+    const requiredScope = TOOL_SCOPES[name];
+    if (!requiredScope) {
       return {
-        content: [{ type: "text", text: `Forbidden: missing ${TOOL_SCOPES[name] ?? "required"} scope` }],
+        content: [{ type: "text", text: `Error: unknown or unavailable tool: ${name}` }],
+        isError: true,
+      };
+    }
+    if (!context.scopes.includes(requiredScope)) {
+      return {
+        content: [{ type: "text", text: `Forbidden: missing ${requiredScope} scope` }],
         isError: true,
       };
     }
@@ -102,7 +115,7 @@ async function localContext(): Promise<McpContext> {
   if (!tenantId) {
     throw new Error("Set CALYX_TENANT_ID for local stdio, or CALYX_API_KEY for authenticated access");
   }
-  const scopes = (process.env.CALYX_MCP_SCOPES ?? "logs:read")
+  const scopes = (process.env.CALYX_MCP_SCOPES ?? "logs:read,incidents:read,incidents:ask")
     .split(",")
     .map((scope) => scope.trim())
     .filter(Boolean) as McpScope[];

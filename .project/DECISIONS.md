@@ -61,3 +61,63 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Because.** It provides duplicate-resistant live following through the lowest common MCP capability.
 
 **Consequence.** Agents must call the tool repeatedly. Native subscription resources can be added later as an optimization without replacing the portable tool.
+
+---
+
+## D-004 — Expose natural-language investigation as a scoped wrapper over the shared agent
+
+**Date:** 2026-09-19
+**Status:** accepted
+
+**Context.** IDE users need the same “ask Calyx” workflow available in web chat, Slack, and CLI without creating a second investigation backend. The wrapper must not recursively invoke itself or allow model-generated tenant identifiers to cross tenant boundaries.
+
+**Options considered.**
+- **Duplicate the investigation flow in MCP** — gives transport-specific control but creates divergent reasoning and evidence behavior.
+- **Call the public HTTP ask route** — adds an unnecessary network and authentication hop inside the same service.
+- **Register an `ask` tool that invokes the shared agent loop** — preserves one tool registry and one investigation implementation.
+
+**Decision.** We chose a registry-backed `ask` tool gated by `incidents:ask`. The shared loop excludes `ask` from model-visible nested tools and overwrites every model-produced tool-call tenant with its authenticated run tenant.
+
+**Because.** MCP receives the same evidence-backed answer and tool-call trace as other product surfaces while recursive calls and tenant injection fail by construction.
+
+**Consequence.** Provider credentials remain required to execute `ask`; deterministic evidence tools remain available independently under their own scopes.
+
+---
+
+## D-005 — Persist detector output as tenant-scoped alert context
+
+**Date:** 2026-09-19
+**Status:** accepted
+
+**Context.** Web, Slack, and IDE investigations need one stable alert identifier and evidence record. Recomputing an alert independently in each surface would produce inconsistent context, while storing only a rendered notification would discard detector evidence.
+
+**Options considered.**
+- **Recompute from recent logs on every surface** — simple but unstable and cannot support alert deep links.
+- **Persist rendered Slack/web cards** — tightly couples the evidence model to presentation.
+- **Persist detector anomalies and retrieve nearby evidence by alert ID** — keeps detection facts durable and presentation-neutral.
+
+**Decision.** We chose a tenant-scoped `alert_contexts` record keyed by detector type and service. Repeated detections update the same record and increment an occurrence count. `get_alert_context` returns that record plus nearby error events.
+
+**Because.** All product surfaces can hand off one opaque alert ID while server-side tenant filtering prevents cross-workspace retrieval.
+
+**Consequence.** Notification dispatch remains separate. A later incident model may group multiple alert contexts without changing their IDs or evidence history.
+
+---
+
+## D-006 — Model incidents separately from alerts and preserve evidence snapshots
+
+**Date:** 2026-09-19
+**Status:** accepted
+
+**Context.** Detector alerts are individual signals, while an incident is the investigation unit that may eventually group several signals and human notes. The existing `search_past_incidents` name incorrectly described raw log keyword matches as incidents.
+
+**Options considered.**
+- **Treat alert contexts as incidents** — minimal storage but prevents multi-signal grouping and lifecycle state.
+- **Replace `search_past_incidents` in place** — cleans the API but silently changes results for existing clients.
+- **Add incidents, alert links, and immutable evidence snapshots** — introduces the correct domain boundary and permits explicit compatibility migration.
+
+**Decision.** We chose separate tenant-scoped incident, incident-alert link, and evidence tables. New `list_incidents`, `get_incident`, and `search_incidents` tools use them. `search_past_incidents` remains temporarily as a clearly deprecated raw-log tool.
+
+**Because.** Alert detection can evolve independently from incident investigation, while snapshots preserve what was known at each detector occurrence.
+
+**Consequence.** Each new alert currently opens one incident automatically; future correlation can attach multiple alerts to an incident through the existing link table. Removing the compatibility tool requires a versioned release.
