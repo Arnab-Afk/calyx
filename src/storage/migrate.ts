@@ -244,6 +244,16 @@ CREATE TABLE IF NOT EXISTS workspace_tenant_links (
 
 CREATE INDEX IF NOT EXISTS workspace_tenant_links_tenant
   ON workspace_tenant_links (tenant_id);
+
+CREATE TABLE IF NOT EXISTS mcp_oauth_rate_limits (
+  subject       TEXT        NOT NULL,
+  window_start  TIMESTAMPTZ NOT NULL,
+  request_count INTEGER     NOT NULL,
+  PRIMARY KEY (subject, window_start)
+);
+
+CREATE INDEX IF NOT EXISTS mcp_oauth_rate_limits_window
+  ON mcp_oauth_rate_limits (window_start);
 `;
 
 async function migrate(): Promise<void> {

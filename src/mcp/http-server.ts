@@ -10,7 +10,15 @@ import { authenticateApiKey, bearerToken, type McpPrincipal } from "./auth.js";
 import { createMcpServer } from "./server.js";
 import { closePool } from "../storage/client.js";
 import { recordAuditEvent } from "../storage/audit.js";
-import { consumeAnonymousMcpRateLimit, consumeMcpRateLimit } from "./rate-limit.js";
+import {
+  consumeAnonymousMcpRateLimit,
+  consumeMcpRateLimit,
+  consumeOAuthRateLimit,
+} from "./rate-limit.js";
+import {
+  authenticateOAuthToken,
+  protectedResourceMetadata,
+} from "./oauth.js";
 
 interface Session {
   transport: StreamableHTTPServerTransport;
@@ -43,10 +51,20 @@ async function auditSafely(event: Parameters<typeof recordAuditEvent>[0]): Promi
   }
 }
 
-function unauthorized(res: ServerResponse): void {
+function resourceUrl(req: IncomingMessage): URL {
+  if (process.env.MCP_PUBLIC_URL) return new URL(process.env.MCP_PUBLIC_URL);
+  return new URL("/mcp", `http://${req.headers.host ?? "localhost"}`);
+}
+
+function metadataUrl(req: IncomingMessage): string {
+  const resource = resourceUrl(req);
+  return new URL(`/.well-known/oauth-protected-resource${resource.pathname}`, resource.origin).toString();
+}
+
+function unauthorized(req: IncomingMessage, res: ServerResponse): void {
   res.writeHead(401, {
     "content-type": "application/json",
-    "www-authenticate": 'Bearer realm="calyx-mcp"',
+    "www-authenticate": `Bearer realm="calyx-mcp", resource_metadata="${metadataUrl(req)}"`,
   });
   res.end(JSON.stringify({ error: "A valid Calyx API key is required" }));
 }
@@ -80,7 +98,7 @@ async function authenticate(req: IncomingMessage): Promise<{ token: string; prin
     : req.headers.authorization;
   const token = bearerToken(header);
   if (!token) return null;
-  const principal = await authenticateApiKey(token);
+  const principal = (await authenticateApiKey(token)) ?? (await authenticateOAuthToken(token));
   return principal ? { token, principal } : null;
 }
 
@@ -107,10 +125,12 @@ async function handleMcp(req: IncomingMessage, res: ServerResponse): Promise<voi
       metadata: { reason: "invalid_or_missing_token" },
       ...requestAuditContext(req),
     });
-    return unauthorized(res);
+    return unauthorized(req, res);
   }
 
-  const rateLimit = await consumeMcpRateLimit(authentication.principal.credentialId);
+  const rateLimit = authentication.principal.credentialId.startsWith("oauth:")
+    ? await consumeOAuthRateLimit(authentication.principal.credentialId)
+    : await consumeMcpRateLimit(authentication.principal.credentialId);
   res.setHeader("x-ratelimit-limit", rateLimit.limit);
   res.setHeader("x-ratelimit-remaining", rateLimit.remaining);
   res.setHeader("x-ratelimit-reset", rateLimit.resetAt);
@@ -151,7 +171,7 @@ async function handleMcp(req: IncomingMessage, res: ServerResponse): Promise<voi
         success: false,
         ...requestAuditContext(req),
       });
-      return unauthorized(res);
+      return unauthorized(req, res);
     }
   } else if (req.method === "POST" && !sessionId && isInitializeRequest(body)) {
     const server = createMcpServer(authentication.principal);
@@ -206,6 +226,9 @@ export function createMcpHttpServer() {
     try {
       const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
       if (url.pathname === "/health") return sendJson(res, 200, { status: "ok", sessions: sessions.size });
+      if (url.pathname === new URL(metadataUrl(req)).pathname) {
+        return sendJson(res, 200, protectedResourceMetadata(resourceUrl(req)));
+      }
       if (url.pathname !== "/mcp") return sendJson(res, 404, { error: "Not found" });
       if (!req.method || !["GET", "POST", "DELETE"].includes(req.method)) {
         res.writeHead(405, { allow: "GET, POST, DELETE" });

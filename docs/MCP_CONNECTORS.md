@@ -66,6 +66,22 @@ Always use HTTPS outside a local machine. Never commit a Calyx token.
 
 Hosted requests are limited per credential through PostgreSQL (`MCP_RATE_LIMIT_PER_MINUTE`, default 120). Invalid authentication attempts have a separate per-network-peer limit. Responses include standard limit, remaining, reset, and retry headers. Credential lifecycle, authentication outcomes, session access, HTTP requests, and tool calls are written to tenant-scoped `audit_events`; token values and tool arguments are never recorded.
 
+## Browser OAuth for hosted clients
+
+Calyx can act as an OAuth 2.0 protected resource while an existing OAuth 2.1/OIDC provider handles browser login, consent, client registration, authorization code + PKCE, refresh tokens, and revocation. Configure:
+
+```bash
+MCP_PUBLIC_URL=https://mcp.example.com/mcp
+MCP_OAUTH_ISSUER=https://auth.example.com
+MCP_OAUTH_INTROSPECTION_URL=https://auth.example.com/oauth2/introspect
+MCP_OAUTH_CLIENT_ID=calyx-mcp
+MCP_OAUTH_CLIENT_SECRET=...
+```
+
+The issuer's RFC 7662 introspection response must include `active: true`, `sub`, a server-issued `tenant_id`, an `aud` matching `MCP_PUBLIC_URL`, and a space-delimited `scope` containing supported Calyx scopes. Calyx publishes protected-resource metadata at `/.well-known/oauth-protected-resource/mcp` and includes that URL in `WWW-Authenticate` responses. Tenant identity is accepted only from the trusted introspection response, never an MCP request.
+
+API keys remain supported for machine-to-machine clients. Always use HTTPS for the resource and issuer in production.
+
 ## Claude Code
 
 Remote connector:

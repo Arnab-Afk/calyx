@@ -4,11 +4,10 @@
 
 ## In progress
 
-- [ ] Add standards-based browser OAuth for remote MCP clients while retaining API keys for machine-to-machine use.
+- [ ] Add deployment-safe session storage for the hosted MCP endpoint.
 
 ## Next
 
-- [ ] Add deployment-safe session storage for the hosted MCP endpoint.
 - [ ] Package the stdio connector so clients do not require a Calyx repository checkout.
 
 ## Backlog
@@ -20,6 +19,7 @@
 
 ## Done
 
+- [x] Add standards-based external browser OAuth protected-resource support while retaining API keys — 2026-09-19
 - [x] Add immutable workspace-to-tenant links and admin-only web MCP credential self-service — 2026-09-19
 - [x] Add shared hosted MCP rate limits and tenant-scoped security/tool audit events — 2026-09-19
 - [x] Persist Slack acknowledge/resolve lifecycle transactionally and authorize actions through the delivered channel — 2026-09-19

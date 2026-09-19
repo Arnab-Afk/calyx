@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { AddressInfo } from "node:net";
+import { createServer } from "node:http";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { createApiKey, authenticateApiKey, revokeApiKey } from "../src/mcp/auth.js";
@@ -19,6 +20,7 @@ beforeAll(async () => {
   await getPool().query("DELETE FROM audit_events WHERE tenant_id IN ($1, $2)", [TENANT, OTHER_TENANT]);
   await getPool().query("DELETE FROM mcp_api_keys WHERE tenant_id IN ($1, $2)", [TENANT, OTHER_TENANT]);
   await getPool().query("DELETE FROM mcp_anonymous_rate_limits WHERE identifier LIKE 'test-%'");
+  await getPool().query("DELETE FROM mcp_oauth_rate_limits WHERE subject LIKE 'oauth:%'");
   initAgent();
 });
 
@@ -27,6 +29,7 @@ afterAll(async () => {
   await getPool().query("DELETE FROM audit_events WHERE tenant_id IN ($1, $2)", [TENANT, OTHER_TENANT]);
   await getPool().query("DELETE FROM mcp_api_keys WHERE tenant_id IN ($1, $2)", [TENANT, OTHER_TENANT]);
   await getPool().query("DELETE FROM mcp_anonymous_rate_limits WHERE identifier LIKE 'test-%'");
+  await getPool().query("DELETE FROM mcp_oauth_rate_limits WHERE subject LIKE 'oauth:%'");
   await closePool();
 });
 
@@ -94,6 +97,61 @@ describe("MCP product connector", () => {
     const events = (next.output.data as { events: { message: string; tenant_id: string }[] }).events;
     expect(events.map((event) => event.message)).toContain("live MCP event");
     expect(events.every((event) => event.tenant_id === TENANT)).toBe(true);
+  });
+
+  it("accepts externally issued OAuth tokens and publishes protected-resource metadata", async () => {
+    const issuer = createServer(async (req, res) => {
+      for await (const _chunk of req) { /* consume form body */ }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        active: true,
+        sub: "user-123",
+        tenant_id: TENANT,
+        scope: "logs:read incidents:read",
+        aud: process.env.MCP_PUBLIC_URL,
+        exp: Math.floor(Date.now() / 1000) + 300,
+      }));
+    });
+    await new Promise<void>((resolve) => issuer.listen(0, "127.0.0.1", resolve));
+    const issuerPort = (issuer.address() as AddressInfo).port;
+    process.env.MCP_OAUTH_ISSUER = `http://127.0.0.1:${issuerPort}`;
+    process.env.MCP_OAUTH_INTROSPECTION_URL = `http://127.0.0.1:${issuerPort}/introspect`;
+    process.env.MCP_OAUTH_CLIENT_ID = "calyx-test";
+    process.env.MCP_OAUTH_CLIENT_SECRET = "test-secret";
+
+    const httpServer = createMcpHttpServer();
+    await new Promise<void>((resolve) => httpServer.listen(0, "127.0.0.1", resolve));
+    const port = (httpServer.address() as AddressInfo).port;
+    const endpoint = `http://127.0.0.1:${port}/mcp`;
+    process.env.MCP_PUBLIC_URL = endpoint;
+    try {
+      const metadata = await fetch(
+        `http://127.0.0.1:${port}/.well-known/oauth-protected-resource/mcp`
+      );
+      expect(metadata.status).toBe(200);
+      expect(await metadata.json()).toMatchObject({
+        resource: endpoint,
+        authorization_servers: [process.env.MCP_OAUTH_ISSUER],
+      });
+
+      const client = new Client({ name: "oauth-vitest", version: "1.0.0" });
+      const transport = new StreamableHTTPClientTransport(new URL(endpoint), {
+        requestInit: { headers: { Authorization: "Bearer external-oauth-token" } },
+      });
+      await client.connect(transport);
+      const tools = await client.listTools();
+      expect(tools.tools.map((tool) => tool.name)).toContain("list_services");
+      expect(tools.tools.map((tool) => tool.name)).not.toContain("ask");
+      await client.close();
+    } finally {
+      await new Promise<void>((resolve) => httpServer.close(() => resolve()));
+      await new Promise<void>((resolve) => issuer.close(() => resolve()));
+      delete process.env.MCP_OAUTH_ISSUER;
+      delete process.env.MCP_OAUTH_INTROSPECTION_URL;
+      delete process.env.MCP_OAUTH_CLIENT_ID;
+      delete process.env.MCP_OAUTH_CLIENT_SECRET;
+      delete process.env.MCP_PUBLIC_URL;
+    }
   });
 
   it("serves scoped tools over authenticated Streamable HTTP", async () => {
