@@ -5,7 +5,7 @@ import pg from "pg";
 import type { Anomaly } from "../schemas/index.js";
 import type { Detector, TimeWindow } from "./types.js";
 import { errorRateDetector } from "./detectors/error-rate.js";
-import { recordAlertContext } from "../storage/alerts.js";
+import { recordAlertContext, type AlertContext } from "../storage/alerts.js";
 
 const WINDOW_MINUTES = 5;
 const BASELINE_WINDOWS = 12; // 12 × 5min = 1 hour of baseline
@@ -42,12 +42,11 @@ async function fetchWindow(
   };
 }
 
-// Run all detectors for a single service and return detected anomalies.
-export async function detectForService(
+async function detectAnomalies(
   pool: pg.Pool,
   tenantId: string,
   service: string,
-  now: Date = new Date()
+  now: Date
 ): Promise<Anomaly[]> {
   const windowMs = WINDOW_MINUTES * 60 * 1000;
 
@@ -72,8 +71,38 @@ export async function detectForService(
     anomalies.push(...detect(current, baseline));
   }
 
-  await Promise.all(anomalies.map((anomaly) => recordAlertContext(pool, anomaly)));
   return anomalies;
+}
+
+export interface DetectedAlert {
+  anomaly: Anomaly;
+  alert: AlertContext;
+}
+
+export async function detectAndRecordForService(
+  pool: pg.Pool,
+  tenantId: string,
+  service: string,
+  now: Date = new Date()
+): Promise<DetectedAlert[]> {
+  const anomalies = await detectAnomalies(pool, tenantId, service, now);
+  return Promise.all(
+    anomalies.map(async (anomaly) => ({
+      anomaly,
+      alert: await recordAlertContext(pool, anomaly),
+    }))
+  );
+}
+
+// Backwards-compatible detector entry point used by existing callers.
+export async function detectForService(
+  pool: pg.Pool,
+  tenantId: string,
+  service: string,
+  now: Date = new Date()
+): Promise<Anomaly[]> {
+  const detected = await detectAndRecordForService(pool, tenantId, service, now);
+  return detected.map(({ anomaly }) => anomaly);
 }
 
 // Dedup guard: track last-alerted timestamp per (tenant, service, type)

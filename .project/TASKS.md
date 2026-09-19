@@ -4,7 +4,7 @@
 
 ## In progress
 
-- [ ] Schedule detection across active tenant services and dispatch durable alert IDs into Slack/web without coupling detection to presentation.
+- [ ] Persist Slack acknowledgement and resolution into canonical alert/incident state instead of process-local memory.
 
 ## Next
 
@@ -23,6 +23,7 @@
 
 ## Done
 
+- [x] Schedule detection across active tenant/services and deliver Slack alerts through a durable retrying outbox — 2026-09-19
 - [x] Add durable incidents/evidence with `list_incidents`, `get_incident`, and `search_incidents`; deprecate the raw-log compatibility tool explicitly — 2026-09-19
 - [x] Persist tenant-scoped detector alerts and expose `get_alert_context` with nearby error evidence — 2026-09-19
 - [x] Add tenant-scoped MCP `list_services` and actionable empty-tenant/filter guidance — 2026-09-19

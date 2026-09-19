@@ -6,6 +6,7 @@
   "scripts": {
     "dev:ingestion": "tsx src/ingestion/server.ts",
     "dev:consumer": "tsx src/ingestion/consumer.ts",
+    "dev:detector": "tsx src/detection/index.ts",
     "dev:slack": "tsx src/slack/index.ts",
     "dev:mcp": "tsx src/mcp/server.ts",
     "dev:mcp:http": "tsx src/mcp/http-server.ts",

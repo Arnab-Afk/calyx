@@ -112,6 +112,24 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+  # Durable detector scheduler and Slack alert delivery worker.
+  detector:
+    profiles: ["slack", "detector"]
+    build: .
+    command: ["npm", "run", "dev:detector"]
+    environment:
+      DATABASE_URL: postgres://calyx:calyx@postgres:5432/calyx
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      CALYX_TENANT_ID: ${CALYX_TENANT_ID:-}
+      CALYX_SLACK_ALERT_CHANNEL: ${CALYX_SLACK_ALERT_CHANNEL:-}
+      CALYX_SLACK_ALERT_CHANNELS: ${CALYX_SLACK_ALERT_CHANNELS:-{}}
+      CALYX_DETECTION_INTERVAL_MS: ${CALYX_DETECTION_INTERVAL_MS:-60000}
+      CALYX_ACTIVE_SERVICE_LOOKBACK_HOURS: ${CALYX_ACTIVE_SERVICE_LOOKBACK_HOURS:-24}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   # Optional: docker compose --profile slack up
   slack:
     profiles: ["slack"]

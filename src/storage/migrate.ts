@@ -99,6 +99,27 @@ CREATE TABLE IF NOT EXISTS incident_evidence (
 
 CREATE INDEX IF NOT EXISTS incident_evidence_tenant_incident
   ON incident_evidence (tenant_id, incident_id, created_at ASC);
+
+CREATE TABLE IF NOT EXISTS alert_deliveries (
+  id            UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  tenant_id     TEXT        NOT NULL,
+  alert_id      UUID        NOT NULL REFERENCES alert_contexts(id) ON DELETE CASCADE,
+  destination   TEXT        NOT NULL CHECK (destination IN ('slack','web')),
+  target        TEXT        NOT NULL,
+  status        TEXT        NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','processing','delivered','failed')),
+  attempts      INTEGER     NOT NULL DEFAULT 0,
+  available_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  external_id   TEXT,
+  last_error    TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  delivered_at TIMESTAMPTZ,
+  CONSTRAINT alert_delivery_once UNIQUE (alert_id, destination, target)
+);
+
+CREATE INDEX IF NOT EXISTS alert_deliveries_pending
+  ON alert_deliveries (available_at ASC)
+  WHERE status IN ('pending','failed');
 `;
 
 async function migrate(): Promise<void> {

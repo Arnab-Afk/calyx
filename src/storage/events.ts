@@ -355,6 +355,19 @@ export async function getServiceDailyHealth(
   }));
 }
 
+export async function getActiveTenantServices(
+  since: Date
+): Promise<Array<{ tenant_id: string; service: string }>> {
+  const result = await getPool().query(
+    `SELECT DISTINCT tenant_id, service
+     FROM events
+     WHERE timestamp >= $1
+     ORDER BY tenant_id, service`,
+    [since.toISOString()]
+  );
+  return result.rows;
+}
+
 export async function getDistinctServices(tenant_id: string): Promise<string[]> {
   const pool = getPool();
   const result = await pool.query(
