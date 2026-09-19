@@ -37,6 +37,31 @@ export async function consumeAnonymousMcpRateLimit(
   };
 }
 
+export async function consumeOAuthRateLimit(
+  subject: string,
+  limit = configuredMcpRateLimit()
+): Promise<RateLimitResult> {
+  const pool = getPool();
+  await pool.query(
+    "DELETE FROM mcp_oauth_rate_limits WHERE window_start < NOW() - INTERVAL '2 minutes'"
+  );
+  const result = await pool.query(
+    `INSERT INTO mcp_oauth_rate_limits (subject, window_start, request_count)
+     VALUES ($1, date_trunc('minute', clock_timestamp()), 1)
+     ON CONFLICT (subject, window_start) DO UPDATE
+       SET request_count = mcp_oauth_rate_limits.request_count + 1
+     RETURNING request_count, window_start + INTERVAL '1 minute' AS reset_at`,
+    [subject]
+  );
+  const count = result.rows[0].request_count as number;
+  return {
+    allowed: count <= limit,
+    limit,
+    remaining: Math.max(0, limit - count),
+    resetAt: result.rows[0].reset_at.toISOString(),
+  };
+}
+
 export async function consumeMcpRateLimit(
   credentialId: string,
   limit = configuredMcpRateLimit()

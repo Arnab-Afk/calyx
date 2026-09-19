@@ -201,3 +201,23 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Because.** Neither browser code nor a compromised workspace member can select another observability tenant, and PostgreSQL remains the credential source of truth.
 
 **Consequence.** An operator must link each workspace once before connector self-service works. Remapping to a different tenant is rejected and requires an explicit future migration workflow.
+
+---
+
+## D-011 — Use an external OAuth issuer and keep Calyx as the protected resource
+
+**Date:** 2026-09-19
+**Status:** accepted
+
+**Context.** Hosted MCP clients need browser OAuth, but Calyx should not implement passwords, browser sessions, consent, dynamic client registration, and refresh-token security as a new identity provider.
+
+**Options considered.**
+- **Build a Calyx authorization server** — maximum control but creates a large new authentication attack surface.
+- **API keys only** — sufficient for machines but not standards-based browser authorization.
+- **External OAuth 2.1/OIDC issuer plus token introspection** — delegates browser login and consent while Calyx remains responsible for tenant and scope enforcement.
+
+**Decision.** We chose protected-resource mode with RFC 9728 metadata and RFC 7662 token introspection. API keys remain supported. OAuth tokens require active status, subject, server-issued tenant, supported scopes, expiry, and an audience matching the configured MCP resource URL.
+
+**Because.** Established identity providers handle authorization code + PKCE, client registration, refresh, consent, and revocation, while Calyx never trusts browser-supplied tenant identity.
+
+**Consequence.** Production deployment must configure an HTTPS issuer and register Calyx as a resource/introspection client. OAuth subjects use a separate shared rate-limit bucket from API-key credentials.
