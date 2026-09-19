@@ -40,7 +40,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/Arnab-Afk/calyx.git",
+    "url": "git+https://github.com/Arnab-Afk/calyx.git",
     "directory": "packages/logger"
   },
   "engines": {
