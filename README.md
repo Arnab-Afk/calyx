@@ -76,7 +76,7 @@ The **skeleton** of both acts exists. The **product loop is not closed**.
 |---|---|---|
 | Ingestion | `POST /v1/logs`, Redis stream, Loki forwarder | Broader formats, projects/envs as first-class |
 | Storage | Postgres events (`tenant_id` on every row) | Incident store, thread memory, ClickHouse later |
-| Agent | Claude + `query_logs`, `get_service_stats`, `search_past_incidents` | Change correlation, blast radius, code search, request trace |
+| Agent | Claude/NVIDIA investigation + `ask`, `query_logs`, `get_service_stats`, `search_past_incidents`, `tail_logs` | Change correlation, blast radius, code search, request trace |
 | Detection | Error-rate stddev detector, dedup helper | Wire to Slack; silent-failure and the rest of the six |
 | Slack | Adapter, alert card, charts, thread replies, approval modal | Detector → investigated card posting; status; Start Incident |
 | CLI / MCP | Scoped stdio + authenticated Streamable HTTP connectors over the same tools, including live `tail_logs` | Incident tools, OAuth, data-source connect |

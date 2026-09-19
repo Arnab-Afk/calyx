@@ -4,10 +4,11 @@
 
 ## In progress
 
-- [ ] Add self-service MCP credential management to the authenticated web workspace; users can create, list, and revoke only their workspace credentials.
+- [ ] Add the scoped MCP `ask` tool as a thin wrapper over the shared Calyx investigation loop, returning evidence tool calls and chart hints.
 
 ## Next
 
+- [ ] Define and persist a canonical Convex workspace-to-observability-tenant mapping before resuming self-service MCP credential management.
 - [ ] Add standards-based browser OAuth for remote MCP clients while retaining API keys for machine-to-machine use.
 - [ ] Add durable incident/evidence schemas and MCP incident tools; a coding agent can retrieve and question one persisted incident.
 - [ ] Add rate limits, audit events, and deployment-safe session storage for the hosted MCP endpoint.
