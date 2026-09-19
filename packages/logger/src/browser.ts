@@ -1,5 +1,6 @@
-import { CalyxClient, formatMessage } from "./client.js";
+import { CalyxClient } from "./client.js";
 import { resolveConfigFromEnv } from "./env.js";
+import { installConsoleHooks, resetConsoleHooksFlag } from "./hooks.js";
 import type { InitOptions } from "./types.js";
 
 export type { CalyxClientOptions, CalyxEvent, InitOptions, LogLevel } from "./types.js";
@@ -7,21 +8,21 @@ export { CalyxClient } from "./client.js";
 export { resolveConfigFromEnv } from "./env.js";
 
 let singleton: CalyxClient | null = null;
-let patched = false;
 
 function isBrowser(): boolean {
   return typeof window !== "undefined" && typeof document !== "undefined";
 }
 
 /**
- * Initialize Calyx browser logging.
+ * Initialize Calyx browser / frontend logging.
  *
  * Reads `NEXT_PUBLIC_CALYX_INTAKE_URL` + `NEXT_PUBLIC_CALYX_SOURCE_TOKEN`
  * (or `VITE_*` / `CALYX_*`) unless you pass overrides.
  *
+ * For Node/backend use `import { init } from 'calyx-logger'` instead.
+ *
  * @example
  * ```ts
- * // app/layout.tsx or instrumentation-client.ts
  * import { init } from 'calyx-logger/browser'
  * init()
  * ```
@@ -29,7 +30,7 @@ function isBrowser(): boolean {
 export function init(options: InitOptions = {}): CalyxClient | null {
   if (singleton) return singleton;
 
-  const config = resolveConfigFromEnv(options);
+  const config = resolveConfigFromEnv(options, "browser");
   if (!config) {
     if (typeof console !== "undefined") {
       console.warn(
@@ -58,7 +59,6 @@ export function init(options: InitOptions = {}): CalyxClient | null {
   if (captureConsole) installConsoleHooks(singleton, captureInfo);
   if (isBrowser()) installLifecycleFlush(singleton);
 
-  patched = captureErrors || captureConsole;
   return singleton;
 }
 
@@ -94,7 +94,7 @@ export async function flush(): Promise<void> {
 export function reset(): void {
   singleton?.destroy();
   singleton = null;
-  patched = false;
+  resetConsoleHooksFlag();
 }
 
 function installGlobalHandlers(client: CalyxClient): void {
@@ -110,33 +110,6 @@ function installGlobalHandlers(client: CalyxClient): void {
   window.addEventListener("unhandledrejection", (event) => {
     client.captureException(event.reason, { kind: "unhandledrejection" });
   });
-}
-
-function installConsoleHooks(client: CalyxClient, includeInfo: boolean): void {
-  if (patched) return;
-
-  const wrap =
-    (level: "error" | "warn" | "info" | "debug" | "log", original: (...a: unknown[]) => void) =>
-    (...args: unknown[]) => {
-      try {
-        const message = formatMessage(args);
-        if (level === "error") client.error(message, { kind: "console.error" });
-        else if (level === "warn") client.warn(message, { kind: "console.warn" });
-        else if (level === "debug") client.debug(message, { kind: "console.debug" });
-        else client.info(message, { kind: `console.${level}` });
-      } catch {
-        /* never break the page */
-      }
-      original.apply(console, args);
-    };
-
-  console.error = wrap("error", console.error.bind(console));
-  console.warn = wrap("warn", console.warn.bind(console));
-  if (includeInfo) {
-    console.log = wrap("log", console.log.bind(console));
-    console.info = wrap("info", console.info.bind(console));
-    console.debug = wrap("debug", console.debug.bind(console));
-  }
 }
 
 function installLifecycleFlush(client: CalyxClient): void {

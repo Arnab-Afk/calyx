@@ -31,7 +31,9 @@ export interface CalyxClientOptions {
 
 export interface InitOptions extends Partial<CalyxClientOptions> {
   /**
-   * Capture window errors + unhandled rejections (default true in browser).
+   * Capture global errors:
+   * - browser: window.onerror + unhandledrejection (default true)
+   * - node: uncaughtException + unhandledRejection (default true)
    */
   captureGlobalErrors?: boolean;
   /**

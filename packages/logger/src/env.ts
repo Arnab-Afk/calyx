@@ -2,10 +2,11 @@ import type { CalyxClientOptions } from "./types.js";
 
 type EnvBag = Record<string, string | undefined>;
 
+export type ConfigRuntime = "browser" | "node";
+
 function readEnv(): EnvBag {
   const out: EnvBag = {};
 
-  // Vite
   try {
     const meta = import.meta as ImportMeta & { env?: EnvBag };
     if (meta.env) Object.assign(out, meta.env);
@@ -13,12 +14,10 @@ function readEnv(): EnvBag {
     /* ignore */
   }
 
-  // Node / Next server
   if (typeof process !== "undefined" && process.env) {
     Object.assign(out, process.env);
   }
 
-  // Next.js inlines NEXT_PUBLIC_* at build time — also accept globals if set
   if (typeof globalThis !== "undefined") {
     const g = globalThis as Record<string, unknown>;
     for (const key of [
@@ -28,6 +27,9 @@ function readEnv(): EnvBag {
       "NEXT_PUBLIC_CALYX_INTAKE_URL",
       "NEXT_PUBLIC_CALYX_SOURCE_TOKEN",
       "NEXT_PUBLIC_CALYX_SERVICE",
+      "VITE_CALYX_INTAKE_URL",
+      "VITE_CALYX_SOURCE_TOKEN",
+      "VITE_CALYX_SERVICE",
     ]) {
       if (typeof g[key] === "string" && !out[key]) {
         out[key] = g[key] as string;
@@ -38,35 +40,48 @@ function readEnv(): EnvBag {
   return out;
 }
 
+function firstDefined(...values: Array<string | undefined>): string | undefined {
+  for (const v of values) {
+    if (v?.trim()) return v.trim();
+  }
+  return undefined;
+}
+
 /**
  * Resolve intake config from env.
- * Prefers NEXT_PUBLIC_* / VITE_* for browser bundles, then CALYX_*.
+ * - browser: NEXT_PUBLIC_* / VITE_* first, then CALYX_*
+ * - node: CALYX_* first (so backend does not pick up a public FE token by accident)
  */
 export function resolveConfigFromEnv(
-  overrides: Partial<CalyxClientOptions> = {}
+  overrides: Partial<CalyxClientOptions> = {},
+  runtime: ConfigRuntime = "browser"
 ): CalyxClientOptions | null {
   const env = readEnv();
 
   const intakeUrl =
     overrides.intakeUrl ||
-    env.NEXT_PUBLIC_CALYX_INTAKE_URL ||
-    env.VITE_CALYX_INTAKE_URL ||
-    env.CALYX_INTAKE_URL;
+    (runtime === "node"
+      ? firstDefined(env.CALYX_INTAKE_URL, env.NEXT_PUBLIC_CALYX_INTAKE_URL, env.VITE_CALYX_INTAKE_URL)
+      : firstDefined(env.NEXT_PUBLIC_CALYX_INTAKE_URL, env.VITE_CALYX_INTAKE_URL, env.CALYX_INTAKE_URL));
 
   const token =
     overrides.token ||
-    env.NEXT_PUBLIC_CALYX_SOURCE_TOKEN ||
-    env.VITE_CALYX_SOURCE_TOKEN ||
-    env.CALYX_SOURCE_TOKEN;
+    (runtime === "node"
+      ? firstDefined(env.CALYX_SOURCE_TOKEN, env.NEXT_PUBLIC_CALYX_SOURCE_TOKEN, env.VITE_CALYX_SOURCE_TOKEN)
+      : firstDefined(
+          env.NEXT_PUBLIC_CALYX_SOURCE_TOKEN,
+          env.VITE_CALYX_SOURCE_TOKEN,
+          env.CALYX_SOURCE_TOKEN
+        ));
 
   if (!intakeUrl || !token) return null;
 
   const service =
     overrides.service ||
-    env.NEXT_PUBLIC_CALYX_SERVICE ||
-    env.VITE_CALYX_SERVICE ||
-    env.CALYX_SERVICE ||
-    "web";
+    (runtime === "node"
+      ? firstDefined(env.CALYX_SERVICE, env.NEXT_PUBLIC_CALYX_SERVICE, env.VITE_CALYX_SERVICE)
+      : firstDefined(env.NEXT_PUBLIC_CALYX_SERVICE, env.VITE_CALYX_SERVICE, env.CALYX_SERVICE)) ||
+    (runtime === "node" ? "api" : "web");
 
   return {
     intakeUrl,

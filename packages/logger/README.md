@@ -1,6 +1,6 @@
 # `calyx-logger`
 
-Ship frontend (and Node) logs to Calyx with env vars — no Vercel Pro drain required.
+Ship **frontend** and **backend** logs to Calyx with env vars — no Vercel Pro drain required.
 
 ## Install
 
@@ -8,89 +8,86 @@ Ship frontend (and Node) logs to Calyx with env vars — no Vercel Pro drain req
 npm i calyx-logger
 ```
 
-## 1. Create a frontend source
+## Frontend (browser)
 
 ```bash
-# from the Calyx repo / CLI
 calyx sources create --project my-app --role frontend --service web
 ```
 
-Copy the `calyx_src_…` token (shown once).
-
-## 2. Env
-
-**Next.js**
-
 ```env
 NEXT_PUBLIC_CALYX_INTAKE_URL=https://your-calyx-host/v1/logs
-NEXT_PUBLIC_CALYX_SOURCE_TOKEN=calyx_src_…
+NEXT_PUBLIC_CALYX_SOURCE_TOKEN=calyx_src_…   # frontend write token
 NEXT_PUBLIC_CALYX_SERVICE=web
 ```
 
-**Vite**
-
-```env
-VITE_CALYX_INTAKE_URL=https://your-calyx-host/v1/logs
-VITE_CALYX_SOURCE_TOKEN=calyx_src_…
-```
-
-## 3. Init once (browser)
-
 ```ts
-// app/instrumentation-client.ts  (Next.js 15+)
-// or app/layout.tsx / a client providers file
 'use client'
 import { init } from 'calyx-logger/browser'
+init()
+```
+
+Captures `console.error` / `warn`, `window.onerror`, unhandled rejections; flushes on tab hide.
+
+```ts
+import { error, info, captureException } from 'calyx-logger/browser'
+info('checkout opened')
+captureException(err)
+```
+
+## Backend (Node / Next server / workers)
+
+```bash
+calyx sources create --project my-app --role backend --service api
+```
+
+```env
+CALYX_INTAKE_URL=https://your-calyx-host/v1/logs
+CALYX_SOURCE_TOKEN=calyx_src_…   # backend write token (NOT NEXT_PUBLIC_)
+CALYX_SERVICE=api
+```
+
+```ts
+// instrumentation.ts, server.ts, or worker entry — once at startup
+import { init, error, captureException } from 'calyx-logger'
 
 init()
+error('payment failed', { orderId: '…' })
+captureException(err)
 ```
 
 That turns on:
 
 - `console.error` / `console.warn` → Calyx
-- `window.onerror` + `unhandledrejection`
-- batched `POST` to `/v1/logs` with your source token
-- flush on `pagehide` / tab hidden
+- `uncaughtException` + `unhandledRejection`
+- flush on `beforeExit` / `SIGTERM` / `SIGINT`
 
-Manual logs:
-
-```ts
-import { error, info, captureException } from 'calyx-logger/browser'
-
-info('checkout opened')
-error('payment failed', { orderId: '…' })
-captureException(err)
-```
-
-## Node / server (no DOM hooks)
+Manual client without global hooks:
 
 ```ts
 import { createClient } from 'calyx-logger'
 
-const log = createClient() // reads CALYX_INTAKE_URL + CALYX_SOURCE_TOKEN
+const log = createClient()
 log.error('job failed', { jobId: '…' })
 await log.flush()
 ```
 
-Use a **separate** backend source token (not `NEXT_PUBLIC_`) for servers.
+Use **separate** source tokens for frontend vs backend.
+
+## Next.js (both)
+
+| Surface | Import | Env |
+|---|---|---|
+| Client components | `calyx-logger/browser` | `NEXT_PUBLIC_CALYX_*` |
+| Server / route handlers / `instrumentation.ts` | `calyx-logger` | `CALYX_*` |
 
 ## Security
 
-The frontend token is visible in the browser bundle. It must be a **write-only** Calyx source token (`calyx_src_…`). Do not put management or MCP keys in `NEXT_PUBLIC_*`.
+Frontend tokens are public in the bundle — use write-only `calyx_src_…` only. Never put management or MCP keys in `NEXT_PUBLIC_*`.
 
 ## Publish (maintainers)
 
 ```bash
 cd packages/logger
-npm login
 npm run build
 npm publish --access public
-```
-
-## Local link (before publish)
-
-```bash
-cd packages/logger && npm run build && npm link
-# in your Next app
-npm link calyx-logger
 ```

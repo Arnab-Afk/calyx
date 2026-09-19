@@ -34,19 +34,30 @@ describe("resolveConfigFromEnv", () => {
   it("reads CALYX_* env", () => {
     process.env.CALYX_INTAKE_URL = "http://localhost:13000/v1/logs";
     process.env.CALYX_SOURCE_TOKEN = "calyx_src_test";
-    const cfg = resolveConfigFromEnv();
+    const cfg = resolveConfigFromEnv({}, "node");
     expect(cfg?.intakeUrl).toBe("http://localhost:13000/v1/logs");
     expect(cfg?.token).toBe("calyx_src_test");
   });
 
-  it("prefers NEXT_PUBLIC_*", () => {
+  it("browser prefers NEXT_PUBLIC_*", () => {
     process.env.CALYX_INTAKE_URL = "http://a/v1/logs";
     process.env.CALYX_SOURCE_TOKEN = "a";
     process.env.NEXT_PUBLIC_CALYX_INTAKE_URL = "http://b/v1/logs";
     process.env.NEXT_PUBLIC_CALYX_SOURCE_TOKEN = "b";
-    const cfg = resolveConfigFromEnv();
+    const cfg = resolveConfigFromEnv({}, "browser");
     expect(cfg?.intakeUrl).toBe("http://b/v1/logs");
     expect(cfg?.token).toBe("b");
+  });
+
+  it("node prefers CALYX_* over NEXT_PUBLIC_*", () => {
+    process.env.CALYX_INTAKE_URL = "http://a/v1/logs";
+    process.env.CALYX_SOURCE_TOKEN = "server-token";
+    process.env.NEXT_PUBLIC_CALYX_INTAKE_URL = "http://b/v1/logs";
+    process.env.NEXT_PUBLIC_CALYX_SOURCE_TOKEN = "public-token";
+    const cfg = resolveConfigFromEnv({}, "node");
+    expect(cfg?.intakeUrl).toBe("http://a/v1/logs");
+    expect(cfg?.token).toBe("server-token");
+    expect(cfg?.service).toBe("api");
   });
 });
 

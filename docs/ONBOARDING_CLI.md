@@ -57,11 +57,13 @@ npm run cli -- slack test --project my-app
 
 ## Frontend SDK (`calyx-logger`)
 
-No Vercel Pro required — instrument the browser:
+No Vercel Pro required — instrument browser **and** backend:
 
 ```bash
 npm i calyx-logger
 ```
+
+**Frontend**
 
 ```env
 NEXT_PUBLIC_CALYX_INTAKE_URL=https://your-calyx-host/v1/logs
@@ -74,7 +76,20 @@ import { init } from 'calyx-logger/browser'
 init()
 ```
 
-Package lives in `packages/logger` until published. See that folder’s README for Vite / Node usage.
+**Backend** (separate source token)
+
+```env
+CALYX_INTAKE_URL=https://your-calyx-host/v1/logs
+CALYX_SOURCE_TOKEN=calyx_src_…   # from: calyx sources create --role backend
+CALYX_SERVICE=api
+```
+
+```ts
+import { init } from 'calyx-logger'
+init()
+```
+
+Package: `packages/logger`. See that folder’s README for Vite / workers / Next `instrumentation.ts`.
 
 ## Sending logs (source write token)
 
