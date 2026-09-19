@@ -79,9 +79,9 @@ The **skeleton** of both acts exists. The **product loop is not closed**.
 | Ingestion | `POST /v1/logs`, Redis stream, Loki forwarder | Broader formats, projects/envs as first-class |
 | Storage | Postgres events, alert contexts, incidents, and evidence snapshots (`tenant_id` on every row) | Thread memory, ClickHouse later |
 | Agent | Claude/NVIDIA investigation with tenant-scoped log, alert, and durable incident tools | Change correlation, blast radius, code search, request trace |
-| Detection | Error-rate stddev detector, dedup helper | Wire to Slack; silent-failure and the rest of the six |
-| Slack | Adapter, alert card, charts, thread replies, approval modal | Detector → investigated card posting; status; Start Incident |
-| CLI / MCP | Scoped stdio + authenticated Streamable HTTP connectors over the same tools, including live `tail_logs`; **CLI onboard** for projects / log sources / GitHub / Slack | Incident tools, OAuth, published logger SDK |
+| Detection | Scheduled error-rate detector, durable alert/incident persistence, retrying Slack outbox | Web dispatch; silent-failure and the rest of the six |
+| Slack | Durable alert delivery, canonical acknowledge/resolve lifecycle, charts, threads, approval modal | Web deep links; richer incident collaboration |
+| CLI / MCP | Scoped stdio + authenticated Streamable HTTP connectors over the same tools, including live `tail_logs`; **CLI onboard** for projects / log sources / GitHub / Slack; `@calyx/logger` in `packages/logger` | OAuth; published npm release polish |
 | Execution | Action interface, policy tiers, audit log, flag-toggle stub | Real operator, real integrations, Slack “Run it” on live alerts |
 
 Shared contracts live in `src/schemas/` (`Event`, `Anomaly`, `Alert`, `Tool`, `Action`). New detectors, tools, and transports stay additive. Do not invent a second shape per layer.
@@ -181,6 +181,8 @@ npx tsx src/cli/index.ts ask -t demo "why are errors spiking?"
 ```
 
 Coding-agent setup for Claude Code, Codex, Pi, Cursor, and other MCP clients: [`docs/MCP_CONNECTORS.md`](./docs/MCP_CONNECTORS.md).
+
+Scheduled detection and Slack delivery: [`docs/ALERT_DELIVERY.md`](./docs/ALERT_DELIVERY.md).
 
 ---
 

@@ -11,7 +11,11 @@ import { closeRedis } from "./queue.js";
 
 const app = Fastify({ logger: true });
 
-await app.register(cors);
+await app.register(cors, {
+  origin: true,
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Tenant-ID"],
+});
 await app.register(logsRoute);
 await app.register(askRoute);
 await app.register(projectsRoute);

@@ -129,9 +129,16 @@ export async function queryEventsAfter(q: {
   level?: string;
   limit?: number;
 }): Promise<{ events: StoredEvent[]; next_cursor: string }> {
-  const start: EventCursor = q.cursor
-    ? decodeEventCursor(q.cursor)
-    : { ingestedAt: new Date().toISOString(), id: "00000000-0000-0000-0000-000000000000" };
+  let start: EventCursor;
+  if (q.cursor) {
+    start = decodeEventCursor(q.cursor);
+  } else {
+    const clock = await getPool().query("SELECT clock_timestamp() AS now");
+    start = {
+      ingestedAt: clock.rows[0].now.toISOString(),
+      id: "00000000-0000-0000-0000-000000000000",
+    };
+  }
   const conditions = ["tenant_id = $1", "(ingested_at, id) > ($2::timestamptz, $3::uuid)"];
   const params: unknown[] = [q.tenant_id, start.ingestedAt, start.id];
   let p = 4;
@@ -353,6 +360,19 @@ export async function getServiceDailyHealth(
       return hit ?? { date, status: "empty", total: 0, error_count: 0, warn_count: 0 };
     }),
   }));
+}
+
+export async function getActiveTenantServices(
+  since: Date
+): Promise<Array<{ tenant_id: string; service: string }>> {
+  const result = await getPool().query(
+    `SELECT DISTINCT tenant_id, service
+     FROM events
+     WHERE timestamp >= $1
+     ORDER BY tenant_id, service`,
+    [since.toISOString()]
+  );
+  return result.rows;
 }
 
 export async function getDistinctServices(tenant_id: string): Promise<string[]> {

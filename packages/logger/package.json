@@ -1,0 +1,49 @@
+{
+  "name": "@calyx/logger",
+  "version": "0.1.0",
+  "description": "Ship frontend (and Node) logs to Calyx intake with one init() and env vars.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  },
+  "keywords": [
+    "calyx",
+    "logging",
+    "observability",
+    "browser",
+    "nextjs"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Arnab-Afk/calyx.git",
+    "directory": "packages/logger"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
