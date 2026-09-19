@@ -221,3 +221,23 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Because.** Established identity providers handle authorization code + PKCE, client registration, refresh, consent, and revocation, while Calyx never trusts browser-supplied tenant identity.
 
 **Consequence.** Production deployment must configure an HTTPS issuer and register Calyx as a resource/introspection client. OAuth subjects use a separate shared rate-limit bucket from API-key credentials.
+
+---
+
+## D-012 — Default hosted MCP to stateless Streamable HTTP
+
+**Date:** 2026-09-19
+**Status:** accepted; supersedes the stateful-default consequence of D-002
+
+**Context.** SDK transport objects and protocol servers contain live connection state that cannot be serialized safely into PostgreSQL. Process-local session maps require sticky routing and lose sessions during deploys.
+
+**Options considered.**
+- **Externalize SDK transport objects** — not supported because live streams and callbacks are process resources.
+- **Require affinity for every deployment** — preserves resumability but complicates scaling and rolling deploys.
+- **Use stateless Streamable HTTP by default** — each POST is independent and any replica can serve it.
+
+**Decision.** We chose stateless mode as the production default. Explicit `stateful` mode remains for single-instance or affinity deployments that need GET/SSE sessions.
+
+**Because.** Current Calyx capabilities are request/response tools, and portable live logs already use cursor-based `tail_logs`; they do not require transport-level session persistence.
+
+**Consequence.** Stateless mode accepts POST only and sacrifices unsolicited server streams. Stateful mode advertises its process-local session count and requires load-balancer affinity.

@@ -29,6 +29,10 @@ interface Session {
 const sessions = new Map<string, Session>();
 const maxBodyBytes = 1024 * 1024;
 
+function sessionMode(): "stateless" | "stateful" {
+  return process.env.MCP_SESSION_MODE === "stateful" ? "stateful" : "stateless";
+}
+
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(body));
@@ -158,6 +162,46 @@ async function handleMcp(req: IncomingMessage, res: ServerResponse): Promise<voi
     }
   }
 
+  if (sessionMode() === "stateless") {
+    if (req.method !== "POST") {
+      res.writeHead(405, { allow: "POST", "content-type": "application/json" });
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "Stateless MCP accepts POST requests only" },
+        id: null,
+      }));
+      return;
+    }
+    const server = createMcpServer(authentication.principal);
+    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    let closed = false;
+    const close = async () => {
+      if (closed) return;
+      closed = true;
+      await transport.close();
+      await server.close();
+    };
+    res.once("close", () => void close());
+    await server.connect(transport);
+    (req as IncomingMessage & { auth?: AuthInfo }).auth = authInfo(
+      authentication.token,
+      authentication.principal
+    );
+    await transport.handleRequest(req as IncomingMessage & { auth?: AuthInfo }, res, body);
+    await auditSafely({
+      tenantId: authentication.principal.tenantId,
+      actorType: "mcp_credential",
+      actorId: authentication.principal.credentialId,
+      action: "mcp.request",
+      resourceType: "mcp_transport",
+      resourceId: "stateless",
+      success: res.statusCode < 400,
+      metadata: { method: req.method, sessionMode: "stateless" },
+      ...requestAuditContext(req),
+    });
+    return;
+  }
+
   let session = sessionId ? sessions.get(sessionId) : undefined;
   if (session) {
     if (session.credentialId !== authentication.principal.credentialId) {
@@ -225,7 +269,13 @@ export function createMcpHttpServer() {
   return createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
-      if (url.pathname === "/health") return sendJson(res, 200, { status: "ok", sessions: sessions.size });
+      if (url.pathname === "/health") {
+        return sendJson(res, 200, {
+          status: "ok",
+          sessionMode: sessionMode(),
+          sessions: sessionMode() === "stateful" ? sessions.size : 0,
+        });
+      }
       if (url.pathname === new URL(metadataUrl(req)).pathname) {
         return sendJson(res, 200, protectedResourceMetadata(resourceUrl(req)));
       }
@@ -252,7 +302,9 @@ export async function startMcpHttpServer(): Promise<void> {
     httpServer.once("error", reject);
     httpServer.listen(port, host, resolve);
   });
-  console.log(`Calyx MCP Streamable HTTP server listening on http://${host}:${port}/mcp`);
+  console.log(
+    `Calyx MCP Streamable HTTP server listening on http://${host}:${port}/mcp (${sessionMode()})`
+  );
 
   const shutdown = async () => {
     for (const session of sessions.values()) await session.transport.close();

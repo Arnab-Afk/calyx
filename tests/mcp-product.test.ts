@@ -125,6 +125,8 @@ describe("MCP product connector", () => {
     const endpoint = `http://127.0.0.1:${port}/mcp`;
     process.env.MCP_PUBLIC_URL = endpoint;
     try {
+      const health = await fetch(`http://127.0.0.1:${port}/health`);
+      expect(await health.json()).toMatchObject({ sessionMode: "stateless", sessions: 0 });
       const metadata = await fetch(
         `http://127.0.0.1:${port}/.well-known/oauth-protected-resource/mcp`
       );
@@ -154,7 +156,8 @@ describe("MCP product connector", () => {
     }
   });
 
-  it("serves scoped tools over authenticated Streamable HTTP", async () => {
+  it("retains explicit stateful mode for affinity deployments", async () => {
+    process.env.MCP_SESSION_MODE = "stateful";
     const created = await createApiKey({ tenantId: TENANT, name: "Codex", scopes: ["logs:read"] });
     const httpServer = createMcpHttpServer();
     await new Promise<void>((resolve) => httpServer.listen(0, "127.0.0.1", resolve));
@@ -200,6 +203,7 @@ describe("MCP product connector", () => {
       expect(JSON.stringify(audit.rows)).not.toContain(OTHER_TENANT);
     } finally {
       await new Promise<void>((resolve) => httpServer.close(() => resolve()));
+      delete process.env.MCP_SESSION_MODE;
     }
   });
 });
