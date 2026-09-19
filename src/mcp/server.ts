@@ -18,6 +18,9 @@ export interface McpContext extends McpPrincipal {}
 const TOOL_SCOPES: Record<string, McpScope> = {
   ask: "incidents:ask",
   get_alert_context: "incidents:read",
+  get_incident: "incidents:read",
+  list_incidents: "incidents:read",
+  search_incidents: "incidents:read",
   query_logs: "logs:read",
   get_service_stats: "logs:read",
   list_services: "logs:read",

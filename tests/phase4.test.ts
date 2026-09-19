@@ -4,6 +4,9 @@ import { closePool, getPool } from "../src/storage/client.js";
 import { detectForService, shouldAlert, resetAlertGuard } from "../src/detection/runner.js";
 import { errorRateDetector } from "../src/detection/detectors/error-rate.js";
 import { getAlertContextTool } from "../src/agent/tools/get_alert_context.js";
+import { getIncidentTool } from "../src/agent/tools/get_incident.js";
+import { listIncidentsTool } from "../src/agent/tools/list_incidents.js";
+import { searchIncidentsTool } from "../src/agent/tools/search_incidents.js";
 import { EventSchema, type Event } from "../src/schemas/index.js";
 import type { TimeWindow } from "../src/detection/types.js";
 
@@ -52,12 +55,14 @@ function baseline(rates: number[]): TimeWindow[] {
 
 beforeAll(async () => {
   const pool = getPool();
+  await pool.query("DELETE FROM incidents WHERE tenant_id = $1", [TENANT]);
   await pool.query("DELETE FROM alert_contexts WHERE tenant_id = $1", [TENANT]);
   await pool.query("DELETE FROM events WHERE tenant_id = $1", [TENANT]);
 });
 
 afterAll(async () => {
   const pool = getPool();
+  await pool.query("DELETE FROM incidents WHERE tenant_id = $1", [TENANT]);
   await pool.query("DELETE FROM alert_contexts WHERE tenant_id = $1", [TENANT]);
   await pool.query("DELETE FROM events WHERE tenant_id = $1", [TENANT]);
   await closePool();
@@ -228,6 +233,31 @@ describe("Phase 4 — detectForService (integration)", () => {
       event_limit: 5,
     });
     expect(crossTenant.data).toEqual({ alert: null, evidence_events: [] });
+
+    const listed = await listIncidentsTool.handler({ tenant_id: TENANT, limit: 20 });
+    const incidents = (listed.data as { incidents: { id: string }[] }).incidents;
+    expect(incidents).toHaveLength(1);
+
+    const searched = await searchIncidentsTool.handler({
+      tenant_id: TENANT,
+      keywords: ["spike-svc"],
+      limit: 20,
+    });
+    expect((searched.data as { count: number }).count).toBe(1);
+
+    const incident = await getIncidentTool.handler({
+      tenant_id: TENANT,
+      incident_id: incidents[0].id,
+    });
+    const incidentData = incident.data as { alerts: unknown[]; evidence: unknown[] };
+    expect(incidentData.alerts).toHaveLength(1);
+    expect(incidentData.evidence).toHaveLength(2);
+
+    const crossTenantIncident = await getIncidentTool.handler({
+      tenant_id: "different-tenant",
+      incident_id: incidents[0].id,
+    });
+    expect(crossTenantIncident.data).toEqual({ incident: null, alerts: [], evidence: [] });
   });
 });
 

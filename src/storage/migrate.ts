@@ -62,6 +62,43 @@ CREATE UNIQUE INDEX IF NOT EXISTS alert_contexts_active_dedup
 
 CREATE INDEX IF NOT EXISTS alert_contexts_tenant_detected
   ON alert_contexts (tenant_id, last_detected_at DESC);
+
+CREATE TABLE IF NOT EXISTS incidents (
+  id          UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  tenant_id   TEXT        NOT NULL,
+  title       TEXT        NOT NULL,
+  summary     TEXT        NOT NULL,
+  service     TEXT        NOT NULL,
+  severity    TEXT        NOT NULL CHECK (severity IN ('low','medium','high','critical')),
+  status      TEXT        NOT NULL DEFAULT 'open' CHECK (status IN ('open','investigating','resolved')),
+  started_at  TIMESTAMPTZ NOT NULL,
+  resolved_at TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS incidents_tenant_updated
+  ON incidents (tenant_id, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS incident_alert_contexts (
+  incident_id      UUID NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
+  alert_context_id UUID NOT NULL REFERENCES alert_contexts(id) ON DELETE CASCADE,
+  PRIMARY KEY (incident_id, alert_context_id),
+  CONSTRAINT incident_alert_context_unique UNIQUE (alert_context_id)
+);
+
+CREATE TABLE IF NOT EXISTS incident_evidence (
+  id          UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  tenant_id   TEXT        NOT NULL,
+  incident_id UUID        NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
+  kind        TEXT        NOT NULL CHECK (kind IN ('detector','log','note')),
+  source_id   TEXT,
+  snapshot    JSONB       NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS incident_evidence_tenant_incident
+  ON incident_evidence (tenant_id, incident_id, created_at ASC);
 `;
 
 async function migrate(): Promise<void> {
