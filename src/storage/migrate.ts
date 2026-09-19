@@ -37,6 +37,31 @@ CREATE TABLE IF NOT EXISTS mcp_api_keys (
 );
 
 CREATE INDEX IF NOT EXISTS mcp_api_keys_tenant ON mcp_api_keys (tenant_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS alert_contexts (
+  id                UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  tenant_id         TEXT        NOT NULL,
+  dedup_key         TEXT        NOT NULL,
+  type              TEXT        NOT NULL,
+  severity          TEXT        NOT NULL CHECK (severity IN ('low','medium','high','critical')),
+  service           TEXT        NOT NULL,
+  status            TEXT        NOT NULL DEFAULT 'open' CHECK (status IN ('open','acknowledged','resolved')),
+  evidence          JSONB       NOT NULL,
+  first_detected_at TIMESTAMPTZ NOT NULL,
+  last_detected_at  TIMESTAMPTZ NOT NULL,
+  occurrence_count  INTEGER     NOT NULL DEFAULT 1,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE alert_contexts DROP CONSTRAINT IF EXISTS alert_contexts_tenant_dedup;
+
+CREATE UNIQUE INDEX IF NOT EXISTS alert_contexts_active_dedup
+  ON alert_contexts (tenant_id, dedup_key)
+  WHERE status IN ('open', 'acknowledged');
+
+CREATE INDEX IF NOT EXISTS alert_contexts_tenant_detected
+  ON alert_contexts (tenant_id, last_detected_at DESC);
 `;
 
 async function migrate(): Promise<void> {

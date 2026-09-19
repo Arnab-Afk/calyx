@@ -13,6 +13,7 @@ The current tools are:
 |---|---|
 | `ask` | Run the same evidence-grounded Calyx investigation used by web, Slack, and CLI |
 | `query_logs` | Query historical logs by service, level, and time range |
+| `get_alert_context` | Continue an alert investigation by ID with nearby error evidence |
 | `get_service_stats` | Compare service event counts and error rates |
 | `list_services` | Discover which services have sent logs for the authenticated tenant |
 | `search_past_incidents` | Search historical evidence by keywords |
@@ -28,7 +29,7 @@ DATABASE_URL=postgres://calyx:calyx@localhost:15432/calyx npm run migrate
 
 # Create a token. It is displayed once; only its SHA-256 hash is stored.
 DATABASE_URL=postgres://calyx:calyx@localhost:15432/calyx \
-  npm run mcp:key -- create --tenant default --name "local-agent" --scopes logs:read,incidents:ask
+  npm run mcp:key -- create --tenant default --name "local-agent" --scopes logs:read,incidents:read,incidents:ask
 
 DATABASE_URL=postgres://calyx:calyx@localhost:15432/calyx \
 MCP_PORT=13002 \
