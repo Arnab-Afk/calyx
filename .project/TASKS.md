@@ -4,21 +4,22 @@
 
 ## In progress
 
-- [ ] Add CloudWatch telemetry ingestion behind the normalized event model.
+- [ ] Complete GitHub repository, deployment, and commit correlation.
 
 ## Next
 
-- [ ] Publish the prepared `calyx-mcp` stdio bridge package when npm credentials are available.
+- [ ] Add human-approved remediation and coding-agent pull-request handoff.
 
 ## Backlog
 
-- CloudWatch and additional telemetry connectors behind the normalized evidence model.
-- GitHub repository/deployment correlation.
+- Additional telemetry connectors behind the normalized evidence model.
 - Human-approved remediation and coding-agent pull-request handoff.
 - Native MCP resource subscriptions for clients that expose them usefully.
 
 ## Done
 
+- [x] Add authenticated CloudWatch Logs subscription ingestion and onboarding — 2026-09-20
+- [x] Publish the standalone `calyx-mcp@0.1.0` stdio bridge to npm — 2026-09-20
 - [x] Package the standalone `calyx-mcp` stdio-to-hosted bridge so clients need no repository checkout — 2026-09-19
 - [x] Default hosted MCP to horizontally safe stateless mode while retaining explicit affinity-based stateful mode — 2026-09-19
 - [x] Publish `calyx-logger@0.2.0` for browser and Node telemetry — 2026-09-19 (teammate)

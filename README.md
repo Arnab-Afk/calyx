@@ -76,12 +76,12 @@ The **skeleton** of both acts exists. The **product loop is not closed**.
 
 | Layer | In the repo | Still missing for a real demo |
 |---|---|---|
-| Ingestion | `POST /v1/logs`, Redis stream, Loki forwarder | Broader formats, projects/envs as first-class |
+| Ingestion | `POST /v1/logs`, Redis stream, Loki forwarder, Vercel drain, CloudWatch Logs subscription intake | Additional telemetry providers and first-class environments |
 | Storage | Postgres events, alert contexts, incidents, and evidence snapshots (`tenant_id` on every row) | Thread memory, ClickHouse later |
 | Agent | Claude/NVIDIA investigation with tenant-scoped log, alert, and durable incident tools | Change correlation, blast radius, code search, request trace |
 | Detection | Scheduled error-rate detector, durable alert/incident persistence, retrying Slack outbox | Web dispatch; silent-failure and the rest of the six |
 | Slack | Durable alert delivery, canonical acknowledge/resolve lifecycle, charts, threads, approval modal | Web deep links; richer incident collaboration |
-| CLI / MCP | Scoped stdio + stateless or affinity-stateful Streamable HTTP, API keys + OAuth, live `tail_logs`; standalone `calyx-mcp` bridge; CLI onboarding; published `calyx-logger@0.2.0` | Publish bridge package; deployment validation |
+| CLI / MCP | Scoped stdio + stateless or affinity-stateful Streamable HTTP, API keys + OAuth, live `tail_logs`; published `calyx-mcp@0.1.0` bridge; CLI onboarding; published `calyx-logger@0.2.0` | Production deployment validation |
 | Execution | Action interface, policy tiers, audit log, flag-toggle stub | Real operator, real integrations, Slack “Run it” on live alerts |
 
 Shared contracts live in `src/schemas/` (`Event`, `Anomaly`, `Alert`, `Tool`, `Action`). New detectors, tools, and transports stay additive. Do not invent a second shape per layer.
