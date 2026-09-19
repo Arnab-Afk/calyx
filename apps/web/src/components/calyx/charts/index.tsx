@@ -64,6 +64,7 @@ const GALLERY: Record<string, ComponentType<{ data: unknown }>> = {
   'morning-digest': u('MorningDigest') as never,
   'incident-lite': u('IncidentLite') as never,
   'runbook-checklist': u('RunbookChecklist') as never,
+  'progress-indicator': u('ProgressIndicator') as never,
   'pr-risk': g('PrRisk') as never,
   'ci-failure': g('CiFailure') as never,
   'deploy-from-commit': g('DeployFromCommit') as never,
@@ -73,6 +74,7 @@ const GALLERY: Record<string, ComponentType<{ data: unknown }>> = {
   'workflow-strip': g('WorkflowStrip') as never,
   'pr-chip': g('PrChip') as never,
   'commit-diff': g('CommitDiff') as never,
+  'pr-unfurl': g('PrUnfurl') as never,
   'resource-health': c('ResourceHealth') as never,
   'quota-warning': c('QuotaWarning') as never,
   'cost-anomaly-lite': c('CostAnomalyLite') as never,
@@ -131,6 +133,7 @@ export const TITLES: Record<string, string> = {
   'morning-digest': 'Morning digest',
   'incident-lite': 'Incident',
   'runbook-checklist': 'Runbook',
+  'progress-indicator': 'Progress',
   'pr-risk': 'PR risk',
   'ci-failure': 'CI failure',
   'deploy-from-commit': 'Deploy',
@@ -140,6 +143,7 @@ export const TITLES: Record<string, string> = {
   'workflow-strip': 'Workflow',
   'pr-chip': 'Pull requests',
   'commit-diff': 'Commit diff',
+  'pr-unfurl': 'Pull request',
   'resource-health': 'Resource health',
   'quota-warning': 'Quota',
   'cost-anomaly-lite': 'Cost anomaly',
@@ -161,7 +165,7 @@ export const TITLES: Record<string, string> = {
   'gcp-cloud-build': 'Cloud Build',
 };
 
-const BARE = new Set(['approval-card', 'action-card']);
+const BARE = new Set(['approval-card', 'action-card', 'pr-unfurl', 'progress-indicator']);
 
 interface ChartProps {
   type: string;

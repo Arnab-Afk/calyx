@@ -30,6 +30,7 @@ Living checklist. When a component ships, a sample message is posted to `#calyx-
 - [x] `morning-digest` — overnight summary card
 - [x] `incident-lite` — severity · owner · checklist
 - [x] `runbook-checklist` — in-thread playbook steps
+- [x] `progress-indicator` — percent · delta vs last period · tick bar
 
 ## GitHub
 
@@ -41,6 +42,7 @@ Living checklist. When a component ships, a sample message is posted to `#calyx-
 - [x] `release-train` — blocking PRs + checks
 - [x] `workflow-strip` — queued → running → failed
 - [x] `pr-chip` — compact PR identity chip row
+- [x] `pr-unfurl` — PR title · truncated summary · diffstat · comments
 
 ## Cloud (shared)
 
@@ -77,6 +79,6 @@ Living checklist. When a component ships, a sample message is posted to `#calyx-
 
 | Done | Total |
 |------|-------|
-| 42   | 42    |
+| 44   | 44    |
 
 _Last updated: all components built + seeded to `#calyx-utilities`_

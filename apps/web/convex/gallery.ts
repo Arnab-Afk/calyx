@@ -240,6 +240,19 @@ const SAMPLES: Sample[] = [
     },
   },
   {
+    chartType: 'progress-indicator',
+    query: 'are we on track for the checkout SLO?',
+    answer: 'Checkout error-budget recovery is **on track** — 66%, up 30% vs last period.',
+    tools: ['get_slo'],
+    chartData: {
+      title: 'Progress Indicator',
+      insight: 'You are on track to finish the goal three days early',
+      percent: 66,
+      delta: 30,
+      comparison: 'vs. the last period',
+    },
+  },
+  {
     chartType: 'pr-risk',
     query: 'risk on this PR?',
     answer: 'PR #482 touches payments — treat carefully.',
@@ -384,6 +397,22 @@ const SAMPLES: Sample[] = [
         { type: 'add', content: '  }', oldNo: null, newNo: 51 },
         { type: 'ctx', content: '  return res.json({ results })', oldNo: 49, newNo: 52 },
       ],
+    },
+  },
+  {
+    chartType: 'pr-unfurl',
+    query: 'what’s in that PR?',
+    answer: 'PR unfurl — landing + dashboard polish, +173 / −61.',
+    tools: ['github'],
+    chartData: {
+      title: 'Polish landing hero and dashboard UI',
+      summary:
+        'Summary UI polish for the landing page and app surfaces (open-ended “make ui changes” request). Landing Brand-first hero: ZkMultiCloud is the primary identity.',
+      additions: 173,
+      deletions: 61,
+      comments: 1,
+      url: 'https://github.com/Arnab-Afk/calyx',
+      number: 1,
     },
   },
   {
@@ -644,5 +673,46 @@ export const seedUtilityGallery = mutation({
       samples: SAMPLES.length,
       sampleTypes: SAMPLES.map((s) => s.chartType),
     };
+  },
+});
+
+/** Post one gallery sample into an existing channel. */
+export const postSample = mutation({
+  args: {
+    workspaceId: v.id('workspaces'),
+    channelId: v.id('channels'),
+    chartType: v.string(),
+    memberId: v.optional(v.id('members')),
+  },
+  handler: async (ctx, args) => {
+    const sample = SAMPLES.find((s) => s.chartType === args.chartType);
+    if (!sample) throw new Error(`Unknown gallery sample: ${args.chartType}`);
+
+    let memberId = args.memberId;
+    if (!memberId) {
+      const member = await ctx.db
+        .query('members')
+        .withIndex('by_workspace_id', (q) => q.eq('workspaceId', args.workspaceId))
+        .first();
+      if (!member) throw new Error('No members — sign in once first.');
+      memberId = member._id;
+    }
+
+    const quillBody = (text: string) => JSON.stringify({ ops: [{ insert: `${text}\n` }] });
+
+    return await ctx.db.insert('messages', {
+      memberId,
+      body: quillBody(`[Calyx] ${sample.answer}`),
+      channelId: args.channelId,
+      workspaceId: args.workspaceId,
+      calyxData: {
+        query: sample.query,
+        answer: sample.answer,
+        chartType: sample.chartType,
+        chartData: JSON.stringify(sample.chartData),
+        toolNames: sample.tools,
+        tenantId: 'default',
+      },
+    });
   },
 });

@@ -3,6 +3,9 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { logsRoute } from "./routes/v1/logs.js";
 import { askRoute } from "./routes/v1/ask.js";
+import { projectsRoute } from "./routes/v1/projects.js";
+import { githubWebhookRoute } from "./routes/v1/github-webhook.js";
+import { vercelDrainRoute } from "./routes/v1/vercel-drain.js";
 import { closePool } from "../storage/client.js";
 import { closeRedis } from "./queue.js";
 
@@ -11,6 +14,9 @@ const app = Fastify({ logger: true });
 await app.register(cors);
 await app.register(logsRoute);
 await app.register(askRoute);
+await app.register(projectsRoute);
+await app.register(githubWebhookRoute);
+await app.register(vercelDrainRoute);
 
 app.get("/health", async () => ({ status: "ok" }));
 

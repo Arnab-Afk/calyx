@@ -46,6 +46,8 @@ Three pillars:
 
 **CLI shape to match:** `calyx ask`, `calyx logs query|tail`, `calyx threads search`, `calyx data-sources connect`, `calyx projects list`.
 
+**Onboarding (v1 shipped):** [`docs/ONBOARDING_CLI.md`](./docs/ONBOARDING_CLI.md) — `calyx login` → `projects` / `sources` / `github connect` / `slack connect` / `onboard`.
+
 Full competitor notes live at the bottom of this file.
 
 ### Act II — Infrastructure control (after the loop is trusted)
@@ -79,7 +81,7 @@ The **skeleton** of both acts exists. The **product loop is not closed**.
 | Agent | Claude + `query_logs`, `get_service_stats`, `search_past_incidents` | Change correlation, blast radius, code search, request trace |
 | Detection | Error-rate stddev detector, dedup helper | Wire to Slack; silent-failure and the rest of the six |
 | Slack | Adapter, alert card, charts, thread replies, approval modal | Detector → investigated card posting; status; Start Incident |
-| CLI / MCP | Scoped stdio + authenticated Streamable HTTP connectors over the same tools, including live `tail_logs` | Incident tools, OAuth, data-source connect |
+| CLI / MCP | Scoped stdio + authenticated Streamable HTTP connectors over the same tools, including live `tail_logs`; **CLI onboard** for projects / log sources / GitHub / Slack | Incident tools, OAuth, published logger SDK |
 | Execution | Action interface, policy tiers, audit log, flag-toggle stub | Real operator, real integrations, Slack “Run it” on live alerts |
 
 Shared contracts live in `src/schemas/` (`Event`, `Anomaly`, `Alert`, `Tool`, `Action`). New detectors, tools, and transports stay additive. Do not invent a second shape per layer.

@@ -10,6 +10,7 @@
     "dev:mcp": "tsx src/mcp/server.ts",
     "dev:mcp:http": "tsx src/mcp/http-server.ts",
     "mcp:key": "tsx src/mcp/keys-cli.ts",
+    "mgmt:key": "tsx src/mgmt/keys-cli.ts",
     "dev:loki-forwarder": "tsx src/connectors/loki-forwarder.ts",
     "cli": "tsx src/cli/index.ts",
     "migrate": "tsx src/storage/migrate.ts",

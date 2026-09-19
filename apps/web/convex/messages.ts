@@ -668,6 +668,41 @@ export const seedCalyxDemoReply = mutation({
       ),
     );
 
+    ids.push(
+      await post(
+        'Opened **Polish landing hero and dashboard UI** — compact PR unfurl with diffstat.',
+        'pr-unfurl',
+        {
+          title: 'Polish landing hero and dashboard UI',
+          summary:
+            'Summary UI polish for the landing page and app surfaces (open-ended “make ui changes” request). Landing Brand-first hero: ZkMultiCloud is the primary identity.',
+          additions: 173,
+          deletions: 61,
+          comments: 1,
+          url: 'https://github.com/Arnab-Afk/calyx',
+          number: 1,
+        },
+        ['github'],
+        'what’s in that PR?',
+      ),
+    );
+
+    ids.push(
+      await post(
+        'Checkout error-budget recovery is **on track** — 66%, up 30% vs last period.',
+        'progress-indicator',
+        {
+          title: 'Progress Indicator',
+          insight: 'You are on track to finish the goal three days early',
+          percent: 66,
+          delta: 30,
+          comparison: 'vs. the last period',
+        },
+        ['get_slo'],
+        'are we on track for the checkout SLO?',
+      ),
+    );
+
     return { count: ids.length, ids };
   },
 });

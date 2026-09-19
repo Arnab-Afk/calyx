@@ -110,9 +110,9 @@ These are **not** your first PR, but design tools so they won’t break:
 
 | Capability | Owner-ish | MCP impact |
 |---|---|---|
-| Connect FE + BE log sources | ingest / connectors | Maybe `list_data_sources` later |
-| GitHub App + commit/deploy markers | connectors | Future `get_deploy_history`, `search_code` |
-| Autonomous Slack cards | detection + Slack | MCP receives **alert id / deep link**, doesn’t send Slack |
+| Connect FE + BE log sources | ingest / connectors | **Done (CLI):** `calyx onboard` / `sources create` — see [`ONBOARDING_CLI.md`](./ONBOARDING_CLI.md) |
+| GitHub App + commit/deploy markers | connectors | **Thin webhook done** (`github connect` + `/v1/webhooks/github/:id`); full App OAuth later |
+| Autonomous Slack cards | detection + Slack | **Channel bind + `slack test` done**; detector→card loop still open |
 | Act II (restart / rollback) | execution + approval | **Never** expose write tools until approval gate exists |
 
 ---

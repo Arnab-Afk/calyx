@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ArrowUpRight, Check } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Check, MoreHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   FooterMeta,
@@ -699,5 +699,65 @@ export function RunbookChecklist({
         ))}
       </ol>
     </div>
+  );
+}
+
+export type ProgressIndicatorData = {
+  title?: string;
+  insight: string;
+  percent: number;
+  delta?: number;
+  comparison?: string;
+};
+
+/** Goal / SLO progress — Joshua Guo progress-indicator layout. */
+export function ProgressIndicator({ data }: { data: ProgressIndicatorData }) {
+  const title = data.title?.trim() || 'Progress Indicator';
+  const comparison = data.comparison ?? 'vs. the last period';
+  const percentLabel = Number.isInteger(data.percent) ? String(data.percent) : data.percent.toFixed(1);
+  const up = (data.delta ?? 0) >= 0;
+  const Arrow = up ? ArrowUpRight : ArrowDownRight;
+
+  return (
+    <article className="rounded-[1.35rem] border border-white/[0.08] bg-[#0c0c0c] px-5 pb-5 pt-[1.15rem] shadow-[0_18px_40px_rgba(0,0,0,0.45)]">
+      <div className="flex items-start justify-between gap-3">
+        <h3 className="font-[family-name:var(--font-display)] text-[16px] font-semibold tracking-tight text-white">
+          {title}
+        </h3>
+        <button
+          type="button"
+          aria-label="More"
+          className="rounded-md p-1 text-white/40 transition hover:bg-white/[0.06] hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+        >
+          <MoreHorizontal className="size-4" strokeWidth={2} />
+        </button>
+      </div>
+
+      <p className="mt-3 max-w-[42ch] text-[14px] leading-snug text-white/55">{data.insight}</p>
+
+      <div className="mt-4 border-t border-white/[0.1] pt-4">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="font-[family-name:var(--font-display)] text-[2.15rem] font-semibold leading-none tracking-tight text-white">
+            {percentLabel}%
+          </span>
+          {data.delta != null ? (
+            <TrendPill tone="neutral" className="rounded-full border-white/30 px-2.5 py-1 text-[12px] text-white/85">
+              <Arrow className="size-3.5" strokeWidth={2.25} aria-hidden />
+              {Math.abs(data.delta)}%
+            </TrendPill>
+          ) : null}
+          <span className="text-[13px] text-white/45">{comparison}</span>
+        </div>
+
+        <VerticalTicks
+          value={data.percent}
+          ticks={22}
+          color="#f4f4f4"
+          emptyColor="#2a2a2a"
+          className="mt-5 h-14 gap-[5px]"
+          tickClassName="rounded-[3px]"
+        />
+      </div>
+    </article>
   );
 }

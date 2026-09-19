@@ -1,5 +1,6 @@
 'use client';
 
+import { GitPullRequest } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FooterMeta, MetricTile, MetricValue, MicroLabel, Subcard, TrendPill, VerticalTicks } from './chart-ui';
 
@@ -361,6 +362,110 @@ export function CommitDiff({
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+export type PrUnfurlItem = {
+  title: string;
+  summary: string;
+  additions: number;
+  deletions: number;
+  comments?: number;
+  url?: string;
+  number?: number;
+};
+
+function diffstatBlocks(additions: number, deletions: number, slots = 5): Array<'add' | 'del' | 'empty'> {
+  const total = additions + deletions;
+  if (total <= 0) return Array.from({ length: slots }, () => 'empty');
+
+  let addSlots = Math.round((additions / total) * slots);
+  if (additions > 0 && addSlots === 0) addSlots = 1;
+  let delSlots = slots - addSlots;
+  if (deletions > 0 && delSlots === 0) {
+    delSlots = 1;
+    addSlots = slots - 1;
+  }
+
+  if (deletions === 0) {
+    return [...Array.from({ length: addSlots }, () => 'add' as const), ...Array.from({ length: slots - addSlots }, () => 'empty' as const)];
+  }
+  if (additions === 0) {
+    return [...Array.from({ length: delSlots }, () => 'del' as const), ...Array.from({ length: slots - delSlots }, () => 'empty' as const)];
+  }
+  return [...Array.from({ length: addSlots }, () => 'add' as const), ...Array.from({ length: delSlots }, () => 'del' as const)];
+}
+
+function PrUnfurlRow({ item }: { item: PrUnfurlItem }) {
+  const blocks = diffstatBlocks(item.additions, item.deletions);
+  const commentCount = item.comments ?? 0;
+  const commentLabel = commentCount === 1 ? '1 comment' : `${commentCount} comments`;
+  const titleClass =
+    'font-[family-name:var(--font-display)] text-[15px] font-semibold leading-snug text-white underline decoration-white/35 underline-offset-[5px] decoration-[1px]';
+
+  return (
+    <article className="rounded-[1.25rem] border border-white/[0.08] bg-[#121417]/95 px-4 py-3.5 shadow-[0_16px_48px_rgba(0,0,0,0.55)] backdrop-blur-md">
+      <div className="flex items-start gap-2.5">
+        <GitPullRequest
+          aria-hidden
+          className="mt-[3px] size-4 shrink-0 text-[var(--sazabi-ok)]"
+          strokeWidth={2}
+        />
+        <div className="min-w-0 flex-1">
+          {item.url ? (
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noreferrer"
+              className={cn(titleClass, 'transition hover:decoration-white/70 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sazabi-ok)]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[#121417]')}
+            >
+              {item.title}
+            </a>
+          ) : (
+            <p className={titleClass}>{item.title}</p>
+          )}
+
+          <p className="mt-1.5 line-clamp-2 text-[13px] leading-[1.45] text-white/55">{item.summary}</p>
+
+          <div className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12px] tabular-nums">
+            <span className="font-medium text-[var(--sazabi-ok)]">+{item.additions}</span>
+            <span className="font-medium text-[var(--sazabi-crimson)]">−{item.deletions}</span>
+            <span className="ml-0.5 inline-flex items-center gap-[3px]" aria-hidden>
+              {blocks.map((kind, i) => (
+                <i
+                  key={i}
+                  className={cn(
+                    'inline-block size-[9px] rounded-[2px]',
+                    kind === 'add' && 'bg-[var(--sazabi-ok)]',
+                    kind === 'del' && 'bg-[var(--sazabi-crimson)]',
+                    kind === 'empty' && 'bg-white/15',
+                  )}
+                />
+              ))}
+            </span>
+            <span className="text-white/45">lines changed</span>
+            {item.comments != null ? (
+              <>
+                <span className="text-white/25">·</span>
+                <span className="text-white/45">{commentLabel}</span>
+              </>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+/** Compact GitHub PR unfurl — title, truncated summary, diffstat, comments. */
+export function PrUnfurl({ data }: { data: PrUnfurlItem | { prs: PrUnfurlItem[] } }) {
+  const items = 'prs' in data && Array.isArray(data.prs) ? data.prs : [data as PrUnfurlItem];
+  return (
+    <div className="space-y-2">
+      {items.map((item, i) => (
+        <PrUnfurlRow key={item.number ?? item.url ?? `${item.title}-${i}`} item={item} />
+      ))}
     </div>
   );
 }

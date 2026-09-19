@@ -119,24 +119,34 @@ export function VerticalTicks({
   max = 100,
   ticks = 30,
   color = '#f0e8ea',
+  emptyColor = 'rgba(255,255,255,0.08)',
   className,
+  tickClassName,
 }: {
   value: number;
   max?: number;
   ticks?: number;
   color?: string;
+  emptyColor?: string;
   className?: string;
+  tickClassName?: string;
 }) {
   const pct = Math.min(100, Math.max(0, (value / max) * 100));
   const filled = Math.round((pct / 100) * ticks);
   return (
-    <div className={cn('flex h-10 w-full items-stretch gap-[3px]', className)}>
+    <div
+      className={cn('flex h-10 w-full items-stretch gap-[3px]', className)}
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={max}
+      aria-valuenow={Math.round(Math.min(max, Math.max(0, value)))}
+    >
       {Array.from({ length: ticks }, (_, i) => (
         <div
           key={i}
-          className="min-w-0 flex-1 rounded-sm"
+          className={cn('min-w-0 flex-1 rounded-sm', tickClassName)}
           style={{
-            backgroundColor: i < filled ? color : 'rgba(255,255,255,0.08)',
+            backgroundColor: i < filled ? color : emptyColor,
           }}
         />
       ))}
