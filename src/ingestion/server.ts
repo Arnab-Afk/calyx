@@ -6,6 +6,7 @@ import { askRoute } from "./routes/v1/ask.js";
 import { projectsRoute } from "./routes/v1/projects.js";
 import { githubWebhookRoute } from "./routes/v1/github-webhook.js";
 import { vercelDrainRoute } from "./routes/v1/vercel-drain.js";
+import { mcpCredentialsRoute } from "./routes/v1/mcp-credentials.js";
 import { closePool } from "../storage/client.js";
 import { closeRedis } from "./queue.js";
 
@@ -21,6 +22,7 @@ await app.register(askRoute);
 await app.register(projectsRoute);
 await app.register(githubWebhookRoute);
 await app.register(vercelDrainRoute);
+await app.register(mcpCredentialsRoute);
 
 app.get("/health", async () => ({ status: "ok" }));
 

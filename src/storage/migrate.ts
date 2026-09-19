@@ -234,6 +234,16 @@ CREATE TABLE IF NOT EXISTS mcp_anonymous_rate_limits (
 CREATE INDEX IF NOT EXISTS mcp_rate_limits_window ON mcp_rate_limits (window_start);
 CREATE INDEX IF NOT EXISTS mcp_anonymous_rate_limits_window
   ON mcp_anonymous_rate_limits (window_start);
+
+CREATE TABLE IF NOT EXISTS workspace_tenant_links (
+  workspace_id TEXT        NOT NULL PRIMARY KEY,
+  tenant_id    TEXT        NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS workspace_tenant_links_tenant
+  ON workspace_tenant_links (tenant_id);
 `;
 
 async function migrate(): Promise<void> {

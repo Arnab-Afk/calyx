@@ -45,6 +45,7 @@ services:
       DATABASE_URL: postgres://calyx:calyx@postgres:5432/calyx
       REDIS_URL: redis://redis:6379
       PORT: "3000"
+      CALYX_INTERNAL_API_KEY: ${CALYX_INTERNAL_API_KEY:-}
     ports:
       - "13000:3000"
     depends_on:
