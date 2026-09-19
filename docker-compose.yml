@@ -97,6 +97,21 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Hosted MCP endpoint for Claude Code, Codex, Pi, Cursor, and other MCP clients.
+  mcp:
+    profiles: ["mcp"]
+    build: .
+    command: ["npm", "run", "dev:mcp:http"]
+    environment:
+      DATABASE_URL: postgres://calyx:calyx@postgres:5432/calyx
+      MCP_PORT: "3002"
+    ports:
+      - "13002:3002"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   # Optional: docker compose --profile slack up
   slack:
     profiles: ["slack"]

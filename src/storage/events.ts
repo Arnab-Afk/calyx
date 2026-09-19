@@ -101,6 +101,72 @@ export async function queryEvents(q: EventQuery): Promise<StoredEvent[]> {
   }));
 }
 
+interface EventCursor {
+  ingestedAt: string;
+  id: string;
+}
+
+function encodeEventCursor(cursor: EventCursor): string {
+  return Buffer.from(JSON.stringify(cursor)).toString("base64url");
+}
+
+function decodeEventCursor(cursor: string): EventCursor {
+  try {
+    const value = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as EventCursor;
+    if (!value.ingestedAt || !value.id || Number.isNaN(Date.parse(value.ingestedAt))) {
+      throw new Error("Malformed cursor");
+    }
+    return value;
+  } catch {
+    throw new Error("Invalid live-log cursor");
+  }
+}
+
+export async function queryEventsAfter(q: {
+  tenant_id: string;
+  cursor?: string;
+  service?: string;
+  level?: string;
+  limit?: number;
+}): Promise<{ events: StoredEvent[]; next_cursor: string }> {
+  const start: EventCursor = q.cursor
+    ? decodeEventCursor(q.cursor)
+    : { ingestedAt: new Date().toISOString(), id: "00000000-0000-0000-0000-000000000000" };
+  const conditions = ["tenant_id = $1", "(ingested_at, id) > ($2::timestamptz, $3::uuid)"];
+  const params: unknown[] = [q.tenant_id, start.ingestedAt, start.id];
+  let p = 4;
+
+  if (q.service) {
+    conditions.push(`service = $${p++}`);
+    params.push(q.service);
+  }
+  if (q.level) {
+    conditions.push(`level = $${p++}`);
+    params.push(q.level);
+  }
+
+  const limit = Math.min(q.limit ?? 50, 100);
+  params.push(limit);
+  const result = await getPool().query(
+    `SELECT id, tenant_id, timestamp, service, level, message,
+            trace_id, span_id, attributes, ingested_at
+     FROM events
+     WHERE ${conditions.join(" AND ")}
+     ORDER BY ingested_at ASC, id ASC
+     LIMIT $${p}`,
+    params
+  );
+
+  const events: StoredEvent[] = result.rows.map((row) => ({
+    ...row,
+    timestamp: row.timestamp.toISOString(),
+    ingested_at: row.ingested_at.toISOString(),
+  }));
+  const last = events.at(-1);
+  const next = last ? { ingestedAt: last.ingested_at, id: last.id } : start;
+  return { events, next_cursor: encodeEventCursor(next) };
+}
+
 export async function searchByMessage(
   tenant_id: string,
   text: string,
