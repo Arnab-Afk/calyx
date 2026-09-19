@@ -103,7 +103,7 @@ export async function projectsRoute(app: FastifyInstance): Promise<void> {
         name: z.string().min(1).max(120),
         role: z.enum(["frontend", "backend", "other"]),
         service: z.string().min(1).max(120),
-        provider: z.enum(["http", "vercel"]).optional().default("http"),
+        provider: z.enum(["http", "vercel", "cloudwatch"]).optional().default("http"),
       })
       .safeParse(request.body);
     if (!body.success) {
@@ -143,6 +143,30 @@ export async function projectsRoute(app: FastifyInstance): Promise<void> {
           `Signature Verification Secret: (shown once below as drainSecret)`,
           "Sources: lambda + edge (+ build if useful); Environments: production (and preview if wanted)",
           "Save the drain — Vercel will POST a verify probe; Calyx echoes x-vercel-verify automatically",
+          `Then: calyx sources status --project ${project.slug} --wait 60`,
+        ],
+      });
+    }
+
+    if (body.data.provider === "cloudwatch") {
+      const drainUrl = `${intake}/v1/drains/cloudwatch/${source.id}`;
+      return reply.status(201).send({
+        source: {
+          id: source.id,
+          projectId: source.projectId,
+          name: source.name,
+          role: source.role,
+          service: source.service,
+          provider: source.provider,
+          lastEventAt: source.lastEventAt,
+          createdAt: source.createdAt,
+        },
+        drainUrl,
+        token: source.token,
+        nextSteps: [
+          "Create a CloudWatch Logs subscription filter targeting a forwarding Lambda",
+          `Configure CALYX_CLOUDWATCH_URL=${drainUrl} on the forwarder`,
+          "Configure CALYX_SOURCE_TOKEN with the token shown once in this response",
           `Then: calyx sources status --project ${project.slug} --wait 60`,
         ],
       });
@@ -193,7 +217,9 @@ export async function projectsRoute(app: FastifyInstance): Promise<void> {
         status: s.lastEventAt ? "receiving" : "waiting",
         ...(s.provider === "vercel"
           ? { drainUrl: `${intake}/v1/drains/vercel/${s.id}` }
-          : {}),
+          : s.provider === "cloudwatch"
+            ? { drainUrl: `${intake}/v1/drains/cloudwatch/${s.id}` }
+            : {}),
       })),
     });
   });

@@ -154,6 +154,16 @@ curl -X POST "http://127.0.0.1:13000/v1/drains/vercel/<sourceId>" \
   -d "$BODY"
 ```
 
+## CloudWatch Logs
+
+Create a tenant-bound source, then follow [CLOUDWATCH_INGESTION.md](./CLOUDWATCH_INGESTION.md) to configure the forwarding Lambda:
+
+```bash
+calyx sources create --project my-app --provider cloudwatch --role backend --service api
+```
+
+The drain URL and source token are displayed once. The forwarder posts the original AWS subscription envelope with that bearer token.
+
 ## Ask after connect
 
 ```bash
@@ -167,7 +177,7 @@ npm run cli -- ask -t default "any errors in the last hour?"
 | `POST` | `/v1/projects` |
 | `GET` | `/v1/projects` |
 | `GET` | `/v1/projects/:id` |
-| `POST` | `/v1/projects/:id/sources` (`provider`: `http` \| `vercel`) |
+| `POST` | `/v1/projects/:id/sources` (`provider`: `http` \| `vercel` \| `cloudwatch`) |
 | `GET` | `/v1/projects/:id/sources` |
 | `POST` | `/v1/projects/:id/github` |
 | `POST` | `/v1/projects/:id/slack` |

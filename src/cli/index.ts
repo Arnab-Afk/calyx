@@ -126,7 +126,7 @@ sources
   .option("--role <role>", "frontend | backend | other")
   .option("--service <name>", "Service name stamped on events")
   .option("--name <name>", "Human-readable source name")
-  .option("--provider <name>", "http (default) | vercel")
+  .option("--provider <name>", "http (default) | vercel | cloudwatch")
   .option("--json", "JSON output")
   .action(
     async (opts: {
@@ -137,8 +137,9 @@ sources
       provider?: string;
       json?: boolean;
     }) => {
-      const provider =
-        opts.provider === "vercel" || opts.provider === "http" ? opts.provider : "http";
+      const provider = ["http", "vercel", "cloudwatch"].includes(opts.provider ?? "")
+        ? opts.provider!
+        : "http";
       let role = opts.role;
       if (!role) {
         const answer = (await prompt("Role (frontend/backend/other)", "backend")).toLowerCase();
@@ -148,13 +149,23 @@ sources
         opts.service ||
         (await prompt(
           "Service name",
-          provider === "vercel" ? "vercel" : role === "frontend" ? "web" : "api"
+          provider === "vercel"
+            ? "vercel"
+            : provider === "cloudwatch"
+              ? "aws"
+              : role === "frontend"
+                ? "web"
+                : "api"
         ));
       const name =
         opts.name ||
         (await prompt(
           "Source name",
-          provider === "vercel" ? `${service}-vercel` : `${service}-${role}`
+          provider === "vercel"
+            ? `${service}-vercel`
+            : provider === "cloudwatch"
+              ? `${service}-cloudwatch`
+              : `${service}-${role}`
         ));
 
       const created = await apiFetch<{
@@ -178,6 +189,17 @@ sources
         console.log(`  ${created.drainUrl}`);
         console.log(`\nSignature secret (paste into Vercel; shown once):`);
         console.log(`  ${created.drainSecret}`);
+        console.log(`\nNext steps:`);
+        for (const step of created.nextSteps) console.log(`  ${step}`);
+        console.log();
+      } else if (provider === "cloudwatch") {
+        console.log(`✓ Created CloudWatch source ${created.source.name}`);
+        console.log(`  role:    ${created.source.role}`);
+        console.log(`  service: ${created.source.service}`);
+        console.log(`\nForwarder URL:`);
+        console.log(`  ${created.drainUrl}`);
+        console.log(`\nSave this write token now (shown once):`);
+        console.log(`  ${created.token}`);
         console.log(`\nNext steps:`);
         for (const step of created.nextSteps) console.log(`  ${step}`);
         console.log();

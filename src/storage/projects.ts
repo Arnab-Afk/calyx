@@ -197,11 +197,12 @@ export async function authenticateSourceToken(token: string): Promise<{
   tenantId: string;
   service: string;
   role: SourceRole;
+  provider: string;
 } | null> {
   if (!token.startsWith(SOURCE_TOKEN_PREFIX) || token.length < 48) return null;
 
   const result = await getPool().query(
-    `SELECT id, project_id, tenant_id, service, role, token_hash
+    `SELECT id, project_id, tenant_id, service, role, provider, token_hash
      FROM log_sources WHERE token_prefix = $1`,
     [token.slice(0, 32)]
   );
@@ -220,6 +221,7 @@ export async function authenticateSourceToken(token: string): Promise<{
     tenantId: row.tenant_id,
     service: row.service,
     role: row.role,
+    provider: row.provider,
   };
 }
 
