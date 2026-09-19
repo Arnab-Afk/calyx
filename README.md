@@ -168,7 +168,7 @@ docker compose up --build
 curl http://localhost:13000/health
 ```
 
-Host ports: ingestion `13000`, Slack `13001` (profile `slack`), Postgres `15432`, Redis `16379`.
+Host ports: ingestion `13000`, Slack `13001` (profile `slack`), MCP `13002` (profile `mcp`), **chat API `14000`** (profile `chat`), Postgres `15432`, Redis `16379`.
 
 ```bash
 npm test
@@ -178,6 +178,10 @@ npm run dev:slack
 CALYX_TENANT_ID=demo npm run dev:mcp
 npm run dev:mcp:http
 npx tsx src/cli/index.ts ask -t demo "why are errors spiking?"
+
+# Go chat API (Convex replacement for workspaces/channels/messages)
+docker compose --profile chat up --build -d chat-api
+# or: cd apps/api && go run ./cmd/server
 ```
 
 Coding-agent setup for Claude Code, Codex, Pi, Cursor, and other MCP clients: [`docs/MCP_CONNECTORS.md`](./docs/MCP_CONNECTORS.md).

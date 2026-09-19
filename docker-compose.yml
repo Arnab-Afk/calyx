@@ -160,6 +160,35 @@ services:
       redis:
         condition: service_healthy
 
+  # Go chat API — Convex replacement for auth/workspaces/channels/messages
+  chat-api:
+    profiles: ["chat"]
+    build:
+      context: ./apps/api
+    environment:
+      DATABASE_URL: postgres://calyx:calyx@postgres:5432/calyx
+      ADDR: ":14000"
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-calyx-chat-api}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+    ports:
+      - "14000:14000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "-qO-",
+          "http://127.0.0.1:14000/health",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+    restart: unless-stopped
+
 volumes:
   calyx_pg_data:
   calyx_redis_data:

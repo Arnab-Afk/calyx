@@ -241,3 +241,23 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Because.** Current Calyx capabilities are request/response tools, and portable live logs already use cursor-based `tail_logs`; they do not require transport-level session persistence.
 
 **Consequence.** Stateless mode accepts POST only and sacrifices unsolicited server streams. Stateful mode advertises its process-local session count and requires load-balancer affinity.
+
+---
+
+## D-013 — Replace Convex chat plane with a Go API; keep Node for observability
+
+**Date:** 2026-09-20
+**Status:** accepted
+
+**Context.** The Slack-style web UI depended on Convex for auth, workspaces, channels, and messages, while logs/agent/MCP already run on the Node/Postgres stack. We need a deployable, first-party backend without a dual-runtime chat store.
+
+**Options considered.**
+- **Keep Convex** — fastest UI iteration, but couples the product to a proprietary realtime DB and complicates self-host deploy.
+- **Move chat into the existing Node Fastify service** — one runtime, but mixes chat and observability concerns and slows the “finish backend for deploy” goal.
+- **Greenfield Go chat API** sharing Postgres — clear ownership boundary; Node stays the observability plane.
+
+**Decision.** Ship `apps/api` (Go) as the chat backend (`chat_*` tables, JWT auth, REST + WebSocket). Observability remains Node on `:13000` / MCP `:13002`. Frontend migration off Convex is a follow-up once the API is deployed and smoke-tested.
+
+**Because.** Deployability and a single Postgres source of truth for product data matter more than keeping Convex’s free subscriptions during this phase.
+
+**Consequence.** Next.js must later swap Convex hooks for the Go HTTP/WS client. Until then both can run; do not write new Convex chat features.

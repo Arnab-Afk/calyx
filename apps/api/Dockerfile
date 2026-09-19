@@ -1,0 +1,18 @@
+# syntax=docker/dockerfile:1
+FROM golang:1.23-alpine AS build
+WORKDIR /src
+ENV GOTOOLCHAIN=auto
+RUN apk add --no-cache git ca-certificates
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/calyx-api ./cmd/server
+
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates wget
+WORKDIR /app
+COPY --from=build /out/calyx-api /app/calyx-api
+ENV ADDR=:14000
+EXPOSE 14000
+USER nobody
+ENTRYPOINT ["/app/calyx-api"]
