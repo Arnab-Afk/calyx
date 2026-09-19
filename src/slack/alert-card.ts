@@ -82,6 +82,16 @@ export function buildAlertCard(alert: Alert, state?: AlertState): AlertCard {
           value: alert.id,
           action_id: "start_incident",
         },
+        ...(!state || state.status === "active"
+          ? [
+              {
+                type: "button",
+                text: { type: "plain_text", text: "Acknowledge", emoji: true },
+                value: alert.id,
+                action_id: "ack_alert",
+              },
+            ]
+          : []),
         ...(state?.status !== "resolved"
           ? [
               {

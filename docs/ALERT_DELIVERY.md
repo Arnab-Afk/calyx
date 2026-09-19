@@ -31,5 +31,7 @@ Never configure one fallback channel for unrelated tenants. Delivery records inc
 - Failures use exponential backoff and stop being claimed after five attempts.
 - Processing leases older than five minutes are recovered after a worker crash.
 - Successful Slack timestamps are stored as external delivery IDs.
+- Slack acknowledge/resolve actions are accepted only from the channel that received the durable delivery.
+- Acknowledgement moves the linked incident to `investigating`; resolution updates both the alert and incident transactionally, including actor, timestamp, and resolution notes.
 
 Web delivery is represented in the outbox contract but is not enabled until an authenticated workspace notification target exists.

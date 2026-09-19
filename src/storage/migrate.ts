@@ -50,10 +50,20 @@ CREATE TABLE IF NOT EXISTS alert_contexts (
   first_detected_at TIMESTAMPTZ NOT NULL,
   last_detected_at  TIMESTAMPTZ NOT NULL,
   occurrence_count  INTEGER     NOT NULL DEFAULT 1,
+  acknowledged_by   TEXT,
+  acknowledged_at   TIMESTAMPTZ,
+  resolved_by       TEXT,
+  resolved_at       TIMESTAMPTZ,
+  resolution_reason TEXT,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE alert_contexts ADD COLUMN IF NOT EXISTS acknowledged_by TEXT;
+ALTER TABLE alert_contexts ADD COLUMN IF NOT EXISTS acknowledged_at TIMESTAMPTZ;
+ALTER TABLE alert_contexts ADD COLUMN IF NOT EXISTS resolved_by TEXT;
+ALTER TABLE alert_contexts ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
+ALTER TABLE alert_contexts ADD COLUMN IF NOT EXISTS resolution_reason TEXT;
 ALTER TABLE alert_contexts DROP CONSTRAINT IF EXISTS alert_contexts_tenant_dedup;
 
 CREATE UNIQUE INDEX IF NOT EXISTS alert_contexts_active_dedup
