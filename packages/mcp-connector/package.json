@@ -1,0 +1,36 @@
+{
+  "name": "calyx-mcp",
+  "version": "0.1.0",
+  "description": "Connect stdio-only coding agents to hosted Calyx MCP.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "calyx-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.10",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Arnab-Afk/calyx.git",
+    "directory": "packages/mcp-connector"
+  },
+  "keywords": ["calyx", "mcp", "claude", "codex", "stdio"]
+}
