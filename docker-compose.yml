@@ -106,6 +106,7 @@ services:
     environment:
       DATABASE_URL: postgres://calyx:calyx@postgres:5432/calyx
       MCP_PORT: "3002"
+      MCP_SESSION_MODE: ${MCP_SESSION_MODE:-stateless}
       MCP_PUBLIC_URL: ${MCP_PUBLIC_URL:-}
       MCP_OAUTH_ISSUER: ${MCP_OAUTH_ISSUER:-}
       MCP_OAUTH_INTROSPECTION_URL: ${MCP_OAUTH_INTROSPECTION_URL:-}

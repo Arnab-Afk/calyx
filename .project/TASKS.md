@@ -4,11 +4,10 @@
 
 ## In progress
 
-- [ ] Add deployment-safe session storage for the hosted MCP endpoint.
+- [ ] Package the stdio connector so clients do not require a Calyx repository checkout.
 
 ## Next
 
-- [ ] Package the stdio connector so clients do not require a Calyx repository checkout.
 
 ## Backlog
 
@@ -19,6 +18,8 @@
 
 ## Done
 
+- [x] Default hosted MCP to horizontally safe stateless mode while retaining explicit affinity-based stateful mode — 2026-09-19
+- [x] Publish `calyx-logger@0.2.0` for browser and Node telemetry — 2026-09-19 (teammate)
 - [x] Add standards-based external browser OAuth protected-resource support while retaining API keys — 2026-09-19
 - [x] Add immutable workspace-to-tenant links and admin-only web MCP credential self-service — 2026-09-19
 - [x] Add shared hosted MCP rate limits and tenant-scoped security/tool audit events — 2026-09-19

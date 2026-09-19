@@ -4,7 +4,7 @@ Calyx exposes the same read-only observability tools to Claude Code, Codex, Pi, 
 
 ## Transports
 
-- **Streamable HTTP (recommended):** `https://<calyx-host>/mcp`, authenticated with a scoped bearer token. It supports stateful MCP sessions and SSE responses.
+- **Streamable HTTP (recommended):** `https://<calyx-host>/mcp`, authenticated with a scoped bearer token. Stateless mode is the horizontally safe default; stateful sessions remain available for affinity deployments.
 - **stdio (local development):** starts `src/mcp/server.ts` as a child process and binds it to one tenant through the environment.
 
 The current tools are:
@@ -63,6 +63,8 @@ npm run mcp:workspace-link -- --workspace <convex-workspace-id> --tenant <calyx-
 The browser never supplies a tenant ID or receives `CALYX_INTERNAL_API_KEY`. Convex verifies workspace-admin membership, sends only its authenticated workspace ID to the internal API, and Calyx resolves the tenant from `workspace_tenant_links`.
 
 Always use HTTPS outside a local machine. Never commit a Calyx token.
+
+Set `MCP_SESSION_MODE=stateless` for replicas without coordination. This accepts POST requests only and creates an isolated protocol server per request. `MCP_SESSION_MODE=stateful` enables GET/SSE and resumable in-process sessions, but every session must remain pinned to the instance that created it.
 
 Hosted requests are limited per credential through PostgreSQL (`MCP_RATE_LIMIT_PER_MINUTE`, default 120). Invalid authentication attempts have a separate per-network-peer limit. Responses include standard limit, remaining, reset, and retry headers. Credential lifecycle, authentication outcomes, session access, HTTP requests, and tool calls are written to tenant-scoped `audit_events`; token values and tool arguments are never recorded.
 
@@ -191,7 +193,8 @@ A cursor is opaque and tenant-bound by the query. Events are ordered by `(ingest
 - API keys use the `calyx_sk_` prefix and 256 bits of random secret material.
 - PostgreSQL stores only a SHA-256 digest and a non-secret lookup prefix.
 - Keys have tenant, name, scopes, optional expiry, last-used time, and revocation time.
-- Every HTTP request is re-authenticated; an MCP session cannot switch credentials.
+- Every HTTP request is re-authenticated; a stateful MCP session cannot switch credentials.
+- Stateless mode stores no protocol session state and can run across replicas without affinity.
 - Tool inputs cannot select a tenant.
 - The first production scope is read-only: `logs:read`.
 - Hosted deployment must terminate TLS and rate-limit `/mcp` at the edge.
