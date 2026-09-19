@@ -2,20 +2,20 @@ import type { Tool, ToolInput } from "../schemas/index.js";
 
 // Central tool registry. Every transport (Slack, CLI, MCP) calls these
 // same handlers — no logic lives in the transport adapters.
-const registry = new Map<string, Tool>();
+const registry = new Map<string, Tool<any>>();
 
-export function registerTool(tool: Tool): void {
+export function registerTool(tool: Tool<any>): void {
   if (registry.has(tool.name)) {
     throw new Error(`Tool already registered: ${tool.name}`);
   }
   registry.set(tool.name, tool);
 }
 
-export function getTool(name: string): Tool | undefined {
+export function getTool(name: string): Tool<any> | undefined {
   return registry.get(name);
 }
 
-export function getAllTools(): Tool[] {
+export function getAllTools(): Tool<any>[] {
   return [...registry.values()];
 }
 

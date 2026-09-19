@@ -79,7 +79,7 @@ The **skeleton** of both acts exists. The **product loop is not closed**.
 | Agent | Claude + `query_logs`, `get_service_stats`, `search_past_incidents` | Change correlation, blast radius, code search, request trace |
 | Detection | Error-rate stddev detector, dedup helper | Wire to Slack; silent-failure and the rest of the six |
 | Slack | Adapter, alert card, charts, thread replies, approval modal | Detector → investigated card posting; status; Start Incident |
-| CLI / MCP | Thin wrappers over the same tools | `logs tail`, `threads search`, data-source connect |
+| CLI / MCP | Scoped stdio + authenticated Streamable HTTP connectors over the same tools, including live `tail_logs` | Incident tools, OAuth, data-source connect |
 | Execution | Action interface, policy tiers, audit log, flag-toggle stub | Real operator, real integrations, Slack “Run it” on live alerts |
 
 Shared contracts live in `src/schemas/` (`Event`, `Anomaly`, `Alert`, `Tool`, `Action`). New detectors, tools, and transports stay additive. Do not invent a second shape per layer.
@@ -173,9 +173,12 @@ npm test
 npm run dev:ingestion
 npm run dev:consumer
 npm run dev:slack
-npm run dev:mcp
+CALYX_TENANT_ID=demo npm run dev:mcp
+npm run dev:mcp:http
 npx tsx src/cli/index.ts ask -t demo "why are errors spiking?"
 ```
+
+Coding-agent setup for Claude Code, Codex, Pi, Cursor, and other MCP clients: [`docs/MCP_CONNECTORS.md`](./docs/MCP_CONNECTORS.md).
 
 ---
 

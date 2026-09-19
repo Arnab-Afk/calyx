@@ -22,6 +22,21 @@ CREATE INDEX IF NOT EXISTS events_tenant_time    ON events (tenant_id, timestamp
 CREATE INDEX IF NOT EXISTS events_tenant_service ON events (tenant_id, service, timestamp DESC);
 CREATE INDEX IF NOT EXISTS events_tenant_level   ON events (tenant_id, level, timestamp DESC);
 CREATE INDEX IF NOT EXISTS events_attrs          ON events USING GIN (attributes);
+
+CREATE TABLE IF NOT EXISTS mcp_api_keys (
+  id           UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  tenant_id    TEXT        NOT NULL,
+  name         TEXT        NOT NULL,
+  key_prefix   TEXT        NOT NULL UNIQUE,
+  token_hash   BYTEA       NOT NULL,
+  scopes       TEXT[]      NOT NULL DEFAULT ARRAY['logs:read'],
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_used_at TIMESTAMPTZ,
+  expires_at   TIMESTAMPTZ,
+  revoked_at   TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS mcp_api_keys_tenant ON mcp_api_keys (tenant_id, created_at DESC);
 `;
 
 async function migrate(): Promise<void> {
