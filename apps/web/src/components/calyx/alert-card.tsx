@@ -67,7 +67,7 @@ export function AlertCard({
     localStatus === 'active' ? 'Open' : localStatus === 'acknowledged' ? 'Acknowledged' : 'Resolved';
 
   return (
-    <div className="my-1 w-full max-w-2xl">
+    <div className="my-1 w-full max-w-3xl">
       <div className="relative overflow-hidden rounded-xl border border-[var(--sazabi-border)] bg-[linear-gradient(145deg,rgba(90,18,28,0.72)_0%,rgba(28,12,16,0.88)_55%,rgba(16,10,12,0.92)_100%)] shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,120,120,0.08)] backdrop-blur-xl">
         <div
           aria-hidden

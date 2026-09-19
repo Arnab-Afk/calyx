@@ -3,8 +3,6 @@ import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
 import { mutation } from './_generated/server';
 
-const CHANNEL = 'calyx-utilities';
-
 type Sample = {
   chartType: string;
   answer: string;
@@ -358,6 +356,37 @@ const SAMPLES: Sample[] = [
     },
   },
   {
+    chartType: 'commit-diff',
+    query: 'show the diff for the fix commit',
+    answer: 'Snapshot of `a3f91c2` — timeout raised on search handler.',
+    tools: ['github'],
+    chartData: {
+      sha: 'a3f91c2e8b1d',
+      message: 'fix: raise search timeout + log slow queries',
+      author: 'maya',
+      path: 'apps/api/src/routes/search.ts',
+      additions: 6,
+      deletions: 3,
+      hunkHeader: '@@ -42,9 +42,12 @@ export async function searchHandler(req, res) {',
+      lines: [
+        { type: 'ctx', content: '  const started = Date.now()', oldNo: 42, newNo: 42 },
+        { type: 'ctx', content: '  const q = String(req.query.q ?? "")', oldNo: 43, newNo: 43 },
+        { type: 'del', content: '  const timeoutMs = 800', oldNo: 44, newNo: null },
+        { type: 'add', content: '  const timeoutMs = Number(process.env.SEARCH_TIMEOUT_MS) || 2500', oldNo: null, newNo: 44 },
+        { type: 'ctx', content: '  const results = await withTimeout(', oldNo: 45, newNo: 45 },
+        { type: 'ctx', content: '    searchIndex.query(q),', oldNo: 46, newNo: 46 },
+        { type: 'del', content: '    timeoutMs', oldNo: 47, newNo: null },
+        { type: 'add', content: '    timeoutMs,', oldNo: null, newNo: 47 },
+        { type: 'add', content: '  )', oldNo: null, newNo: 48 },
+        { type: 'del', content: '  )', oldNo: 48, newNo: null },
+        { type: 'add', content: '  if (Date.now() - started > 1000) {', oldNo: null, newNo: 49 },
+        { type: 'add', content: '    logger.warn("slow_search", { q, ms: Date.now() - started })', oldNo: null, newNo: 50 },
+        { type: 'add', content: '  }', oldNo: null, newNo: 51 },
+        { type: 'ctx', content: '  return res.json({ results })', oldNo: 49, newNo: 52 },
+      ],
+    },
+  },
+  {
     chartType: 'resource-health',
     query: 'cloud resources',
     answer: 'Cross-cloud resource health snapshot.',
@@ -542,11 +571,13 @@ const SAMPLES: Sample[] = [
   },
 ];
 
-/** Create `#calyx-utilities` if needed and post all utility/GitHub/cloud gallery samples. */
+/** Create a new channel and post all utility/GitHub/cloud gallery samples. */
 export const seedUtilityGallery = mutation({
   args: {
     workspaceId: v.id('workspaces'),
     memberId: v.optional(v.id('members')),
+    /** Channel name without `#`. Defaults to a unique `calyx-gallery-…` name. */
+    channelName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     let memberId = args.memberId;
@@ -559,20 +590,21 @@ export const seedUtilityGallery = mutation({
       memberId = member._id;
     }
 
+    const stamp = new Date().toISOString().slice(5, 16).replace(/[:T]/g, '');
+    let channelName = args.channelName ?? `calyx-gallery-${stamp}`;
+
     const existing = await ctx.db
       .query('channels')
       .withIndex('by_workspace_id', (q) => q.eq('workspaceId', args.workspaceId))
       .collect();
-    let channel = existing.find((c) => c.name === CHANNEL);
-    let channelId: Id<'channels'>;
-    if (channel) {
-      channelId = channel._id;
-    } else {
-      channelId = await ctx.db.insert('channels', {
-        name: CHANNEL,
-        workspaceId: args.workspaceId,
-      });
+    if (existing.some((c) => c.name === channelName)) {
+      channelName = `${channelName}-${stamp}`;
     }
+
+    const channelId = await ctx.db.insert('channels', {
+      name: channelName,
+      workspaceId: args.workspaceId,
+    });
 
     const quillBody = (text: string) => JSON.stringify({ ops: [{ insert: `${text}\n` }] });
 
@@ -605,6 +637,12 @@ export const seedUtilityGallery = mutation({
       );
     }
 
-    return { channelId, channelName: CHANNEL, count: ids.length, sampleTypes: SAMPLES.map((s) => s.chartType) };
+    return {
+      channelId,
+      channelName,
+      count: ids.length,
+      samples: SAMPLES.length,
+      sampleTypes: SAMPLES.map((s) => s.chartType),
+    };
   },
 });

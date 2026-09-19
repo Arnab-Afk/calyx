@@ -98,12 +98,12 @@ export function GrafanaPanel({
 
   return (
     <div
-      className={`overflow-hidden rounded-2xl border border-white/[0.08] bg-[#121417]/95 shadow-[0_12px_40px_rgba(0,0,0,0.55)] backdrop-blur-md ${className}`}
+      className={`w-full overflow-hidden rounded-[1.25rem] border border-white/[0.08] bg-[#121417]/95 shadow-[0_16px_48px_rgba(0,0,0,0.55)] backdrop-blur-md ${className}`}
     >
       {cleanTitle || timeRange || meta ? (
-        <div className="flex items-center gap-3 border-b border-white/[0.06] px-4 py-3">
+        <div className="flex items-center gap-3 border-b border-white/[0.06] px-5 py-4 sm:px-6">
           {cleanTitle ? (
-            <h3 className="min-w-0 flex-1 truncate font-[family-name:var(--font-display)] text-[14px] font-semibold tracking-tight text-white">
+            <h3 className="min-w-0 flex-1 truncate font-[family-name:var(--font-display)] text-[15px] font-semibold tracking-tight text-white">
               {cleanTitle}
               {timeRange ? (
                 <span className="font-[family-name:var(--font-body)] font-normal text-white/40">
@@ -120,7 +120,7 @@ export function GrafanaPanel({
           )}
         </div>
       ) : null}
-      <div className="p-4 font-[family-name:var(--font-body)]">{children}</div>
+      <div className="p-5 font-[family-name:var(--font-body)] sm:p-6">{children}</div>
     </div>
   );
 }
