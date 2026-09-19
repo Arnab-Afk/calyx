@@ -81,3 +81,23 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Because.** MCP receives the same evidence-backed answer and tool-call trace as other product surfaces while recursive calls and tenant injection fail by construction.
 
 **Consequence.** Provider credentials remain required to execute `ask`; deterministic evidence tools remain available independently under their own scopes.
+
+---
+
+## D-005 — Persist detector output as tenant-scoped alert context
+
+**Date:** 2026-09-19
+**Status:** accepted
+
+**Context.** Web, Slack, and IDE investigations need one stable alert identifier and evidence record. Recomputing an alert independently in each surface would produce inconsistent context, while storing only a rendered notification would discard detector evidence.
+
+**Options considered.**
+- **Recompute from recent logs on every surface** — simple but unstable and cannot support alert deep links.
+- **Persist rendered Slack/web cards** — tightly couples the evidence model to presentation.
+- **Persist detector anomalies and retrieve nearby evidence by alert ID** — keeps detection facts durable and presentation-neutral.
+
+**Decision.** We chose a tenant-scoped `alert_contexts` record keyed by detector type and service. Repeated detections update the same record and increment an occurrence count. `get_alert_context` returns that record plus nearby error events.
+
+**Because.** All product surfaces can hand off one opaque alert ID while server-side tenant filtering prevents cross-workspace retrieval.
+
+**Consequence.** Notification dispatch remains separate. A later incident model may group multiple alert contexts without changing their IDs or evidence history.
