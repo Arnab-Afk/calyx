@@ -13,6 +13,8 @@ export interface AgentRunOptions {
   /** Slack always passes "anthropic". CLI may pass "nvidia" as a spare. */
   provider?: AgentProvider;
   model?: string;
+  /** Prevent wrapper tools such as `ask` from recursively invoking themselves. */
+  excludeTools?: string[];
 }
 
 function looksLikeNvidiaModel(model: string): boolean {
@@ -58,13 +60,14 @@ export async function runAgent(
   options?: AgentRunOptions
 ): Promise<AgentResponse> {
   if (agentProvider(options?.provider) === "nvidia") {
-    return runNvidiaAgent(tenantId, userMessage, systemPrompt, systemSuffix, maxTokens);
+    return runNvidiaAgent(tenantId, userMessage, systemPrompt, systemSuffix, maxTokens, options?.excludeTools);
   }
 
   const model = anthropicModel(options?.model);
   const useAdaptiveThinking = !/haiku/i.test(model);
   const client = new Anthropic();
-  const tools = getAllTools().map(toApiTool);
+  const excludedTools = new Set(["ask", ...(options?.excludeTools ?? [])]);
+  const tools = getAllTools().filter((tool) => !excludedTools.has(tool.name)).map(toApiTool);
 
   const base =
     systemPrompt ??
@@ -110,10 +113,11 @@ cite specific numbers and service names from the tool results.`;
 
       const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
         toolUseBlocks.map(async (block) => {
-          const result = await executeTool(block.name, block.input as ToolInput);
+          const input = { ...(block.input as ToolInput), tenant_id: tenantId };
+          const result = await executeTool(block.name, input);
           const record: ToolCallRecord = {
             toolName: block.name,
-            input: block.input as ToolInput,
+            input,
             result: result.ok
               ? { ok: true, summary: result.output.summary }
               : { ok: false, error: result.error },

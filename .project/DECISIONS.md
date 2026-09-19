@@ -61,3 +61,23 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Because.** It provides duplicate-resistant live following through the lowest common MCP capability.
 
 **Consequence.** Agents must call the tool repeatedly. Native subscription resources can be added later as an optimization without replacing the portable tool.
+
+---
+
+## D-004 — Expose natural-language investigation as a scoped wrapper over the shared agent
+
+**Date:** 2026-09-19
+**Status:** accepted
+
+**Context.** IDE users need the same “ask Calyx” workflow available in web chat, Slack, and CLI without creating a second investigation backend. The wrapper must not recursively invoke itself or allow model-generated tenant identifiers to cross tenant boundaries.
+
+**Options considered.**
+- **Duplicate the investigation flow in MCP** — gives transport-specific control but creates divergent reasoning and evidence behavior.
+- **Call the public HTTP ask route** — adds an unnecessary network and authentication hop inside the same service.
+- **Register an `ask` tool that invokes the shared agent loop** — preserves one tool registry and one investigation implementation.
+
+**Decision.** We chose a registry-backed `ask` tool gated by `incidents:ask`. The shared loop excludes `ask` from model-visible nested tools and overwrites every model-produced tool-call tenant with its authenticated run tenant.
+
+**Because.** MCP receives the same evidence-backed answer and tool-call trace as other product surfaces while recursive calls and tenant injection fail by construction.
+
+**Consequence.** Provider credentials remain required to execute `ask`; deterministic evidence tools remain available independently under their own scopes.

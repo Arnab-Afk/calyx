@@ -129,6 +129,24 @@ describe("Phase 5 — MCP server", () => {
     expect(services).toContain("db");
   });
 
+  it("exposes ask only with incidents:ask and keeps tenant_id private", async () => {
+    const server = createScopedMcpServer({
+      credentialId: "ask-key",
+      tenantId: TENANT,
+      name: "ask-test",
+      scopes: ["incidents:ask"],
+    });
+    const handler = (server as unknown as {
+      _requestHandlers: Map<string, (req: unknown) => Promise<unknown>>;
+    })._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
+    const result = (await handler?.({ method: "tools/list", params: {} })) as {
+      tools: { name: string; inputSchema: { properties: Record<string, unknown> } }[];
+    };
+
+    expect(result.tools.map((tool) => tool.name)).toEqual(["ask"]);
+    expect(result.tools[0].inputSchema.properties).not.toHaveProperty("tenant_id");
+  });
+
   it("MCP tool descriptions match the central registry", () => {
     const server = createMcpServer();
     const registryTools = getAllTools();
