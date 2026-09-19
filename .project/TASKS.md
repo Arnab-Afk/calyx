@@ -4,10 +4,11 @@
 
 ## In progress
 
-- [ ] Package the stdio connector so clients do not require a Calyx repository checkout.
+- [ ] Add CloudWatch telemetry ingestion behind the normalized event model.
 
 ## Next
 
+- [ ] Publish the prepared `calyx-mcp` stdio bridge package when npm credentials are available.
 
 ## Backlog
 
@@ -18,6 +19,7 @@
 
 ## Done
 
+- [x] Package the standalone `calyx-mcp` stdio-to-hosted bridge so clients need no repository checkout — 2026-09-19
 - [x] Default hosted MCP to horizontally safe stateless mode while retaining explicit affinity-based stateful mode — 2026-09-19
 - [x] Publish `calyx-logger@0.2.0` for browser and Node telemetry — 2026-09-19 (teammate)
 - [x] Add standards-based external browser OAuth protected-resource support while retaining API keys — 2026-09-19

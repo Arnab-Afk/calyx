@@ -84,6 +84,18 @@ The issuer's RFC 7662 introspection response must include `active: true`, `sub`,
 
 API keys remain supported for machine-to-machine clients. Always use HTTPS for the resource and issuer in production.
 
+## Standalone stdio bridge
+
+For stdio-only clients connecting to hosted Calyx, run the standalone bridge—no repository checkout or database access is required:
+
+```bash
+CALYX_MCP_URL=https://<calyx-host>/mcp \
+CALYX_API_KEY=calyx_sk_... \
+npx -y calyx-mcp
+```
+
+The bridge forwards tool discovery and calls to hosted Streamable HTTP. The bearer credential determines tenant and scopes; the bridge never accepts `tenant_id`.
+
 ## Claude Code
 
 Remote connector:
