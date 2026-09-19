@@ -25,6 +25,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@radix-ui/react-visually-hidden": "^1.2.4",
     "@vercel/config": "^0.0.33",
+    "calyx-logger": "file:..\\..\\packages\\logger",
     "chart.js": "^4.5.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -67,7 +68,7 @@
     "typescript": "^5.9.3"
   },
   "packageManager": "pnpm@11.10.0",
-  "description": "Calyx web \u2014 Slack-style workspace with observability AI replies",
+  "description": "Calyx web — Slack-style workspace with observability AI replies",
   "keywords": [
     "reactjs",
     "nextjs",

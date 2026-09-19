@@ -1,7 +1,7 @@
 {
   "name": "calyx-logger",
-  "version": "0.2.0",
-  "description": "Ship frontend and backend logs to Calyx intake with one init() and env vars.",
+  "version": "0.3.2",
+  "description": "Ship frontend and backend logs to Calyx — Next plugin (withCalyxLogger) or init().",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -18,18 +18,37 @@
     "./node": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./next": {
+      "types": "./dist/next/index.d.ts",
+      "import": "./dist/next/index.js",
+      "require": "./dist/next/index.js"
+    },
+    "./next/register": {
+      "types": "./dist/next/register.d.ts",
+      "import": "./dist/next/register.js"
     }
   },
   "files": [
     "dist",
     "README.md"
   ],
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/next/register.js"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "next": ">=15.3.0"
+  },
+  "peerDependenciesMeta": {
+    "next": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "typescript": "^5.8.3",
