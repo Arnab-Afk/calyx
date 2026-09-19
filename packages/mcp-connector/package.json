@@ -5,7 +5,7 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "calyx-mcp": "./dist/index.js"
+    "calyx-mcp": "dist/index.js"
   },
   "files": [
     "dist",
@@ -32,5 +32,11 @@
     "url": "git+https://github.com/Arnab-Afk/calyx.git",
     "directory": "packages/mcp-connector"
   },
-  "keywords": ["calyx", "mcp", "claude", "codex", "stdio"]
+  "keywords": [
+    "calyx",
+    "mcp",
+    "claude",
+    "codex",
+    "stdio"
+  ]
 }
