@@ -1,0 +1,63 @@
+# Decision log
+
+Append-only. Newest at the bottom. Never edit or delete a past entry — supersede it.
+
+---
+
+## D-001 — Build Calyx as a complete product rather than a hackathon-only demo
+
+**Date:** 2026-09-19
+**Status:** accepted
+
+**Context.** The initial planning optimized for a short AWS hackathon demonstration. The product direction now requires durable integrations and compatibility beyond the event.
+
+**Options considered.**
+- **Hackathon slice** — implement only the shortest CloudWatch-to-demo path.
+- **Product foundation** — preserve the incident-loop priority while designing external interfaces for tenant isolation, lifecycle management, and broad client compatibility.
+
+**Decision.** We chose the product foundation.
+
+**Because.** MCP, authentication, connectors, and incidents become expensive to replace if their boundaries are demo-specific. A production-shaped vertical slice can still be demonstrated while remaining reusable.
+
+**Consequence.** Delivery is broken into verified product slices rather than one-off mocks. AWS remains an important connector/deployment target but no longer defines the complete product scope.
+
+---
+
+## D-002 — Support MCP through scoped stdio and authenticated Streamable HTTP
+
+**Date:** 2026-09-19
+**Status:** accepted
+
+**Context.** Coding agents vary in transport and authentication support. Local stdio is universally useful for development, while a product service needs remote sessions and revocable credentials.
+
+**Options considered.**
+- **stdio only** — simple, but requires local database access and cannot provide a hosted connector.
+- **Legacy HTTP+SSE** — broadly deployed but deprecated by the MCP SDK.
+- **Streamable HTTP only** — correct for hosted use but less convenient for local tools.
+- **stdio plus Streamable HTTP** — one scoped tool surface with transport-specific hosting.
+
+**Decision.** We chose stdio plus stateful Streamable HTTP, with legacy SSE excluded.
+
+**Because.** Both are standard MCP transports and cover Claude Code, Codex, Pi, Cursor, and other clients without duplicating tool logic.
+
+**Consequence.** Each server instance is bound to one authenticated tenant. HTTP sessions are stateful and must be managed across process lifetime; horizontal scaling will later require session affinity or an external session/event store.
+
+---
+
+## D-003 — Stream live logs through a portable cursor-based long-poll tool
+
+**Date:** 2026-09-19
+**Status:** accepted
+
+**Context.** MCP supports server notifications, but coding-agent clients differ in whether and how they expose unsolicited notifications to the model.
+
+**Options considered.**
+- **Logging notifications/resources subscriptions** — push-based but inconsistently surfaced by clients.
+- **One large blocking tool call** — hard to cancel and prone to client timeouts.
+- **Bounded long polling with an opaque cursor** — works anywhere tools work and allows cancellation between calls.
+
+**Decision.** We chose `tail_logs` with a maximum 25-second wait and opaque `(ingested_at, id)` cursor.
+
+**Because.** It provides duplicate-resistant live following through the lowest common MCP capability.
+
+**Consequence.** Agents must call the tool repeatedly. Native subscription resources can be added later as an optimization without replacing the portable tool.

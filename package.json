@@ -8,6 +8,8 @@
     "dev:consumer": "tsx src/ingestion/consumer.ts",
     "dev:slack": "tsx src/slack/index.ts",
     "dev:mcp": "tsx src/mcp/server.ts",
+    "dev:mcp:http": "tsx src/mcp/http-server.ts",
+    "mcp:key": "tsx src/mcp/keys-cli.ts",
     "dev:loki-forwarder": "tsx src/connectors/loki-forwarder.ts",
     "cli": "tsx src/cli/index.ts",
     "migrate": "tsx src/storage/migrate.ts",

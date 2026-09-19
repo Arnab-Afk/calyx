@@ -78,6 +78,7 @@ export interface ToolOutput {
 }
 
 export interface ToolJsonSchema {
+  [key: string]: unknown;
   type: "object";
   properties: Record<string, unknown>;
   required?: string[];
@@ -86,7 +87,7 @@ export interface ToolJsonSchema {
 export interface Tool<I extends ToolInput = ToolInput> {
   name: string;
   description: string;
-  inputSchema: z.ZodType<I>;
+  inputSchema: z.ZodType<I, z.ZodTypeDef, unknown>;
   // Explicit JSON Schema for the Anthropic API — keep in sync with inputSchema
   inputJsonSchema: ToolJsonSchema;
   handler: (input: I) => Promise<ToolOutput>;

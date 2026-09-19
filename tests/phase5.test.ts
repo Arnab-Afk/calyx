@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { insertEvents } from "../src/storage/events.js";
 import { closePool, getPool } from "../src/storage/client.js";
 import { initAgent, executeTool, getAllTools } from "../src/agent/index.js";
-import { createMcpServer } from "../src/mcp/server.js";
+import { createMcpServer as createScopedMcpServer } from "../src/mcp/server.js";
 import { EventSchema, type Event } from "../src/schemas/index.js";
 import {
   CallToolRequestSchema,
@@ -10,6 +10,12 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 const TENANT = "mcp-cli-tests";
+const createMcpServer = () => createScopedMcpServer({
+  credentialId: "test-key",
+  tenantId: TENANT,
+  name: "test",
+  scopes: ["logs:read"],
+});
 
 // ─── Seed ─────────────────────────────────────────────────────────────────────
 
