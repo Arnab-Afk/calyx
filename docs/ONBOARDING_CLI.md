@@ -168,5 +168,5 @@ Management routes require `Authorization: Bearer calyx_mgmt_…`.
 - Web onboarding UI
 - Full GitHub App OAuth
 - Published npm release of `calyx-logger` (package exists in `packages/logger`)
-- Autonomous detector → Slack loop (use `slack test` for connectivity)
+- Web UI for configuring autonomous detector delivery (CLI channel bind and the durable detector → Slack loop are available)
 - Auto-provisioning drains via Vercel API (dashboard paste of URL + secret for now)

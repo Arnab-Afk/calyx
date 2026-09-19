@@ -90,9 +90,9 @@ Goal: friend can paste a token, ask “why are we getting 404s?”, and get real
 
 Scope `incidents:ask` already exists but is unused.
 
-- [ ] Add MCP tool **`ask`** → thin wrapper over `runAgent` / `POST /v1/ask`  
-- [ ] Return structured result: `{ answer, toolCalls[], chartHint? }` (mirror web `calyxData` shape enough that IDE agents can cite tools)  
-- [ ] Same rate limits / timeouts as HTTP ask
+- [x] Add MCP tool **`ask`** → thin wrapper over `runAgent` / `POST /v1/ask`
+- [x] Return structured result: `{ answer, toolCalls[], chartHint? }` so IDE agents can cite evidence
+- [x] Apply hosted MCP rate limits; provider execution retains the shared agent timeout behavior
 
 **Why:** Founders will say “ask Calyx” in Claude the same way they type `/calyx` in chat. One brain.
 
@@ -112,7 +112,7 @@ These are **not** your first PR, but design tools so they won’t break:
 |---|---|---|
 | Connect FE + BE log sources | ingest / connectors | **Done (CLI):** `calyx onboard` / `sources create` — see [`ONBOARDING_CLI.md`](./ONBOARDING_CLI.md) |
 | GitHub App + commit/deploy markers | connectors | **Thin webhook done** (`github connect` + `/v1/webhooks/github/:id`); full App OAuth later |
-| Autonomous Slack cards | detection + Slack | **Channel bind + `slack test` done**; detector→card loop still open |
+| Autonomous Slack cards | detection + Slack | **Done:** scheduled detector → durable outbox → tenant-routed card; canonical acknowledge/resolve lifecycle |
 | Act II (restart / rollback) | execution + approval | **Never** expose write tools until approval gate exists |
 
 ---

@@ -161,3 +161,23 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Because.** Slack, MCP, and future web views observe one state, while channel-bound authorization limits replay of copied action payloads.
 
 **Consequence.** Alert cards now include an acknowledge action. Actor IDs are Slack user IDs until a cross-provider identity mapping is introduced.
+
+---
+
+## D-009 — Enforce hosted MCP limits and audit through PostgreSQL
+
+**Date:** 2026-09-19
+**Status:** accepted
+
+**Context.** A hosted MCP endpoint needs abuse controls and a durable security trail across replicas. Process-local counters and logs disappear on restart and diverge under horizontal scaling.
+
+**Options considered.**
+- **In-memory counters and application logs** — low latency but not shared or durable.
+- **External rate-limit/audit services** — scalable but introduces another required system before deployment.
+- **PostgreSQL fixed-window counters and structured audit rows** — immediately shared, transactional, and operable with the existing stack.
+
+**Decision.** We chose PostgreSQL-backed per-credential and anonymous-peer minute windows, plus structured audit events for credential lifecycle, authentication, sessions, requests, and tool outcomes.
+
+**Because.** Every current deployment already requires PostgreSQL, and no plaintext token or tool argument needs to enter the audit trail.
+
+**Consequence.** The default authenticated limit is 120 requests/minute and is configurable. Old counter windows are pruned automatically. A distributed edge limiter can replace the implementation later without changing HTTP behavior.

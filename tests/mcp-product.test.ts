@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { AddressInfo } from "node:net";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -8,19 +9,24 @@ import { executeTool, initAgent } from "../src/agent/index.js";
 import { insertEvents } from "../src/storage/events.js";
 import { EventSchema } from "../src/schemas/index.js";
 import { closePool, getPool } from "../src/storage/client.js";
+import { consumeAnonymousMcpRateLimit, consumeMcpRateLimit } from "../src/mcp/rate-limit.js";
 
 const TENANT = "mcp-product-tests";
 const OTHER_TENANT = "mcp-product-tests-other";
 
 beforeAll(async () => {
   await getPool().query("DELETE FROM events WHERE tenant_id IN ($1, $2)", [TENANT, OTHER_TENANT]);
+  await getPool().query("DELETE FROM audit_events WHERE tenant_id IN ($1, $2)", [TENANT, OTHER_TENANT]);
   await getPool().query("DELETE FROM mcp_api_keys WHERE tenant_id IN ($1, $2)", [TENANT, OTHER_TENANT]);
+  await getPool().query("DELETE FROM mcp_anonymous_rate_limits WHERE identifier LIKE 'test-%'");
   initAgent();
 });
 
 afterAll(async () => {
   await getPool().query("DELETE FROM events WHERE tenant_id IN ($1, $2)", [TENANT, OTHER_TENANT]);
+  await getPool().query("DELETE FROM audit_events WHERE tenant_id IN ($1, $2)", [TENANT, OTHER_TENANT]);
   await getPool().query("DELETE FROM mcp_api_keys WHERE tenant_id IN ($1, $2)", [TENANT, OTHER_TENANT]);
+  await getPool().query("DELETE FROM mcp_anonymous_rate_limits WHERE identifier LIKE 'test-%'");
   await closePool();
 });
 
@@ -35,6 +41,28 @@ describe("MCP product connector", () => {
 
     expect(await revokeApiKey(created.credentialId, TENANT)).toBe(true);
     expect(await authenticateApiKey(created.token)).toBeNull();
+  });
+
+  it("enforces a shared credential rate limit and audits credential lifecycle", async () => {
+    const created = await createApiKey({ tenantId: TENANT, name: "Rate test", scopes: ["logs:read"] });
+    const anonymousId = `test-${crypto.randomUUID()}`;
+    expect((await consumeAnonymousMcpRateLimit(anonymousId, 1)).allowed).toBe(true);
+    expect((await consumeAnonymousMcpRateLimit(anonymousId, 1)).allowed).toBe(false);
+    expect((await consumeMcpRateLimit(created.credentialId, 2)).allowed).toBe(true);
+    expect((await consumeMcpRateLimit(created.credentialId, 2)).allowed).toBe(true);
+    const limited = await consumeMcpRateLimit(created.credentialId, 2);
+    expect(limited).toMatchObject({ allowed: false, limit: 2, remaining: 0 });
+
+    expect(await revokeApiKey(created.credentialId, TENANT)).toBe(true);
+    const audit = await getPool().query(
+      `SELECT action, success FROM audit_events
+       WHERE tenant_id = $1 AND resource_id = $2 ORDER BY created_at ASC`,
+      [TENANT, created.credentialId]
+    );
+    expect(audit.rows).toEqual([
+      { action: "mcp.credential_created", success: true },
+      { action: "mcp.credential_revoked", success: true },
+    ]);
   });
 
   it("tails only events ingested after its opaque cursor", async () => {
@@ -78,6 +106,7 @@ describe("MCP product connector", () => {
     try {
       const unauthorized = await fetch(endpoint, { method: "POST", body: "{}" });
       expect(unauthorized.status).toBe(401);
+      expect(unauthorized.headers.get("x-ratelimit-limit")).toBe("30");
 
       const client = new Client({ name: "vitest", version: "1.0.0" });
       const transport = new StreamableHTTPClientTransport(new URL(endpoint), {
@@ -98,6 +127,19 @@ describe("MCP product connector", () => {
       expect(text).toContain("live MCP event");
       expect(text).not.toContain("must not leak");
       await client.close();
+
+      const audit = await getPool().query(
+        `SELECT action, resource_id, metadata FROM audit_events
+         WHERE tenant_id = $1 AND actor_id = $2 ORDER BY created_at ASC`,
+        [TENANT, created.credentialId]
+      );
+      expect(audit.rows.some((row) => row.action === "mcp.request")).toBe(true);
+      expect(
+        audit.rows.some(
+          (row) => row.action === "mcp.tool_call" && row.resource_id === "query_logs"
+        )
+      ).toBe(true);
+      expect(JSON.stringify(audit.rows)).not.toContain(OTHER_TENANT);
     } finally {
       await new Promise<void>((resolve) => httpServer.close(() => resolve()));
     }

@@ -4,14 +4,12 @@
 
 ## In progress
 
-- [ ] Add hosted MCP rate limiting and audit events before external deployment.
+- [ ] Define and persist a canonical Convex workspace-to-observability-tenant mapping before resuming self-service MCP credential management.
 
 ## Next
 
-- [ ] Define and persist a canonical Convex workspace-to-observability-tenant mapping before resuming self-service MCP credential management.
 - [ ] Add standards-based browser OAuth for remote MCP clients while retaining API keys for machine-to-machine use.
-- [ ] Add durable incident/evidence schemas and MCP incident tools; a coding agent can retrieve and question one persisted incident.
-- [ ] Add rate limits, audit events, and deployment-safe session storage for the hosted MCP endpoint.
+- [ ] Add deployment-safe session storage for the hosted MCP endpoint.
 - [ ] Package the stdio connector so clients do not require a Calyx repository checkout.
 
 ## Backlog
@@ -23,6 +21,7 @@
 
 ## Done
 
+- [x] Add shared hosted MCP rate limits and tenant-scoped security/tool audit events — 2026-09-19
 - [x] Persist Slack acknowledge/resolve lifecycle transactionally and authorize actions through the delivered channel — 2026-09-19
 - [x] Schedule detection across active tenant/services and deliver Slack alerts through a durable retrying outbox — 2026-09-19
 - [x] Add durable incidents/evidence with `list_incidents`, `get_incident`, and `search_incidents`; deprecate the raw-log compatibility tool explicitly — 2026-09-19

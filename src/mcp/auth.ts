@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { getPool } from "../storage/client.js";
+import { recordAuditEvent } from "../storage/audit.js";
 
 export const MCP_SCOPES = ["logs:read", "incidents:read", "incidents:ask"] as const;
 export type McpScope = (typeof MCP_SCOPES)[number];
@@ -48,20 +49,44 @@ export async function createApiKey(input: {
   const prefix = lookupPrefix(token);
   const digest = hashToken(token);
 
-  const result = await getPool().query(
-    `INSERT INTO mcp_api_keys (tenant_id, name, key_prefix, token_hash, scopes, expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id, created_at`,
-    [input.tenantId, input.name, prefix, digest, scopes, input.expiresAt ?? null]
-  );
+  const client = await getPool().connect();
+  let row: { id: string; created_at: Date };
+  try {
+    await client.query("BEGIN");
+    const result = await client.query(
+      `INSERT INTO mcp_api_keys (tenant_id, name, key_prefix, token_hash, scopes, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, created_at`,
+      [input.tenantId, input.name, prefix, digest, scopes, input.expiresAt ?? null]
+    );
+    row = result.rows[0];
+    await recordAuditEvent(
+      {
+        tenantId: input.tenantId,
+        actorType: "operator",
+        action: "mcp.credential_created",
+        resourceType: "mcp_credential",
+        resourceId: row.id,
+        success: true,
+        metadata: { name: input.name, scopes },
+      },
+      client
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 
   return {
-    credentialId: result.rows[0].id,
+    credentialId: row.id,
     tenantId: input.tenantId,
     name: input.name,
     scopes,
     token,
-    createdAt: result.rows[0].created_at.toISOString(),
+    createdAt: row.created_at.toISOString(),
     ...(input.expiresAt && { expiresAt: Math.floor(input.expiresAt.getTime() / 1000) }),
   };
 }
@@ -122,12 +147,34 @@ export async function listApiKeys(tenantId: string): Promise<Array<{
 }
 
 export async function revokeApiKey(credentialId: string, tenantId: string): Promise<boolean> {
-  const result = await getPool().query(
-    `UPDATE mcp_api_keys SET revoked_at = NOW()
-     WHERE id = $1 AND tenant_id = $2 AND revoked_at IS NULL`,
-    [credentialId, tenantId]
-  );
-  return result.rowCount === 1;
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query(
+      `UPDATE mcp_api_keys SET revoked_at = NOW()
+       WHERE id = $1 AND tenant_id = $2 AND revoked_at IS NULL`,
+      [credentialId, tenantId]
+    );
+    const success = result.rowCount === 1;
+    await recordAuditEvent(
+      {
+        tenantId,
+        actorType: "operator",
+        action: "mcp.credential_revoked",
+        resourceType: "mcp_credential",
+        resourceId: credentialId,
+        success,
+      },
+      client
+    );
+    await client.query("COMMIT");
+    return success;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export function bearerToken(header: string | undefined): string | null {
