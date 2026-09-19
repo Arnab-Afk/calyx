@@ -15,7 +15,7 @@ import {
 } from "./conversation.js";
 import { shouldHandleUnmentionedReply, stripBotMentions } from "./thread-replies.js";
 import { autoChartType, renderChartForSlack } from "./charts/index.js";
-import { ackAlert, resolveAlert, getAlertState } from "./alert-state.js";
+import { acknowledgeAlert, resolveAlert, getAlertState } from "./alert-state.js";
 import {
   storePendingAction,
   getPendingAction,
@@ -294,7 +294,16 @@ export function createSlackApp(): App {
     await ack();
     const alertId = (body as { actions: { value: string }[] }).actions[0]?.value;
     const userId = (body as { user: { id: string } }).user.id;
-    const state = ackAlert(alertId, userId);
+    const channelId = (body as { channel: { id: string } }).channel.id;
+    const state = await acknowledgeAlert(alertId, channelId, userId);
+    if (!state) {
+      await client.chat.postEphemeral({
+        channel: channelId,
+        user: userId,
+        text: "This alert is no longer open or is not valid for this channel.",
+      });
+      return;
+    }
 
     // Update the original message to reflect new state
     const msg = body as { message: { blocks: object[]; ts: string }; channel: { id: string } };
@@ -395,7 +404,15 @@ export function createSlackApp(): App {
     const reason =
       view.state.values.resolve_reason_block?.resolve_reason_input?.value ?? undefined;
 
-    const state = resolveAlert(alertId, userId, reason);
+    const state = await resolveAlert(alertId, channel, userId, reason);
+    if (!state) {
+      await client.chat.postEphemeral({
+        channel,
+        user: userId,
+        text: "This alert is already resolved or is not valid for this channel.",
+      });
+      return;
+    }
 
     await client.chat
       .postMessage({
@@ -699,7 +716,7 @@ export async function postAlert(
   channelId: string,
   alert: Alert
 ): Promise<{ ts: string }> {
-  const state = getAlertState(alert.id);
+  const state = await getAlertState(alert.id);
   const card = buildAlertCard(alert, state);
 
   const result = await app.client.chat.postMessage({

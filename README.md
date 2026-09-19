@@ -78,7 +78,7 @@ The **skeleton** of both acts exists. The **product loop is not closed**.
 | Storage | Postgres events, alert contexts, incidents, and evidence snapshots (`tenant_id` on every row) | Thread memory, ClickHouse later |
 | Agent | Claude/NVIDIA investigation with tenant-scoped log, alert, and durable incident tools | Change correlation, blast radius, code search, request trace |
 | Detection | Scheduled error-rate detector, durable alert/incident persistence, retrying Slack outbox | Web dispatch; silent-failure and the rest of the six |
-| Slack | Adapter, alert card, charts, thread replies, approval modal | Detector → investigated card posting; status; Start Incident |
+| Slack | Durable alert delivery, canonical acknowledge/resolve lifecycle, charts, threads, approval modal | Web deep links; richer incident collaboration |
 | CLI / MCP | Scoped stdio + authenticated Streamable HTTP connectors over the same tools, including live `tail_logs` | Incident tools, OAuth, data-source connect |
 | Execution | Action interface, policy tiers, audit log, flag-toggle stub | Real operator, real integrations, Slack “Run it” on live alerts |
 
