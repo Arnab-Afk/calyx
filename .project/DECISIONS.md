@@ -181,3 +181,23 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Because.** Every current deployment already requires PostgreSQL, and no plaintext token or tool argument needs to enter the audit trail.
 
 **Consequence.** The default authenticated limit is 120 requests/minute and is configurable. Old counter windows are pruned automatically. A distributed edge limiter can replace the implementation later without changing HTTP behavior.
+
+---
+
+## D-010 — Resolve web workspaces to observability tenants in PostgreSQL
+
+**Date:** 2026-09-19
+**Status:** accepted
+
+**Context.** Convex authenticates web users and workspace membership, while PostgreSQL owns telemetry tenants and MCP credentials. Treating a Convex workspace ID as a tenant ID would silently expose or create data under the wrong security boundary.
+
+**Options considered.**
+- **Use workspace IDs as tenant IDs** — simple but conflates independent identity systems.
+- **Let the browser or Convex action submit a tenant ID** — flexible but permits tenant selection at the credential boundary.
+- **Persist an operator-established workspace-to-tenant link in PostgreSQL** — keeps tenant resolution inside the credential authority.
+
+**Decision.** We chose immutable `workspace_tenant_links`. Convex verifies workspace-admin membership and sends only the workspace ID through a server-only internal secret; Calyx resolves the tenant before every credential operation.
+
+**Because.** Neither browser code nor a compromised workspace member can select another observability tenant, and PostgreSQL remains the credential source of truth.
+
+**Consequence.** An operator must link each workspace once before connector self-service works. Remapping to a different tenant is rejected and requires an explicit future migration workflow.

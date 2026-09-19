@@ -13,6 +13,7 @@ import type * as channels from "../channels.js";
 import type * as conversations from "../conversations.js";
 import type * as gallery from "../gallery.js";
 import type * as http from "../http.js";
+import type * as mcpCredentials from "../mcpCredentials.js";
 import type * as members from "../members.js";
 import type * as messages from "../messages.js";
 import type * as reactions from "../reactions.js";
@@ -32,6 +33,7 @@ declare const fullApi: ApiFromModules<{
   conversations: typeof conversations;
   gallery: typeof gallery;
   http: typeof http;
+  mcpCredentials: typeof mcpCredentials;
   members: typeof members;
   messages: typeof messages;
   reactions: typeof reactions;

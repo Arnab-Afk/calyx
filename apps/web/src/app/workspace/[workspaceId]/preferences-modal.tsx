@@ -1,7 +1,7 @@
 'use client';
 
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden';
-import { Trash } from 'lucide-react';
+import { KeyRound, Trash } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -18,6 +18,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { McpCredentialsModal } from '@/features/mcp/components/mcp-credentials-modal';
 import { useRemoveWorkspace } from '@/features/workspaces/api/use-remove-workspace';
 import { useUpdateWorkspace } from '@/features/workspaces/api/use-update-workspace';
 import { useConfirm } from '@/hooks/use-confirm';
@@ -36,6 +37,7 @@ export const PreferencesModal = ({ open, setOpen, initialValue }: PreferencesMod
 
   const [value, setValue] = useState(initialValue);
   const [editOpen, setEditOpen] = useState(false);
+  const [connectorsOpen, setConnectorsOpen] = useState(false);
 
   const { mutate: updateWorkspace, isPending: isUpdatingWorkspace } = useUpdateWorkspace();
   const { mutate: removeWorkspace, isPending: isRemovingWorkspace } = useRemoveWorkspace();
@@ -86,6 +88,7 @@ export const PreferencesModal = ({ open, setOpen, initialValue }: PreferencesMod
   return (
     <>
       <ConfirmDialog />
+      <McpCredentialsModal workspaceId={workspaceId} open={connectorsOpen} setOpen={setConnectorsOpen} />
 
       <Dialog open={open || isUpdatingWorkspace || isRemovingWorkspace} onOpenChange={setOpen}>
         <DialogContent className="overflow-hidden bg-gray-50 p-0">
@@ -147,6 +150,18 @@ export const PreferencesModal = ({ open, setOpen, initialValue }: PreferencesMod
                 </form>
               </DialogContent>
             </Dialog>
+
+            <button
+              disabled={isUpdatingWorkspace || isRemovingWorkspace}
+              onClick={() => setConnectorsOpen(true)}
+              className="flex cursor-pointer items-center gap-x-2 rounded-lg border bg-white px-5 py-4 text-slate-700 hover:bg-gray-50 disabled:pointer-events-none disabled:opacity-50"
+            >
+              <KeyRound className="size-4" />
+              <div className="text-left">
+                <p className="text-sm font-semibold">Coding-agent connectors</p>
+                <p className="text-xs text-slate-500">Claude Code, Codex, Pi, Cursor, and MCP clients</p>
+              </div>
+            </button>
 
             <button
               disabled={isRemovingWorkspace}

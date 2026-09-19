@@ -54,6 +54,14 @@ npm run mcp:key -- list --tenant default
 npm run mcp:key -- revoke --tenant default --id <credential-uuid>
 ```
 
+Workspace admins can create, copy once, list, and revoke credentials from **Preferences → Coding-agent connectors** after an operator establishes the canonical workspace mapping:
+
+```bash
+npm run mcp:workspace-link -- --workspace <convex-workspace-id> --tenant <calyx-tenant-id>
+```
+
+The browser never supplies a tenant ID or receives `CALYX_INTERNAL_API_KEY`. Convex verifies workspace-admin membership, sends only its authenticated workspace ID to the internal API, and Calyx resolves the tenant from `workspace_tenant_links`.
+
 Always use HTTPS outside a local machine. Never commit a Calyx token.
 
 Hosted requests are limited per credential through PostgreSQL (`MCP_RATE_LIMIT_PER_MINUTE`, default 120). Invalid authentication attempts have a separate per-network-peer limit. Responses include standard limit, remaining, reset, and retry headers. Credential lifecycle, authentication outcomes, session access, HTTP requests, and tool calls are written to tenant-scoped `audit_events`; token values and tool arguments are never recorded.
