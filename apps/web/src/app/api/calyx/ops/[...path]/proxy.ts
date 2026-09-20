@@ -5,11 +5,7 @@ function opsBase() {
 }
 
 function chatBase() {
-  return (
-    process.env.CALYX_CHAT_URL ||
-    process.env.NEXT_PUBLIC_CALYX_CHAT_URL ||
-    'http://127.0.0.1:14000'
-  ).replace(/\/$/, '');
+  return (process.env.CALYX_CHAT_URL || process.env.NEXT_PUBLIC_CALYX_CHAT_URL || 'http://127.0.0.1:14000').replace(/\/$/, '');
 }
 
 function mgmtToken() {
@@ -24,16 +20,16 @@ async function authorizeWorkspaceAdmin(
   request: NextRequest,
   workspaceId: string,
   token: string,
-): Promise<NextResponse | null> {
+): Promise<{ actorId: string } | NextResponse> {
   const cookie = request.headers.get('cookie');
   if (!cookie) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
 
   let memberResponse: Response;
   try {
-    memberResponse = await fetch(
-      `${chatBase()}/v1/workspaces/${encodeURIComponent(workspaceId)}/members/me`,
-      { headers: { Accept: 'application/json', Cookie: cookie }, cache: 'no-store' },
-    );
+    memberResponse = await fetch(`${chatBase()}/v1/workspaces/${encodeURIComponent(workspaceId)}/members/me`, {
+      headers: { Accept: 'application/json', Cookie: cookie },
+      cache: 'no-store',
+    });
   } catch {
     return NextResponse.json({ error: 'Calyx chat API unreachable' }, { status: 502 });
   }
@@ -43,24 +39,21 @@ async function authorizeWorkspaceAdmin(
   if (!memberResponse.ok) {
     return NextResponse.json({ error: 'Workspace membership required' }, { status: 403 });
   }
-  const member = (await memberResponse.json().catch(() => null)) as { role?: string } | null;
-  if (member?.role !== 'admin') {
+  const member = (await memberResponse.json().catch(() => null)) as { id?: string; role?: string } | null;
+  if (member?.role !== 'admin' || !member.id) {
     return NextResponse.json({ error: 'Workspace admin access required' }, { status: 403 });
   }
 
   let tenantResponse: Response;
   try {
-    tenantResponse = await fetch(
-      `${opsBase()}/v1/internal/workspaces/${encodeURIComponent(workspaceId)}/authorize-management`,
-      {
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-          'X-Calyx-Internal-Key': internalKey(),
-        },
-        cache: 'no-store',
+    tenantResponse = await fetch(`${opsBase()}/v1/internal/workspaces/${encodeURIComponent(workspaceId)}/authorize-management`, {
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+        'X-Calyx-Internal-Key': internalKey(),
       },
-    );
+      cache: 'no-store',
+    });
   } catch {
     return NextResponse.json({ error: 'Calyx observability API unreachable' }, { status: 502 });
   }
@@ -70,25 +63,22 @@ async function authorizeWorkspaceAdmin(
       { status: tenantResponse.status === 401 ? 503 : 403 },
     );
   }
-  return null;
+  return { actorId: `web:${workspaceId}:${member.id}` };
 }
 
 export async function proxyOpsRequest(request: NextRequest, path: string[]) {
   const token = mgmtToken();
   const serviceKey = internalKey();
   if (!token || !serviceKey) {
-    return NextResponse.json(
-      { error: 'Calyx operations integration is not configured on the web server' },
-      { status: 503 },
-    );
+    return NextResponse.json({ error: 'Calyx operations integration is not configured on the web server' }, { status: 503 });
   }
   const requestUrl = new URL(request.url);
   const workspaceId = requestUrl.searchParams.get('workspaceId')?.trim();
   if (!workspaceId) {
     return NextResponse.json({ error: 'workspaceId is required' }, { status: 400 });
   }
-  const denied = await authorizeWorkspaceAdmin(request, workspaceId, token);
-  if (denied) return denied;
+  const authorization = await authorizeWorkspaceAdmin(request, workspaceId, token);
+  if (authorization instanceof NextResponse) return authorization;
 
   requestUrl.searchParams.delete('workspaceId');
   const suffix = path.join('/');
@@ -97,6 +87,8 @@ export async function proxyOpsRequest(request: NextRequest, path: string[]) {
   const headers: Record<string, string> = {
     Accept: 'application/json',
     Authorization: `Bearer ${token}`,
+    'X-Calyx-Internal-Key': serviceKey,
+    'X-Calyx-Actor-ID': authorization.actorId,
   };
   const body = request.method === 'GET' || request.method === 'HEAD' ? undefined : await request.text();
   if (body) headers['Content-Type'] = 'application/json';

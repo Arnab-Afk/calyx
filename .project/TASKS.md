@@ -4,11 +4,10 @@
 
 ## In progress
 
-- [ ] Replace the web approval card’s local state with authenticated remediation APIs.
+- [ ] Add coding-agent pull-request handoff.
 
 ## Next
 
-- [ ] Add coding-agent pull-request handoff.
 - [ ] Add GitHub App installation OAuth and automatic webhook provisioning.
 
 ## Backlog
@@ -18,6 +17,7 @@
 
 ## Done
 
+- [x] Replace the web approval card’s local state with authenticated tenant-scoped remediation APIs — 2026-09-20
 - [x] Connect incident recommendations to a signed customer-side operator and durable Slack approval delivery — 2026-09-20
 - [x] Replace caller-asserted remediation approval with durable requests and immutable transition events — 2026-09-20
 - [x] Make Go the sole web auth/data backend and remove active Convex runtime paths — 2026-09-20

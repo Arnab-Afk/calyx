@@ -11,8 +11,12 @@ import { mcpCredentialsRoute } from "./routes/v1/mcp-credentials.js";
 import { eventsRoute } from "./routes/v1/events.js";
 import { internalAskRoute } from "./routes/v1/internal-ask.js";
 import { internalWorkspaceLinkRoute } from "./routes/v1/internal-workspace-link.js";
+import { remediationsRoute } from "./routes/v1/remediations.js";
 import { closePool } from "../storage/client.js";
 import { closeRedis } from "./queue.js";
+import { initAgent } from "../agent/index.js";
+
+initAgent();
 
 const app = Fastify({ logger: true });
 
@@ -31,6 +35,7 @@ await app.register(cloudWatchDrainRoute);
 await app.register(mcpCredentialsRoute);
 await app.register(internalAskRoute);
 await app.register(internalWorkspaceLinkRoute);
+await app.register(remediationsRoute);
 
 app.get("/health", async () => ({ status: "ok" }));
 

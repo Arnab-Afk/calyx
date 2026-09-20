@@ -213,6 +213,32 @@ export async function findActiveRemediation(input: {
   return result.rows[0] ? mapRequest(result.rows[0]) : null;
 }
 
+export async function listRemediationRequests(
+  tenantId: string,
+  filters: {
+    status?: RemediationStatus;
+    incidentId?: string;
+    limit?: number;
+  } = {},
+): Promise<RemediationRequest[]> {
+  const conditions = ["tenant_id=$1"];
+  const params: unknown[] = [tenantId];
+  if (filters.status) {
+    conditions.push(`status=$${params.push(filters.status)}`);
+  }
+  if (filters.incidentId) {
+    conditions.push(`incident_id=$${params.push(filters.incidentId)}`);
+  }
+  params.push(Math.min(Math.max(filters.limit ?? 20, 1), 100));
+  const result = await getPool().query<RequestRow>(
+    `SELECT ${columns} FROM remediation_requests
+     WHERE ${conditions.join(" AND ")}
+     ORDER BY created_at DESC LIMIT $${params.length}`,
+    params,
+  );
+  return result.rows.map(mapRequest);
+}
+
 export async function getRemediationRequest(
   id: string,
   tenantId?: string,

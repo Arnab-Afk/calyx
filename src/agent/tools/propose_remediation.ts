@@ -45,9 +45,20 @@ async function handler(input: Input): Promise<ToolOutput> {
         : `Remediation ${result.request.id} failed its dry run and cannot execute.`,
     data: {
       remediation_request_id: result.request.id,
+      remediationRequestId: result.request.id,
       incident_id: input.incident_id,
       status: result.request.status,
       action_name: result.request.actionName,
+      action: input.operation,
+      target: input.target,
+      risk:
+        result.request.tier === "2"
+          ? "high"
+          : result.request.tier === "1"
+            ? "medium"
+            : "low",
+      reversible: result.request.reversible,
+      dryRunSummary: [result.request.dryRunResult.message],
       dry_run_result: result.request.dryRunResult,
     },
     visualization_hint: "none",
