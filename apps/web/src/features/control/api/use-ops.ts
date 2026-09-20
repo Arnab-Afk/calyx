@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
+import { useWorkspaceId } from '@/hooks/use-workspace-id';
+
 export type OpsProject = {
   id: string;
   name?: string;
@@ -19,14 +21,18 @@ export type OpsSource = {
   lastEventAt?: string | null;
 };
 
-async function opsFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api/calyx/ops/${path.replace(/^\//, '')}`, {
-    ...init,
-    headers: {
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-      ...init?.headers,
+async function opsFetch<T>(workspaceId: string, path: string, init?: RequestInit): Promise<T> {
+  const separator = path.includes('?') ? '&' : '?';
+  const res = await fetch(
+    `/api/calyx/ops/${path.replace(/^\//, '')}${separator}workspaceId=${encodeURIComponent(workspaceId)}`,
+    {
+      ...init,
+      headers: {
+        ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+        ...init?.headers,
+      },
     },
-  });
+  );
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error((data as { error?: string }).error || `Ops API ${res.status}`);
@@ -35,6 +41,7 @@ async function opsFetch<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function useOpsProjects() {
+  const workspaceId = useWorkspaceId();
   const [projects, setProjects] = useState<OpsProject[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,7 +50,7 @@ export function useOpsProjects() {
     setLoading(true);
     setError(null);
     try {
-      const data = await opsFetch<{ projects?: OpsProject[] } | OpsProject[]>('projects');
+      const data = await opsFetch<{ projects?: OpsProject[] } | OpsProject[]>(workspaceId, 'projects');
       const list = Array.isArray(data) ? data : (data.projects ?? []);
       setProjects(list);
     } catch (err) {
@@ -52,7 +59,7 @@ export function useOpsProjects() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [workspaceId]);
 
   useEffect(() => {
     void reload();
@@ -60,19 +67,20 @@ export function useOpsProjects() {
 
   const create = useCallback(
     async (slug: string, environment = 'production') => {
-      await opsFetch('projects', {
+      await opsFetch(workspaceId, 'projects', {
         method: 'POST',
         body: JSON.stringify({ name: slug, slug, environment }),
       });
       await reload();
     },
-    [reload],
+    [reload, workspaceId],
   );
 
   return { projects, loading, error, reload, create };
 }
 
 export function useOpsSources(projectSlug: string | null) {
+  const workspaceId = useWorkspaceId();
   const [sources, setSources] = useState<OpsSource[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,6 +94,7 @@ export function useOpsSources(projectSlug: string | null) {
     setError(null);
     try {
       const data = await opsFetch<{ sources?: OpsSource[] } | OpsSource[]>(
+        workspaceId,
         `projects/${encodeURIComponent(projectSlug)}/sources`,
       );
       setSources(Array.isArray(data) ? data : (data.sources ?? []));
@@ -95,7 +104,7 @@ export function useOpsSources(projectSlug: string | null) {
     } finally {
       setLoading(false);
     }
-  }, [projectSlug]);
+  }, [projectSlug, workspaceId]);
 
   useEffect(() => {
     void reload();
@@ -105,22 +114,24 @@ export function useOpsSources(projectSlug: string | null) {
     async (input: { role: string; service: string; name: string; provider?: string }) => {
       if (!projectSlug) throw new Error('No project selected');
       return opsFetch<{ source: OpsSource; token?: string; intakeUrl?: string }>(
+        workspaceId,
         `projects/${encodeURIComponent(projectSlug)}/sources`,
         { method: 'POST', body: JSON.stringify(input) },
       );
     },
-    [projectSlug],
+    [projectSlug, workspaceId],
   );
 
   const connectGithub = useCallback(
     async (repo: string) => {
       if (!projectSlug) throw new Error('No project selected');
       return opsFetch<{ webhookUrl?: string; webhookSecret?: string; repo?: string }>(
+        workspaceId,
         `projects/${encodeURIComponent(projectSlug)}/github`,
         { method: 'POST', body: JSON.stringify({ repo }) },
       );
     },
-    [projectSlug],
+    [projectSlug, workspaceId],
   );
 
   return { sources, loading, error, reload, createSource, connectGithub };
