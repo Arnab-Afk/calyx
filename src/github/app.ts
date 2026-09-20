@@ -36,6 +36,7 @@ async function github<T>(
   });
   if (!response.ok)
     throw new Error(`GitHub API ${response.status} for ${path}`);
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -93,6 +94,68 @@ export async function searchRepositoryCode(input: {
     sha: item.sha,
     url: item.html_url,
   }));
+}
+
+export async function provisionGithubRepository(input: {
+  installationId: string;
+  repo: string;
+  webhookUrl: string;
+  webhookSecret: string;
+}): Promise<void> {
+  const installation = await github<{ id: number }>(
+    `/repos/${input.repo}/installation`,
+    appJwt(),
+  );
+  if (String(installation.id) !== input.installationId) {
+    throw new Error(
+      "GitHub installation does not have access to the selected repository",
+    );
+  }
+  const token = await installationToken(input.installationId);
+  const hooks = await github<
+    Array<{ id: number; active: boolean; config?: { url?: string } }>
+  >(`/repos/${input.repo}/hooks?per_page=100`, token);
+  const existing = hooks.find((hook) => hook.config?.url === input.webhookUrl);
+  const payload = JSON.stringify({
+    name: "web",
+    active: true,
+    events: ["push", "deployment", "deployment_status"],
+    config: {
+      url: input.webhookUrl,
+      content_type: "json",
+      secret: input.webhookSecret,
+      insecure_ssl: "0",
+    },
+  });
+  if (existing) {
+    await github(`/repos/${input.repo}/hooks/${existing.id}`, token, {
+      method: "PATCH",
+      body: payload,
+    });
+  } else {
+    await github(`/repos/${input.repo}/hooks`, token, {
+      method: "POST",
+      body: payload,
+    });
+  }
+}
+
+export async function removeGithubRepositoryWebhook(input: {
+  installationId: string;
+  repo: string;
+  webhookUrl: string;
+}): Promise<void> {
+  const token = await installationToken(input.installationId);
+  const hooks = await github<Array<{ id: number; config?: { url?: string } }>>(
+    `/repos/${input.repo}/hooks?per_page=100`,
+    token,
+  );
+  const existing = hooks.find((hook) => hook.config?.url === input.webhookUrl);
+  if (existing) {
+    await github(`/repos/${input.repo}/hooks/${existing.id}`, token, {
+      method: "DELETE",
+    });
+  }
 }
 
 export interface PullRequestFile {

@@ -122,7 +122,7 @@ export function useOpsSources(projectSlug: string | null) {
   const connectGithub = useCallback(
     async (repo: string) => {
       if (!projectSlug) throw new Error('No project selected');
-      return opsFetch<{ webhookUrl?: string; webhookSecret?: string; repo?: string }>(
+      return opsFetch<{ installationUrl: string; repo: string; expiresInSeconds: number }>(
         workspaceId,
         `projects/${encodeURIComponent(projectSlug)}/github`,
         { method: 'POST', body: JSON.stringify({ repo }) },

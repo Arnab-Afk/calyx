@@ -188,6 +188,8 @@ Coding-agent setup for Claude Code, Codex, Pi, Cursor, and other MCP clients: [`
 
 Durable remediation approval lifecycle and remaining operator boundary: [`docs/REMEDIATION.md`](./docs/REMEDIATION.md).
 
+GitHub App installation and coding-agent draft PR handoff: [`docs/GITHUB_APP.md`](./docs/GITHUB_APP.md) and [`docs/CODING_AGENT_HANDOFF.md`](./docs/CODING_AGENT_HANDOFF.md).
+
 Scheduled detection and Slack delivery: [`docs/ALERT_DELIVERY.md`](./docs/ALERT_DELIVERY.md).
 
 ---
