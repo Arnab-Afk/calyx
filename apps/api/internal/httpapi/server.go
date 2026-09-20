@@ -86,6 +86,11 @@ func New(db *pgxpool.Pool, authSvc *auth.Service, hub *realtime.Hub, corsOrigins
 			r.Get("/channels/{channelID}/messages", s.listMessages)
 			r.Post("/channels/{channelID}/messages", s.createMessage)
 
+			r.Post("/workspaces/{workspaceID}/conversations", s.createOrGetConversation)
+			r.Get("/conversations/{conversationID}", s.getConversation)
+			r.Get("/conversations/{conversationID}/messages", s.listConversationMessages)
+			r.Post("/conversations/{conversationID}/messages", s.createConversationMessage)
+
 			r.Get("/messages/{messageID}", s.getMessage)
 			r.Patch("/messages/{messageID}", s.updateMessage)
 			r.Delete("/messages/{messageID}", s.deleteMessage)
@@ -858,7 +863,8 @@ func (s *Server) toggleReaction(w http.ResponseWriter, r *http.Request) {
 		`SELECT m.workspace_id::text, mem.id::text
 		 FROM chat_messages m
 		 JOIN chat_members mem ON mem.workspace_id=m.workspace_id AND mem.user_id=$2
-		 WHERE m.id=$1`, msgID, uid,
+		 LEFT JOIN chat_conversations c ON c.id=m.conversation_id
+		 WHERE m.id=$1 AND (m.conversation_id IS NULL OR mem.id IN (c.member_one_id, c.member_two_id))`, msgID, uid,
 	).Scan(&wsID, &memberID)
 	if err != nil {
 		writeErr(w, http.StatusForbidden, "not allowed")

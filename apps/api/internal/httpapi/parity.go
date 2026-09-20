@@ -199,7 +199,12 @@ func (s *Server) getMessage(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "message lookup failed")
 		return
 	}
-	if _, err := s.requireMember(r.Context(), message.WorkspaceID, userID(r.Context())); err != nil {
+	if message.ConversationID != nil {
+		if _, _, err := s.conversationForUser(r, *message.ConversationID); err != nil {
+			writeErr(w, http.StatusNotFound, "message not found")
+			return
+		}
+	} else if _, err := s.requireMember(r.Context(), message.WorkspaceID, userID(r.Context())); err != nil {
 		writeErr(w, http.StatusForbidden, "not a member")
 		return
 	}
