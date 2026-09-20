@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import {
@@ -9,6 +10,7 @@ import {
 import {
   createLogSource,
   createProject,
+  deleteGithubConnection,
   getGithubConnection,
   getProject,
   getSlackBinding,
@@ -21,6 +23,14 @@ import {
 import { buildAlertCard } from "../../../slack/alert-card.js";
 import type { Alert } from "../../../schemas/index.js";
 import { WebClient } from "@slack/web-api";
+import {
+  consumeGithubInstallationState,
+  createGithubInstallationState,
+} from "../../../storage/github-installations.js";
+import {
+  provisionGithubRepository,
+  removeGithubRepositoryWebhook,
+} from "../../../github/app.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -31,11 +41,13 @@ declare module "fastify" {
 async function requireMgmt(
   request: FastifyRequest,
   reply: FastifyReply,
-  scope: "projects:write" | "sources:write" | "integrations:write"
+  scope: "projects:write" | "sources:write" | "integrations:write",
 ): Promise<MgmtPrincipal | null> {
   const token = bearerToken(request.headers.authorization);
   if (!token) {
-    await reply.status(401).send({ error: "Missing Authorization Bearer token" });
+    await reply
+      .status(401)
+      .send({ error: "Missing Authorization Bearer token" });
     return null;
   }
   const principal = await authenticateMgmtKey(token);
@@ -72,7 +84,9 @@ export async function projectsRoute(app: FastifyInstance): Promise<void> {
       })
       .safeParse(request.body);
     if (!body.success) {
-      return reply.status(422).send({ error: "Validation failed", issues: body.error.issues });
+      return reply
+        .status(422)
+        .send({ error: "Validation failed", issues: body.error.issues });
     }
 
     const project = await createProject({
@@ -103,11 +117,16 @@ export async function projectsRoute(app: FastifyInstance): Promise<void> {
         name: z.string().min(1).max(120),
         role: z.enum(["frontend", "backend", "other"]),
         service: z.string().min(1).max(120),
-        provider: z.enum(["http", "vercel", "cloudwatch"]).optional().default("http"),
+        provider: z
+          .enum(["http", "vercel", "cloudwatch"])
+          .optional()
+          .default("http"),
       })
       .safeParse(request.body);
     if (!body.success) {
-      return reply.status(422).send({ error: "Validation failed", issues: body.error.issues });
+      return reply
+        .status(422)
+        .send({ error: "Validation failed", issues: body.error.issues });
     }
 
     const source = await createLogSource({
@@ -234,38 +253,119 @@ export async function projectsRoute(app: FastifyInstance): Promise<void> {
 
     const body = z
       .object({
-        repo: z.string().min(3).regex(/^[\w.-]+\/[\w.-]+$/),
-        installationId: z.string().optional(),
+        repo: z
+          .string()
+          .min(3)
+          .regex(/^[\w.-]+\/[\w.-]+$/),
       })
       .safeParse(request.body);
     if (!body.success) {
-      return reply.status(422).send({ error: "Validation failed", issues: body.error.issues });
+      return reply
+        .status(422)
+        .send({ error: "Validation failed", issues: body.error.issues });
     }
-
-    const conn = await upsertGithubConnection({
-      projectId: project.id,
+    const slug = process.env.GITHUB_APP_SLUG?.trim();
+    if (
+      !slug ||
+      !process.env.GITHUB_APP_ID ||
+      !process.env.GITHUB_APP_PRIVATE_KEY
+    ) {
+      return reply
+        .status(503)
+        .send({ error: "GitHub App installation is not configured" });
+    }
+    const state = await createGithubInstallationState({
       tenantId: principal.tenantId,
+      projectId: project.id,
       repo: body.data.repo,
-      installationId: body.data.installationId,
     });
-
-    const base = intakeBaseUrl(request);
     return reply.status(201).send({
-      github: {
-        repo: conn.repo,
-        connectedAt: conn.connectedAt,
-        installationId: conn.installationId,
-      },
-      webhookUrl: `${base}/v1/webhooks/github/${project.id}`,
-      webhookSecret: conn.webhookSecret,
-      nextSteps: [
-        `In GitHub → ${conn.repo} → Settings → Webhooks → Add webhook`,
-        `Payload URL: ${base}/v1/webhooks/github/${project.id}`,
-        `Content type: application/json`,
-        `Secret: (shown once above)`,
-        `Events: Just the push event (and optionally deployment_status)`,
-      ],
+      repo: body.data.repo,
+      installationUrl: `https://github.com/apps/${encodeURIComponent(slug)}/installations/new?state=${encodeURIComponent(state)}`,
+      expiresInSeconds: 600,
     });
+  });
+
+  app.get("/v1/github/install/callback", async (request, reply) => {
+    const parsed = z
+      .object({
+        state: z.string().min(60),
+        installation_id: z.coerce.string().regex(/^\d+$/),
+        setup_action: z.string().optional(),
+      })
+      .safeParse(request.query);
+    if (!parsed.success)
+      return reply
+        .status(422)
+        .send({ error: "Invalid GitHub installation callback" });
+    if (parsed.data.setup_action === "delete") {
+      return reply
+        .status(409)
+        .send({ error: "GitHub installation was removed" });
+    }
+    const state = await consumeGithubInstallationState(parsed.data.state);
+    if (!state)
+      return reply
+        .status(409)
+        .send({
+          error:
+            "GitHub installation state is invalid, expired, or already used",
+        });
+
+    const webhookSecret = crypto.randomBytes(32).toString("hex");
+    const webhookUrl = `${intakeBaseUrl(request)}/v1/webhooks/github/${state.projectId}`;
+    try {
+      await provisionGithubRepository({
+        installationId: parsed.data.installation_id,
+        repo: state.repo,
+        webhookUrl,
+        webhookSecret,
+      });
+      const connection = await upsertGithubConnection({
+        projectId: state.projectId,
+        tenantId: state.tenantId,
+        repo: state.repo,
+        installationId: parsed.data.installation_id,
+        webhookSecret,
+      });
+      return {
+        connected: true,
+        projectId: state.projectId,
+        repo: connection.repo,
+        installationId: connection.installationId,
+      };
+    } catch (error) {
+      return reply
+        .status(502)
+        .send({
+          error: error instanceof Error ? error.message : String(error),
+        });
+    }
+  });
+
+  app.delete("/v1/projects/:id/github", async (request, reply) => {
+    const principal = await requireMgmt(request, reply, "integrations:write");
+    if (!principal) return;
+    const { id } = request.params as { id: string };
+    const project = await getProject(principal.tenantId, id);
+    if (!project) return reply.status(404).send({ error: "Project not found" });
+    const connection = await getGithubConnection(project.id);
+    if (!connection)
+      return reply.status(404).send({ error: "GitHub is not connected" });
+    let warning: string | undefined;
+    if (connection.installationId) {
+      try {
+        await removeGithubRepositoryWebhook({
+          installationId: connection.installationId,
+          repo: connection.repo,
+          webhookUrl: `${intakeBaseUrl(request)}/v1/webhooks/github/${project.id}`,
+        });
+      } catch (error) {
+        warning = error instanceof Error ? error.message : String(error);
+      }
+    }
+    await deleteGithubConnection(project.id, principal.tenantId);
+    return { disconnected: true, ...(warning && { warning }) };
   });
 
   app.post("/v1/projects/:id/slack", async (request, reply) => {
@@ -285,7 +385,9 @@ export async function projectsRoute(app: FastifyInstance): Promise<void> {
       })
       .safeParse(request.body);
     if (!body.success) {
-      return reply.status(422).send({ error: "Validation failed", issues: body.error.issues });
+      return reply
+        .status(422)
+        .send({ error: "Validation failed", issues: body.error.issues });
     }
 
     const binding = await upsertSlackBinding({
@@ -320,7 +422,10 @@ export async function projectsRoute(app: FastifyInstance): Promise<void> {
     if (!project) return reply.status(404).send({ error: "Project not found" });
 
     const binding = await getSlackBinding(project.id);
-    if (!binding) return reply.status(404).send({ error: "Slack not connected for this project" });
+    if (!binding)
+      return reply
+        .status(404)
+        .send({ error: "Slack not connected for this project" });
 
     const alert: Alert = {
       id: `test-${Date.now()}`,
@@ -393,7 +498,11 @@ export async function projectsRoute(app: FastifyInstance): Promise<void> {
         createdAt: s.createdAt,
       })),
       github: github
-        ? { repo: github.repo, connectedAt: github.connectedAt, installationId: github.installationId }
+        ? {
+            repo: github.repo,
+            connectedAt: github.connectedAt,
+            installationId: github.installationId,
+          }
         : null,
       slack: slack
         ? {

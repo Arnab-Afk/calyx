@@ -1,30 +1,14 @@
 'use client';
 
-import {
-  FolderKanban,
-  GitBranch,
-  KeyRound,
-  Loader2,
-  Plug,
-  Rocket,
-  Settings2,
-  Shield,
-  UserRound,
-  Users,
-} from 'lucide-react';
+import { FolderKanban, GitBranch, KeyRound, Loader2, Plug, Rocket, Settings2, Shield, UserRound, Users } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { useChatAuth } from '@/components/chat-auth-provider';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useOpsProjects, useOpsSources } from '@/features/control/api/use-ops';
 import { McpCredentialsModal } from '@/features/mcp/components/mcp-credentials-modal';
@@ -38,15 +22,8 @@ import { useRemoveWorkspace } from '@/features/workspaces/api/use-remove-workspa
 import { useUpdateWorkspace } from '@/features/workspaces/api/use-update-workspace';
 import { useWorkspaceId } from '@/hooks/use-workspace-id';
 import { cn } from '@/lib/utils';
-import { useRouter } from 'next/navigation';
 
-export type ControlSection =
-  | 'start'
-  | 'profile'
-  | 'workspace'
-  | 'members'
-  | 'projects'
-  | 'connections';
+export type ControlSection = 'start' | 'profile' | 'workspace' | 'members' | 'projects' | 'connections';
 
 const NAV: { id: ControlSection; label: string; icon: typeof UserRound }[] = [
   { id: 'start', label: 'Get started', icon: Rocket },
@@ -80,9 +57,7 @@ export function ControlCenter({ open, setOpen, initialSection = 'start' }: Contr
 
         <aside className="flex w-[220px] shrink-0 flex-col border-r border-white/10 bg-[#08080b]">
           <div className="border-b border-white/10 px-4 py-4">
-            <p className="font-[family-name:var(--font-display)] text-[11px] uppercase tracking-[0.2em] text-white/45">
-              Calyx
-            </p>
+            <p className="font-[family-name:var(--font-display)] text-[11px] uppercase tracking-[0.2em] text-white/45">Calyx</p>
             <p className="mt-1 text-sm font-medium text-white/90">Control center</p>
           </div>
           <nav className="flex flex-1 flex-col gap-0.5 p-2">
@@ -96,9 +71,7 @@ export function ControlCenter({ open, setOpen, initialSection = 'start' }: Contr
                   onClick={() => setSection(item.id)}
                   className={cn(
                     'flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition',
-                    active
-                      ? 'bg-[var(--sazabi-crimson)]/20 text-white'
-                      : 'text-white/60 hover:bg-white/5 hover:text-white',
+                    active ? 'bg-[var(--sazabi-crimson)]/20 text-white' : 'text-white/60 hover:bg-white/5 hover:text-white',
                   )}
                 >
                   <Icon className="size-4 shrink-0 opacity-80" />
@@ -122,15 +95,7 @@ export function ControlCenter({ open, setOpen, initialSection = 'start' }: Contr
   );
 }
 
-function Panel({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle: string;
-  children: React.ReactNode;
-}) {
+function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
     <div className="px-6 py-5">
       <h2 className="font-[family-name:var(--font-display)] text-lg tracking-wide text-white">{title}</h2>
@@ -141,9 +106,7 @@ function Panel({
 }
 
 function Card({ children, className }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div className={cn('rounded-lg border border-white/10 bg-white/[0.03] p-4', className)}>{children}</div>
-  );
+  return <div className={cn('rounded-lg border border-white/10 bg-white/[0.03] p-4', className)}>{children}</div>;
 }
 
 function StartPanel({ onGo }: { onGo: (s: ControlSection) => void }) {
@@ -207,8 +170,8 @@ function ProfilePanel() {
           <div>
             <p className="text-sm font-medium">Sign-in methods</p>
             <p className="mt-1 text-xs text-white/45">
-              Email &amp; password is live. Google / GitHub account linking for chat login is next —
-              use Connections for GitHub <em>repo</em> webhooks today.
+              Email &amp; password is live. Google / GitHub account linking for chat login is next — use Connections for GitHub{' '}
+              <em>repo</em> webhooks today.
             </p>
           </div>
         </div>
@@ -265,9 +228,7 @@ function WorkspacePanel({ onClose }: { onClose: () => void }) {
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-sm font-medium">Invite code</p>
-            <p className="mt-1 font-mono text-lg tracking-widest text-[var(--sazabi-crimson)]">
-              {workspace?.joinCode ?? '—'}
-            </p>
+            <p className="mt-1 font-mono text-lg tracking-widest text-[var(--sazabi-crimson)]">{workspace?.joinCode ?? '—'}</p>
           </div>
           <Button
             variant="outline"
@@ -397,19 +358,15 @@ function ProjectsPanel() {
   const [busy, setBusy] = useState(false);
   const [lastToken, setLastToken] = useState<string | null>(null);
   const [githubRepo, setGithubRepo] = useState('');
-  const [webhookInfo, setWebhookInfo] = useState<{ url?: string; secret?: string } | null>(null);
 
   return (
-    <Panel
-      title="Projects & logs"
-      subtitle="Observability projects live here — same surface as chat, no separate console."
-    >
+    <Panel title="Projects & logs" subtitle="Observability projects live here — same surface as chat, no separate console.">
       {error && (
         <Card className="border-amber-500/30 text-sm text-amber-100/90">
           {error}
           <p className="mt-2 text-xs text-white/45">
-            Set <code className="text-white/70">CALYX_API_URL</code> and{' '}
-            <code className="text-white/70">CALYX_MGMT_TOKEN</code> on the web server to enable this panel.
+            Set <code className="text-white/70">CALYX_API_URL</code> and <code className="text-white/70">CALYX_MGMT_TOKEN</code> on the web
+            server to enable this panel.
           </p>
         </Card>
       )}
@@ -447,9 +404,7 @@ function ProjectsPanel() {
       <Card>
         <p className="mb-2 text-sm font-medium">Your projects</p>
         {loading && <Loader2 className="size-4 animate-spin text-white/40" />}
-        {!loading && projects.length === 0 && (
-          <p className="text-xs text-white/45">No projects yet — create one above.</p>
-        )}
+        {!loading && projects.length === 0 && <p className="text-xs text-white/45">No projects yet — create one above.</p>}
         <ul className="space-y-1">
           {projects.map((p) => (
             <li key={p.id}>
@@ -458,7 +413,6 @@ function ProjectsPanel() {
                 onClick={() => {
                   setSelected(p.slug);
                   setLastToken(null);
-                  setWebhookInfo(null);
                 }}
                 className={cn(
                   'flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm',
@@ -558,8 +512,7 @@ function ProjectsPanel() {
                   setBusy(true);
                   try {
                     const res = await connectGithub(githubRepo.trim());
-                    setWebhookInfo({ url: res.webhookUrl, secret: res.webhookSecret });
-                    toast.success('GitHub connected');
+                    window.location.assign(res.installationUrl);
                   } catch (e) {
                     toast.error(e instanceof Error ? e.message : 'Failed');
                   } finally {
@@ -571,18 +524,6 @@ function ProjectsPanel() {
                 Connect
               </Button>
             </div>
-            {webhookInfo?.url && (
-              <div className="mt-3 space-y-1 text-xs text-white/55">
-                <p>
-                  Webhook URL: <span className="break-all text-white/80">{webhookInfo.url}</span>
-                </p>
-                {webhookInfo.secret && (
-                  <p>
-                    Secret: <span className="font-mono text-white/80">{webhookInfo.secret}</span>
-                  </p>
-                )}
-              </div>
-            )}
           </Card>
         </>
       )}
@@ -617,8 +558,8 @@ function ConnectionsPanel() {
           <div>
             <p className="text-sm font-medium">GitHub</p>
             <p className="mt-1 text-xs text-white/45">
-              Repo webhooks: use <strong className="font-medium text-white/70">Projects &amp; logs</strong>. Full
-              GitHub App OAuth for login / code search is not enabled yet.
+              Repo webhooks: use <strong className="font-medium text-white/70">Projects &amp; logs</strong>. Full GitHub App OAuth for login
+              / code search is not enabled yet.
             </p>
           </div>
         </div>
@@ -627,8 +568,8 @@ function ConnectionsPanel() {
       <Card className="opacity-80">
         <p className="text-sm font-medium">Google / GitHub sign-in</p>
         <p className="mt-1 text-xs text-white/45">
-          Chat auth today is email + password. Social login for the same account will land here when OAuth apps are
-          configured — no separate admin console.
+          Chat auth today is email + password. Social login for the same account will land here when OAuth apps are configured — no separate
+          admin console.
         </p>
         <div className="mt-3 flex gap-2">
           <Button size="sm" variant="outline" disabled>

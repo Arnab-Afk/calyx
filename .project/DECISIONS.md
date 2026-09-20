@@ -352,3 +352,18 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Because.** The agent needs enough access to propose a fix, not standing repository credentials or production authority. The callback digest, atomic submission claim, file/count limits, and append-only events provide a narrow auditable boundary.
 
 **Consequence.** A configured external dispatcher remains responsible for sandboxed code execution and tests. GitHub App installation OAuth must provision and validate installation IDs before this workflow can be enabled for customers.
+
+---
+
+## D-018 — Accept GitHub installation identity only through single-use setup state
+
+**Date:** 2026-09-20
+**Status:** accepted
+
+**Context.** The management API previously accepted caller-supplied installation IDs and returned webhook secrets for manual setup. That cannot establish that an installation belongs to the selected repository or tenant.
+
+**Decision.** A management request now creates a random, hashed, ten-minute state bound to tenant, project, and repository. The GitHub setup callback consumes it once, verifies the installation ID against GitHub’s repository-installation endpoint, provisions the signed webhook, and only then persists the connection.
+
+**Because.** Installation IDs are identifiers, not credentials or proof of repository access. Validation must happen server-to-server under the App identity and remain bound to the authenticated project selection.
+
+**Consequence.** Failed callbacks require restarting setup and cannot be replayed. Browser code never receives the webhook secret or App private key. Disconnect attempts webhook cleanup but removes stale local state even if the installation was already revoked.

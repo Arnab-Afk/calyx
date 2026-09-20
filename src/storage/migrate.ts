@@ -99,6 +99,21 @@ CREATE TABLE IF NOT EXISTS github_connections (
 CREATE INDEX IF NOT EXISTS github_connections_tenant_repo
   ON github_connections (tenant_id, repo);
 
+CREATE TABLE IF NOT EXISTS github_installation_states (
+  id          UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  tenant_id   TEXT        NOT NULL,
+  project_id  UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  repo        TEXT        NOT NULL,
+  token_prefix TEXT       NOT NULL UNIQUE,
+  token_hash  BYTEA       NOT NULL,
+  expires_at  TIMESTAMPTZ NOT NULL,
+  consumed_at TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS github_installation_states_expiry
+  ON github_installation_states (expires_at) WHERE consumed_at IS NULL;
+
 CREATE TABLE IF NOT EXISTS github_commits (
   tenant_id    TEXT        NOT NULL,
   project_id   UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,

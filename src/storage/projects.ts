@@ -279,6 +279,14 @@ export async function getGithubConnection(projectId: string): Promise<GithubConn
   };
 }
 
+export async function deleteGithubConnection(projectId: string, tenantId: string): Promise<boolean> {
+  const result = await getPool().query(
+    "DELETE FROM github_connections WHERE project_id=$1 AND tenant_id=$2",
+    [projectId, tenantId]
+  );
+  return result.rowCount === 1;
+}
+
 export async function upsertSlackBinding(input: {
   projectId: string;
   tenantId: string;
