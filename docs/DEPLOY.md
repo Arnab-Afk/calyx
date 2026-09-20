@@ -73,9 +73,13 @@ Without Redis + consumer, log POSTs fail or never become queryable for `/calyx`.
 ```bash
 NEXT_PUBLIC_CALYX_CHAT_URL=https://YOUR_GO_API_ORIGIN
 NEXT_PUBLIC_CALYX_MCP_URL=https://YOUR_MCP_ORIGIN/mcp
+CALYX_CHAT_URL=https://YOUR_GO_API_ORIGIN
 CALYX_API_URL=https://YOUR_INTAKE_ORIGIN
 CALYX_MGMT_TOKEN=calyx_mgmt_…
+CALYX_INTERNAL_API_KEY=<same value configured on Go and Node>
 ```
+
+The Control Center fails closed unless the browser has a valid Go session, the user is a workspace admin, and the workspace’s immutable tenant link matches `CALYX_MGMT_TOKEN`.
 
 ## 7. Smoke
 

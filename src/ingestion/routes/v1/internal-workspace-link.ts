@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authorizeInternal } from "../../internal-auth.js";
+import { bearerToken } from "../../../mcp/auth.js";
+import { authenticateMgmtKey } from "../../../mgmt/auth.js";
 import { linkWorkspaceToTenant, tenantForWorkspace } from "../../../storage/workspace-tenants.js";
 
 const Body = z.object({
@@ -35,5 +37,19 @@ export async function internalWorkspaceLinkRoute(app: FastifyInstance): Promise<
     const tenantId = await tenantForWorkspace(workspaceId);
     if (!tenantId) return reply.status(404).send({ error: "Workspace is not linked" });
     return { workspaceId, tenantId };
+  });
+
+  app.get("/v1/internal/workspaces/:workspaceId/authorize-management", async (request, reply) => {
+    if (!authorizeInternal(request, reply)) return;
+    const token = bearerToken(request.headers.authorization);
+    const principal = token ? await authenticateMgmtKey(token) : null;
+    if (!principal) return reply.status(401).send({ error: "Invalid management credential" });
+
+    const { workspaceId } = request.params as { workspaceId: string };
+    const tenantId = await tenantForWorkspace(workspaceId);
+    if (!tenantId || tenantId !== principal.tenantId) {
+      return reply.status(403).send({ error: "Management credential does not belong to this workspace" });
+    }
+    return { authorized: true };
   });
 }
