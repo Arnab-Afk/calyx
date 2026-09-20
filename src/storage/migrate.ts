@@ -289,6 +289,9 @@ CREATE INDEX IF NOT EXISTS remediation_requests_tenant_time
 CREATE INDEX IF NOT EXISTS remediation_requests_incident
   ON remediation_requests (tenant_id, incident_id, created_at DESC)
   WHERE incident_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS remediation_requests_active_proposal
+  ON remediation_requests (tenant_id, incident_id, action_name, MD5(params::TEXT))
+  WHERE incident_id IS NOT NULL AND status IN ('pending','executing');
 CREATE INDEX IF NOT EXISTS remediation_requests_pending
   ON remediation_requests (created_at ASC) WHERE status = 'pending';
 

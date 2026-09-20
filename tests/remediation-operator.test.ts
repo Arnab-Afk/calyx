@@ -167,6 +167,23 @@ describe("tenant remediation operator", () => {
       proposedBy: "slack:T1:U1",
       incidentId,
     });
+    const callCount = calls.length;
+    const duplicate = await executeTool("propose_remediation", {
+      tenant_id: TENANT,
+      actor_id: "slack:T1:U1",
+      incident_id: incidentId,
+      operation: "service.scale",
+      target: "api",
+      input: { replicas: 4 },
+    });
+    expect(duplicate.ok).toBe(true);
+    if (!duplicate.ok) throw new Error(duplicate.error);
+    expect(
+      (duplicate.output.data as { remediation_request_id: string })
+        .remediation_request_id,
+    ).toBe(requestId);
+    expect(calls).toHaveLength(callCount);
+
     expect(
       await enqueueRemediationDelivery({
         tenantId: TENANT,

@@ -8,6 +8,7 @@ import {
   completeRemediation,
   completeUndo,
   createRemediationRequest,
+  findActiveRemediation,
   getRemediationRequest,
   rejectRemediation,
   type RemediationRequest,
@@ -37,6 +38,21 @@ export async function proposeAction(
     !(await getIncident(input.tenantId, input.incidentId))
   ) {
     throw new Error(`Incident not found for tenant: ${input.incidentId}`);
+  }
+  if (input.incidentId) {
+    const existing = await findActiveRemediation({
+      tenantId: input.tenantId,
+      incidentId: input.incidentId,
+      actionName: input.actionName,
+      params: input.params,
+    });
+    if (existing) {
+      return {
+        request: existing,
+        executed: false,
+        message: "An equivalent remediation is already awaiting a decision.",
+      };
+    }
   }
 
   const requestId = crypto.randomUUID();

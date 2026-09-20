@@ -139,6 +139,7 @@ export async function createRemediationRequest(input: {
       `INSERT INTO remediation_requests
          (id, tenant_id, incident_id, action_name, params, tier, reversible, status, proposed_by, dry_run_result)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       ON CONFLICT DO NOTHING
        RETURNING ${columns}`,
       [
         input.id,
@@ -153,6 +154,22 @@ export async function createRemediationRequest(input: {
         input.dryRunResult,
       ],
     );
+    if (!result.rows[0]) {
+      const existing = input.incidentId
+        ? await client.query<RequestRow>(
+            `SELECT ${columns} FROM remediation_requests
+             WHERE tenant_id=$1 AND incident_id=$2 AND action_name=$3 AND params=$4
+               AND status IN ('pending','executing')
+             ORDER BY created_at ASC LIMIT 1`,
+            [input.tenantId, input.incidentId, input.actionName, input.params],
+          )
+        : null;
+      if (!existing?.rows[0]) {
+        throw new Error("Could not create remediation request");
+      }
+      await client.query("COMMIT");
+      return mapRequest(existing.rows[0]);
+    }
     const request = mapRequest(result.rows[0]);
     await appendEvent(client, {
       requestId: request.id,
@@ -178,6 +195,22 @@ export async function createRemediationRequest(input: {
   } finally {
     client.release();
   }
+}
+
+export async function findActiveRemediation(input: {
+  tenantId: string;
+  incidentId: string;
+  actionName: string;
+  params: unknown;
+}): Promise<RemediationRequest | null> {
+  const result = await getPool().query<RequestRow>(
+    `SELECT ${columns} FROM remediation_requests
+     WHERE tenant_id=$1 AND incident_id=$2 AND action_name=$3 AND params=$4
+       AND status IN ('pending','executing')
+     ORDER BY created_at ASC LIMIT 1`,
+    [input.tenantId, input.incidentId, input.actionName, input.params],
+  );
+  return result.rows[0] ? mapRequest(result.rows[0]) : null;
 }
 
 export async function getRemediationRequest(
