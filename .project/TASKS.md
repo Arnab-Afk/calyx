@@ -4,11 +4,11 @@
 
 ## In progress
 
-- [ ] Move workspace image storage from PostgreSQL to S3/R2.
+- [ ] Run end-to-end production deployment and recovery smoke tests.
 
 ## Next
 
-- [ ] Run end-to-end production deployment and recovery smoke tests.
+- [ ] Configure real hostnames, TLS, external OAuth, GitHub App, Slack, and coding-agent dispatcher.
 
 ## Backlog
 
@@ -17,6 +17,7 @@
 
 ## Done
 
+- [x] Move private workspace image storage to S3/R2 with backfill and durable cleanup — 2026-09-20
 - [x] Add shared Redis-backed Go realtime fan-out and versioned database migrations — 2026-09-20
 - [x] Add GitHub App installation state, repository validation, and automatic webhook provisioning — 2026-09-20
 - [x] Add durable coding-agent jobs, bounded repository access, callbacks, and draft pull-request creation — 2026-09-20

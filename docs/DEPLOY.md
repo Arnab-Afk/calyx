@@ -22,6 +22,15 @@ Run the Go image's migration binary as a release job before API replicas start:
 DATABASE_URL='postgresql://…/calyx?sslmode=require' /app/calyx-migrate
 ```
 
+After configuring private object storage, backfill legacy upload bytes before starting the new API:
+
+```bash
+DATABASE_URL='…' OBJECT_STORAGE_ENDPOINT='https://<account>.r2.cloudflarestorage.com' \
+OBJECT_STORAGE_REGION=auto OBJECT_STORAGE_BUCKET=calyx-uploads \
+OBJECT_STORAGE_ACCESS_KEY_ID='…' OBJECT_STORAGE_SECRET_ACCESS_KEY='…' \
+/app/calyx-backfill-uploads
+```
+
 Go migrations under `apps/api/internal/db/migrations` are ordered, checksummed, transactional, and serialized with an advisory lock. The API no longer mutates schema at startup.
 
 ## 2. Mint Control Center token
@@ -45,6 +54,12 @@ Set the **same** value on Go and Node.
 APP_ENV=production
 DATABASE_URL=…
 REDIS_URL=…
+OBJECT_STORAGE_ENDPOINT=https://<account>.r2.cloudflarestorage.com
+OBJECT_STORAGE_REGION=auto
+OBJECT_STORAGE_BUCKET=calyx-uploads
+OBJECT_STORAGE_ACCESS_KEY_ID=…
+OBJECT_STORAGE_SECRET_ACCESS_KEY=…
+OBJECT_STORAGE_PATH_STYLE=false
 JWT_SECRET=<≥32 chars>
 CORS_ORIGINS=https://YOUR_WEB_ORIGIN
 # Cross-origin web (e.g. Vercel → api subdomain): leave COOKIE_DOMAIN empty.
@@ -55,6 +70,8 @@ CALYX_INTERNAL_API_KEY=…
 CALYX_DEFAULT_TENANT=default
 ADDR=:14000
 ```
+
+The object bucket must remain private. Grant the API key object read/write permissions only for the upload bucket; authenticated reads stream through Go and no bucket credentials are sent to the browser.
 
 Every Go replica must use the same Redis deployment so WebSocket events fan out across replicas. Production startup fails closed when `REDIS_URL` is missing.
 

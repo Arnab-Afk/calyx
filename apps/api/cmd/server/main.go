@@ -13,6 +13,7 @@ import (
 	"github.com/Arnab-Afk/calyx/apps/api/internal/config"
 	"github.com/Arnab-Afk/calyx/apps/api/internal/db"
 	"github.com/Arnab-Afk/calyx/apps/api/internal/httpapi"
+	"github.com/Arnab-Afk/calyx/apps/api/internal/objectstore"
 	"github.com/Arnab-Afk/calyx/apps/api/internal/realtime"
 )
 
@@ -37,9 +38,21 @@ func main() {
 		log.Fatalf("realtime: %v", err)
 	}
 	defer hub.Close()
+	objects, err := objectstore.NewS3(ctx, objectstore.Config{
+		Endpoint: cfg.ObjectEndpoint, Region: cfg.ObjectRegion, Bucket: cfg.ObjectBucket,
+		AccessKeyID: cfg.ObjectAccessKeyID, SecretAccessKey: cfg.ObjectSecretKey,
+		UsePathStyle: cfg.ObjectPathStyle,
+	})
+	if err != nil {
+		log.Fatalf("object storage: %v", err)
+	}
+	workerCtx, stopWorker := context.WithCancel(ctx)
+	defer stopWorker()
+	go objectstore.RunDeletionWorker(workerCtx, pool, objects)
+
 	authSvc := auth.NewService(cfg.JWTSecret, cfg.TokenTTL, cfg.JWTIssuer, cfg.JWTAudience)
 	handler := httpapi.New(
-		pool, authSvc, hub, cfg.CORSOrigins, cfg.CookieSecure, cfg.CookieSameSite, cfg.CookieDomain, cfg.TokenTTL,
+		pool, authSvc, hub, objects, cfg.CORSOrigins, cfg.CookieSecure, cfg.CookieSameSite, cfg.CookieDomain, cfg.TokenTTL,
 		cfg.CalyxAskURL, cfg.CalyxInternalKey, cfg.CalyxDefaultTenant,
 	)
 
