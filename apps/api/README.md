@@ -48,13 +48,15 @@ Registration and login return a bearer token for CLI clients and also set an HTT
 | `GET` | `/v1/auth/me` |
 | `GET/POST` | `/v1/workspaces` |
 | `POST` | `/v1/workspaces/join` |
-| `GET` | `/v1/workspaces/:id` |
+| `GET/PATCH/DELETE` | `/v1/workspaces/:id` |
+| `GET` | `/v1/workspaces/:id/info` |
 | `POST` | `/v1/workspaces/:id/join-code` |
-| `GET` | `/v1/workspaces/:id/members` |
+| `GET` | `/v1/workspaces/:id/members` and `/v1/workspaces/:id/members/me` |
+| `GET/PATCH/DELETE` | `/v1/members/:id` |
 | `GET/POST` | `/v1/workspaces/:id/channels` |
-| `PATCH/DELETE` | `/v1/channels/:id` |
+| `GET/PATCH/DELETE` | `/v1/channels/:id` |
 | `GET/POST` | `/v1/channels/:id/messages` |
-| `PATCH/DELETE` | `/v1/messages/:id` |
+| `GET/PATCH/DELETE` | `/v1/messages/:id` |
 | `POST` | `/v1/messages/:id/reactions` |
 | `GET` | `/v1/workspaces/:id/ws` (WebSocket) |
 
