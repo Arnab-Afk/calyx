@@ -4,6 +4,7 @@ import { Barlow, Chakra_Petch } from 'next/font/google';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { PropsWithChildren } from 'react';
 
+import { ChatAuthProvider } from '@/components/chat-auth-provider';
 import { ConvexClientProvider } from '@/components/convex-client-provider';
 import { JotaiProvider } from '@/components/jotai-provider';
 import { ModalProvider } from '@/components/modal-provider';
@@ -40,14 +41,16 @@ const RootLayout = ({ children }: Readonly<PropsWithChildren>) => {
       <html lang="en" className="dark">
         <body className={`${display.variable} ${body.variable} font-[family-name:var(--font-body)] antialiased`}>
           <ConvexClientProvider>
-            <JotaiProvider>
-              <NuqsAdapter>
-                <Toaster theme="dark" richColors closeButton />
-                <ModalProvider />
+            <ChatAuthProvider>
+              <JotaiProvider>
+                <NuqsAdapter>
+                  <Toaster theme="dark" richColors closeButton />
+                  <ModalProvider />
 
-                {children}
-              </NuqsAdapter>
-            </JotaiProvider>
+                  {children}
+                </NuqsAdapter>
+              </JotaiProvider>
+            </ChatAuthProvider>
           </ConvexClientProvider>
         </body>
       </html>

@@ -2,7 +2,7 @@
 
 Slack-style workspace UI for Calyx. Chat stays familiar; Calyx AI replies can include Grafana-like charts from observability data.
 
-> **Migration status:** this frontend still uses Convex. The first-party Go replacement is in [`../api`](../api); new chat features should target that API rather than adding Convex functions. The current instructions remain valid until the client migration lands.
+> **Migration status:** existing screens still use Convex while they are moved in vertical slices. The first-party Go client, HTTP-only session provider, and workspace API hooks are now available for migration. New chat features should target [`../api`](../api), not add Convex functions. The current Convex instructions remain valid until screen cutover lands.
 
 ## Run on any machine
 
@@ -46,6 +46,7 @@ Confirm: `pnpm exec convex env list` shows `JWT_PRIVATE_KEY`, `JWKS`, `SITE_URL`
 ### 4. App env
 ```bash
 cat >> .env.local <<'EOF'
+NEXT_PUBLIC_CALYX_CHAT_URL=http://localhost:14000
 CALYX_API_URL=http://127.0.0.1:13000
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 NEXT_PUBLIC_CALYX_MCP_URL=http://localhost:13002/mcp
