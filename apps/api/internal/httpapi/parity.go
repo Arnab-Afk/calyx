@@ -93,7 +93,12 @@ func (s *Server) currentMember(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "member not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, member)
+	populated, err := s.memberByID(r, member.ID)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "member not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, populated)
 }
 
 func (s *Server) getMember(w http.ResponseWriter, r *http.Request) {
