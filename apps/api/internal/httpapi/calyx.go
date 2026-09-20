@@ -64,7 +64,11 @@ func (s *Server) askCalyx(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	payload, _ := json.Marshal(map[string]any{"message": body.Query, "threadId": body.ParentMessageID})
+	payload, _ := json.Marshal(map[string]any{
+		"message":  body.Query,
+		"threadId": body.ParentMessageID,
+		"actorId":  fmt.Sprintf("web:%s:%s", workspaceID, member.ID),
+	})
 	endpoint := fmt.Sprintf("%s/v1/internal/workspaces/%s/ask", s.calyxAskURL, url.PathEscape(workspaceID))
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {

@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { proxyOpsRequest } from './proxy';
 
 const WORKSPACE = 'f67f9d4c-1780-493f-a3aa-b0b54dc2a92d';
@@ -22,10 +23,9 @@ afterEach(() => {
 });
 
 function request(cookie?: string) {
-  return new NextRequest(
-    `https://app.example.test/api/calyx/ops/projects?workspaceId=${WORKSPACE}`,
-    { headers: cookie ? { cookie } : undefined },
-  );
+  return new NextRequest(`https://app.example.test/api/calyx/ops/projects?workspaceId=${WORKSPACE}`, {
+    headers: cookie ? { cookie } : undefined,
+  });
 }
 
 describe('web operations proxy authorization', () => {
@@ -52,7 +52,7 @@ describe('web operations proxy authorization', () => {
   it('checks workspace tenant binding before proxying and strips workspaceId upstream', async () => {
     const mockedFetch = vi
       .fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ role: 'admin' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'member-1', role: 'admin' }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ authorized: true }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ projects: [] }), { status: 200 }));
     global.fetch = mockedFetch;
@@ -60,13 +60,11 @@ describe('web operations proxy authorization', () => {
     const response = await proxyOpsRequest(request('calyx_session=signed'), ['projects']);
     expect(response.status).toBe(200);
     expect(mockedFetch).toHaveBeenCalledTimes(3);
-    expect(mockedFetch.mock.calls[0][0]).toBe(
-      `https://chat.example.test/v1/workspaces/${WORKSPACE}/members/me`,
-    );
-    expect(mockedFetch.mock.calls[1][0]).toBe(
-      `https://ops.example.test/v1/internal/workspaces/${WORKSPACE}/authorize-management`,
-    );
+    expect(mockedFetch.mock.calls[0][0]).toBe(`https://chat.example.test/v1/workspaces/${WORKSPACE}/members/me`);
+    expect(mockedFetch.mock.calls[1][0]).toBe(`https://ops.example.test/v1/internal/workspaces/${WORKSPACE}/authorize-management`);
     expect(mockedFetch.mock.calls[2][0]).toBe('https://ops.example.test/v1/projects');
     expect(mockedFetch.mock.calls[2][1].headers.Authorization).toBe('Bearer calyx_mgmt_test');
+    expect(mockedFetch.mock.calls[2][1].headers['X-Calyx-Internal-Key']).toBe('internal-test-key');
+    expect(mockedFetch.mock.calls[2][1].headers['X-Calyx-Actor-ID']).toBe(`web:${WORKSPACE}:member-1`);
   });
 });

@@ -42,6 +42,19 @@ It returns JSON containing `success`, `message`, and optional `before`/`after` v
 
 Agent recommendations can call `propose_remediation` only for an active tenant-owned incident. This performs the operator dry run, persists the request, and durably queues a Slack approval card. The general MCP `ask` wrapper excludes the mutation tool, and it is not exposed as a scoped MCP tool.
 
+## Web approval
+
+The web approval card loads its request from `/v1/remediations/:requestId` and never treats chart payload state as authorization. Approval and rejection require:
+
+- a valid server-held management credential with `integrations:write`;
+- an HTTP-only Go browser session;
+- workspace-admin membership;
+- a workspace tenant link matching the management credential tenant;
+- a server-derived member actor passed under the internal service credential;
+- a non-empty reason.
+
+Cards without a durable remediation request ID are display-only and expose no execution controls. Successful decisions refresh from PostgreSQL rather than advancing local UI state.
+
 ## Safety boundary
 
 The original `flag_toggle` action remains an in-memory test adapter. Calyx deliberately does not retry an `executing` request automatically because the external side effect may have succeeded before a process crash. Customer operators must reconcile these requests using the request ID and their idempotency ledger. Exact undo remains action-specific and is not offered by the generic operator webhook.

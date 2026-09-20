@@ -21,18 +21,15 @@ export type OpsSource = {
   lastEventAt?: string | null;
 };
 
-async function opsFetch<T>(workspaceId: string, path: string, init?: RequestInit): Promise<T> {
+export async function opsFetch<T>(workspaceId: string, path: string, init?: RequestInit): Promise<T> {
   const separator = path.includes('?') ? '&' : '?';
-  const res = await fetch(
-    `/api/calyx/ops/${path.replace(/^\//, '')}${separator}workspaceId=${encodeURIComponent(workspaceId)}`,
-    {
-      ...init,
-      headers: {
-        ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-        ...init?.headers,
-      },
+  const res = await fetch(`/api/calyx/ops/${path.replace(/^\//, '')}${separator}workspaceId=${encodeURIComponent(workspaceId)}`, {
+    ...init,
+    headers: {
+      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...init?.headers,
     },
-  );
+  });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error((data as { error?: string }).error || `Ops API ${res.status}`);
