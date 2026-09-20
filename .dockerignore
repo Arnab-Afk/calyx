@@ -2,8 +2,15 @@ node_modules
 dist
 .git
 .gitignore
+.project
 .env
+.env.*
 *.md
+*.log
 tests
+apps
+packages
+coverage
 vitest.config.ts
 .DS_Store
+HACKATHON_CONTEXT.md

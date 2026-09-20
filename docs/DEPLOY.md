@@ -2,11 +2,11 @@
 
 Deploy these three services against the **same Postgres and Redis**. Redis backs both log intake and cross-replica Go realtime delivery.
 
-| Service | Role | Typical URL |
-|---|---|---|
-| Next.js `apps/web` | UI | `https://app.arnabbhowmik.in` or Vercel |
-| Go `apps/api` | Chat auth, workspaces, `/calyx` proxy | `https://calyx-api.arnabbhowmik.in` |
-| Node intake + consumer | Logs, projects, ask, MCP | `https://calyx-intake.arnabbhowmik.in` |
+| Service                | Role                                  | Typical URL                             |
+| ---------------------- | ------------------------------------- | --------------------------------------- |
+| Next.js `apps/web`     | UI                                    | `https://app.arnabbhowmik.in` or Vercel |
+| Go `apps/api`          | Chat auth, workspaces, `/calyx` proxy | `https://calyx-api.arnabbhowmik.in`     |
+| Node intake + consumer | Logs, projects, ask, MCP              | `https://calyx-intake.arnabbhowmik.in`  |
 
 ## 1. Postgres migrate (Node schema)
 
@@ -91,6 +91,7 @@ CALYX_INTAKE_URL=https://YOUR_INTAKE_ORIGIN
 ```
 
 Run **both**:
+
 - `npm run start` / `dev:ingestion` (HTTP)
 - `npm run dev:consumer` (Redis → Postgres)
 
@@ -109,15 +110,27 @@ CALYX_INTERNAL_API_KEY=<same value configured on Go and Node>
 
 The Control Center fails closed unless the browser has a valid Go session, the user is a workspace admin, and the workspace’s immutable tenant link matches `CALYX_MGMT_TOKEN`.
 
-## 7. Smoke
+## 7. Executable production deployment
 
-1. Open web → register → create workspace  
-2. Settings → Projects & logs → create project → FE/BE sources  
-3. `curl -X POST $INTAKE/v1/logs -H "Authorization: Bearer calyx_src_…" -d '…'`  
-4. In `#general`: `/calyx any errors?`  
-5. Members / invite code from Settings  
+Build and publish immutable Node and Go image digests, populate a secret-managed copy of `deploy/.env.production.example`, then run:
 
-## Existing workspaces (pre-fix)
+```bash
+./scripts/deploy-production.sh /secure/path/calyx.production.env
+```
+
+The script validates TLS URLs, independent secrets, OAuth, GitHub App credentials, private object storage, coding-agent configuration, and digest-pinned images before changing services. It then runs release migrations/backfill, waits for dependency-aware readiness, and probes public endpoints.
+
+The production Compose file binds backend ports to loopback only; place an HTTPS reverse proxy or load balancer in front. The Next.js app is deployed separately after backend readiness. See [`PRODUCTION_RUNBOOK.md`](./PRODUCTION_RUNBOOK.md) for acceptance, backup/restore, Redis/R2 failure, ambiguous-side-effect reconciliation, rollback, monitoring, and ownership.
+
+## 8. Smoke
+
+1. Open web → register → create workspace
+2. Settings → Projects & logs → create project → FE/BE sources
+3. `curl -X POST $INTAKE/v1/logs -H "Authorization: Bearer calyx_src_…" -d '…'`
+4. In `#general`: `/calyx any errors?`
+5. Members / invite code from Settings
+
+## 9. Existing workspaces (pre-fix)
 
 If a workspace was created before auto-link:
 

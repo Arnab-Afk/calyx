@@ -13,8 +13,8 @@ import { internalAskRoute } from "./routes/v1/internal-ask.js";
 import { internalWorkspaceLinkRoute } from "./routes/v1/internal-workspace-link.js";
 import { remediationsRoute } from "./routes/v1/remediations.js";
 import { codingJobsRoute } from "./routes/v1/coding-jobs.js";
-import { closePool } from "../storage/client.js";
-import { closeRedis } from "./queue.js";
+import { closePool, getPool } from "../storage/client.js";
+import { closeRedis, getRedis } from "./queue.js";
 import { initAgent } from "../agent/index.js";
 
 initAgent();
@@ -40,6 +40,15 @@ await app.register(remediationsRoute);
 await app.register(codingJobsRoute);
 
 app.get("/health", async () => ({ status: "ok" }));
+app.get("/ready", async (_request, reply) => {
+  try {
+    await Promise.all([getPool().query("SELECT 1"), getRedis().ping()]);
+    return { status: "ready" };
+  } catch (error) {
+    app.log.error(error, "readiness check failed");
+    return reply.status(503).send({ status: "unavailable" });
+  }
+});
 
 async function start(): Promise<void> {
   const port = parseInt(process.env.PORT ?? "3000", 10);

@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  node:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: calyx
+          POSTGRES_PASSWORD: calyx
+          POSTGRES_DB: calyx
+        ports: ["15432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U calyx -d calyx"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["16379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgres://calyx:calyx@localhost:15432/calyx
+      REDIS_URL: redis://localhost:16379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run migrate
+      - run: npm run build
+      - run: npm audit --omit=dev
+      - run: npm test
+      - run: docker build -t calyx-node-ci .
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - run: pnpm install --frozen-lockfile
+        working-directory: apps/web
+      - run: pnpm exec tsc --noEmit
+        working-directory: apps/web
+      - run: pnpm run build
+        working-directory: apps/web
+        env:
+          NEXT_PUBLIC_CALYX_CHAT_URL: http://localhost:14000
+
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: >-
+          docker run --rm
+          -v "$PWD/apps/api:/src" -w /src
+          golang:1.26-alpine sh -c 'gofmt -d $(find cmd internal -name "*.go") | tee /tmp/gofmt.diff; test ! -s /tmp/gofmt.diff; go test ./...'
+      - run: docker build -t calyx-chat-ci ./apps/api
+
+  deployment-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose --profile chat config --quiet
+      - run: >-
+          CALYX_ENV_FILE="$PWD/deploy/.env.production.example"
+          docker compose --env-file deploy/.env.production.example
+          -f deploy/compose.production.yml config --quiet

@@ -14,6 +14,7 @@ import (
 )
 
 type Store interface {
+	Ready(ctx context.Context) error
 	Put(ctx context.Context, key, contentType string, data []byte) error
 	Get(ctx context.Context, key string) (io.ReadCloser, error)
 	Delete(ctx context.Context, key string) error
@@ -47,12 +48,20 @@ func NewS3(ctx context.Context, cfg Config) (*S3Store, error) {
 		options.BaseEndpoint = aws.String(cfg.Endpoint)
 		options.UsePathStyle = cfg.UsePathStyle
 	})
+	store := &S3Store{client: client, bucket: cfg.Bucket}
 	checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	if _, err := client.HeadBucket(checkCtx, &s3.HeadBucketInput{Bucket: aws.String(cfg.Bucket)}); err != nil {
-		return nil, fmt.Errorf("verify object storage bucket: %w", err)
+	if err := store.Ready(checkCtx); err != nil {
+		return nil, err
 	}
-	return &S3Store{client: client, bucket: cfg.Bucket}, nil
+	return store, nil
+}
+
+func (s *S3Store) Ready(ctx context.Context) error {
+	if _, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(s.bucket)}); err != nil {
+		return fmt.Errorf("verify object storage bucket: %w", err)
+	}
+	return nil
 }
 
 func (s *S3Store) Put(ctx context.Context, key, contentType string, data []byte) error {
