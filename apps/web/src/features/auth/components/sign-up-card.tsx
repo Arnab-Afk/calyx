@@ -1,16 +1,11 @@
-import { useAuthActions } from '@convex-dev/auth/react';
 import { TriangleAlert } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { FaGithub } from 'react-icons/fa';
-import { FcGoogle } from 'react-icons/fc';
 
 import { useChatAuth } from '@/components/chat-auth-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
-import { isGoChatBackend } from '@/lib/chat-backend';
 
 import type { SignInFlow } from '../types';
 
@@ -20,7 +15,6 @@ interface SignUpCardProps {
 
 export const SignUpCard = ({ setState }: SignUpCardProps) => {
   const router = useRouter();
-  const { signIn } = useAuthActions();
   const chatAuth = useChatAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -28,11 +22,6 @@ export const SignUpCard = ({ setState }: SignUpCardProps) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
-
-  const handleOAuthSignUp = (value: 'github' | 'google') => {
-    setPending(true);
-    signIn(value).finally(() => setPending(false));
-  };
 
   const handleSignUp = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -55,10 +44,8 @@ export const SignUpCard = ({ setState }: SignUpCardProps) => {
 
     setPending(true);
     setError('');
-    const operation = isGoChatBackend
-      ? chatAuth.register({ name, email, password })
-      : signIn('password', { name, email, password, flow: 'signUp' });
-    operation
+    chatAuth
+      .register({ name, email, password })
       .then(() => router.replace('/'))
       .catch(() => {
         setError('Something went wrong!');
@@ -70,7 +57,7 @@ export const SignUpCard = ({ setState }: SignUpCardProps) => {
     <Card className="size-full p-8">
       <CardHeader className="px-0 pt-0">
         <CardTitle>Sign up to continue</CardTitle>
-        <CardDescription>Use your email or another service to continue.</CardDescription>
+        <CardDescription>Create a Calyx account with your email and password.</CardDescription>
       </CardHeader>
 
       {!!error && (
@@ -115,22 +102,6 @@ export const SignUpCard = ({ setState }: SignUpCardProps) => {
             Continue
           </Button>
         </form>
-
-        {!isGoChatBackend && <Separator />}
-
-        {!isGoChatBackend && (
-          <div className="flex flex-col gap-y-2.5">
-            <Button disabled={pending} onClick={() => handleOAuthSignUp('google')} variant="outline" size="lg" className="relative w-full">
-              <FcGoogle className="absolute left-2.5 top-3 size-5" />
-              Continue with Google
-            </Button>
-
-            <Button disabled={pending} onClick={() => handleOAuthSignUp('github')} variant="outline" size="lg" className="relative w-full">
-              <FaGithub className="absolute left-2.5 top-3 size-5" />
-              Continue with GitHub
-            </Button>
-          </div>
-        )}
 
         <p className="text-center text-xs text-muted-foreground">
           Already have an account?{' '}

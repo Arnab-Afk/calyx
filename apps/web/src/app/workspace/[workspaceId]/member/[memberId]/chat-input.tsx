@@ -8,10 +8,8 @@ import { toast } from 'sonner';
 
 import type { Id } from '@/../convex/_generated/dataModel';
 import { useCreateMessage } from '@/features/messages/api/use-create-message';
-import { useGenerateUploadUrl } from '@/features/upload/api/use-generate-upload-url';
 import { useWorkspaceId } from '@/hooks/use-workspace-id';
 import { uploadChatImage } from '@/lib/chat-api';
-import { isGoChatBackend } from '@/lib/chat-backend';
 
 const Editor = dynamic(() => import('@/components/editor'), {
   ssr: false,
@@ -43,7 +41,6 @@ export const ChatInput = ({ placeholder, conversationId }: ChatInputProps) => {
   const workspaceId = useWorkspaceId();
 
   const { mutate: createMessage } = useCreateMessage();
-  const { mutate: generateUploadUrl } = useGenerateUploadUrl();
 
   const handleSubmit = async ({ body, image }: { body: string; image: File | null }) => {
     try {
@@ -58,22 +55,8 @@ export const ChatInput = ({ placeholder, conversationId }: ChatInputProps) => {
       };
 
       if (image) {
-        if (isGoChatBackend) {
-          const upload = await uploadChatImage(String(workspaceId), image);
-          values.image = upload.id as Id<'_storage'>;
-        } else {
-          const url = await generateUploadUrl({}, { throwError: true });
-          if (!url) throw new Error('URL not found.');
-
-          const result = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-type': image.type },
-            body: image,
-          });
-          if (!result.ok) throw new Error('Failed to upload image.');
-          const { storageId } = await result.json();
-          values.image = storageId;
-        }
+        const upload = await uploadChatImage(String(workspaceId), image);
+        values.image = upload.id as Id<'_storage'>;
       }
 
       await createMessage(values, { throwError: true });

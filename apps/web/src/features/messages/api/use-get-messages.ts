@@ -1,13 +1,9 @@
-import { usePaginatedQuery } from 'convex/react';
-
-import { api } from '@/../convex/_generated/api';
 import type { Id } from '@/../convex/_generated/dataModel';
 import { useChatResource } from '@/hooks/use-chat-resource';
 import { chatApi } from '@/lib/chat-api';
-import { isGoChatBackend } from '@/lib/chat-backend';
 import { convexMessage } from '@/lib/chat-compat';
 
-const BATCH_SIZE = 20;
+const BATCH_SIZE = 100;
 
 interface UseGetMessagesProps {
   channelId?: Id<'channels'>;
@@ -15,14 +11,20 @@ interface UseGetMessagesProps {
   parentMessageId?: Id<'messages'>;
 }
 
-export type GetMessagesReturnType = (typeof api.messages.get._returnType)['page'];
+export type GetMessagesReturnType = ReturnType<typeof convexMessage>[];
+type PaginationStatus = 'LoadingFirstPage' | 'CanLoadMore' | 'LoadingMore' | 'Exhausted';
 
-export const useGetMessages = ({ channelId, conversationId, parentMessageId }: UseGetMessagesProps) => {
-  const convex = usePaginatedQuery(api.messages.get, isGoChatBackend ? 'skip' : { channelId, conversationId, parentMessageId }, {
-    initialNumItems: BATCH_SIZE,
-  });
+export const useGetMessages = ({
+  channelId,
+  conversationId,
+  parentMessageId,
+}: UseGetMessagesProps): {
+  results: GetMessagesReturnType;
+  status: PaginationStatus;
+  loadMore: () => void;
+} => {
   const key = `messages:${channelId ?? ''}:${conversationId ?? ''}:${parentMessageId ?? ''}`;
-  const go = useChatResource<GetMessagesReturnType>(key, isGoChatBackend, async (signal) => {
+  const resource = useChatResource<GetMessagesReturnType>(key, true, async (signal) => {
     let resolvedChannel = channelId ? String(channelId) : undefined;
     let resolvedConversation = conversationId ? String(conversationId) : undefined;
     if (!resolvedChannel && !resolvedConversation && parentMessageId) {
@@ -36,19 +38,12 @@ export const useGetMessages = ({ channelId, conversationId, parentMessageId }: U
       : resolvedConversation
         ? await chatApi.conversationMessages(resolvedConversation, options)
         : { messages: [] };
-    return response.messages.map(convexMessage) as unknown as GetMessagesReturnType;
+    return response.messages.map(convexMessage);
   });
 
-  if (isGoChatBackend) {
-    return {
-      results: go.data ?? [],
-      status: go.isLoading ? ('LoadingFirstPage' as const) : ('Exhausted' as const),
-      loadMore: () => undefined,
-    };
-  }
   return {
-    results: convex.results,
-    status: convex.status,
-    loadMore: () => convex.loadMore(BATCH_SIZE),
+    results: resource.data ?? [],
+    status: resource.isLoading ? 'LoadingFirstPage' : 'Exhausted',
+    loadMore: () => undefined,
   };
 };

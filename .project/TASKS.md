@@ -4,13 +4,11 @@
 
 ## In progress
 
-- [ ] Migrate Next.js authentication and workspace navigation from Convex to the Go API.
+- [ ] Add human-approved remediation and coding-agent pull-request handoff.
 
 ## Next
 
-- [ ] Migrate channels, messages, uploads, and realtime updates from Convex to the Go API.
-- [ ] Reconnect MCP credential administration through the Go workspace identity boundary.
-- [ ] Add human-approved remediation and coding-agent pull-request handoff.
+- [ ] Add durable remediation approval requests and immutable execution audits.
 - [ ] Add GitHub App installation OAuth and automatic webhook provisioning.
 
 ## Backlog
@@ -20,6 +18,7 @@
 
 ## Done
 
+- [x] Make Go the sole web auth/data backend and remove active Convex runtime paths — 2026-09-20
 - [x] Reconnect MCP credential administration through authenticated Go workspace identity — 2026-09-20
 - [x] Adapt Next.js message, thread, reaction, upload, trusted ask, and realtime paths to the feature-gated Go backend — 2026-09-20
 - [x] Adapt Next.js workspace, channel, member, and conversation mutations to the feature-gated Go backend — 2026-09-20

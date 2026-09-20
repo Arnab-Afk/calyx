@@ -10,7 +10,6 @@ import { Thread } from '@/features/messages/components/thread';
 import { usePanel } from '@/hooks/use-panel';
 import { useWorkspaceId } from '@/hooks/use-workspace-id';
 import { connectChatRealtime } from '@/lib/chat-api';
-import { isGoChatBackend } from '@/lib/chat-backend';
 
 import { Sidebar } from './sidebar';
 import { Toolbar } from './toolbar';
@@ -21,7 +20,6 @@ const WorkspaceIdLayout = ({ children }: Readonly<PropsWithChildren>) => {
   const workspaceId = useWorkspaceId();
 
   useEffect(() => {
-    if (!isGoChatBackend) return;
     const socket = connectChatRealtime(String(workspaceId), () => {
       window.dispatchEvent(new Event('calyx:chat-mutated'));
     });

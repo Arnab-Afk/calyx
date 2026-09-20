@@ -156,7 +156,7 @@ GitHub App, SSO/RBAC (Clerk/WorkOS), data residency, SOC2-class controls. After 
 
 ## Web UI
 
-The Slack-style Next.js app lives in `apps/web`. It still uses Convex while the first-party Go chat API in `apps/api` is hardened and brought to feature parity. Do not add new Convex chat features; the tracked next step is migrating the existing hooks to Go REST, HTTP-only JWT sessions, and WebSockets. See [`apps/web/README.md`](./apps/web/README.md) and [`apps/api/README.md`](./apps/api/README.md).
+The Slack-style Next.js app lives in `apps/web` and uses the first-party Go chat API in `apps/api` for authentication, workspaces, channels, messages, uploads, realtime events, trusted investigations, and MCP credential administration. Browser authentication uses HTTP-only JWT session cookies. See [`apps/web/README.md`](./apps/web/README.md) and [`apps/api/README.md`](./apps/api/README.md).
 
 ---
 
