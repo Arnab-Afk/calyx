@@ -20,6 +20,7 @@
 
 ## Done
 
+- [x] Add the typed Next.js Go API/session/workspace client foundation without storing browser bearer tokens — 2026-09-20
 - [x] Complete Go API parity for bounded workspace-scoped image uploads — 2026-09-20
 - [x] Add the trusted workspace-to-tenant web investigation boundary and retire caller-selected tenant asks — 2026-09-20
 - [x] Add private direct-conversation and direct-message API parity — 2026-09-20
