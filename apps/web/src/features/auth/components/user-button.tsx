@@ -1,13 +1,17 @@
 'use client';
 
-import { Loader, LogOut } from 'lucide-react';
+import { Loader, LogOut, UserRound } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 import { useChatAuth } from '@/components/chat-auth-provider';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
-export const UserButton = () => {
+interface UserButtonProps {
+  onOpenProfile?: () => void;
+}
+
+export const UserButton = ({ onOpenProfile }: UserButtonProps = {}) => {
   const router = useRouter();
   const chatAuth = useChatAuth();
   const data = chatAuth.user;
@@ -22,7 +26,6 @@ export const UserButton = () => {
   }
 
   const { image, name } = data;
-
   const avatarFallback = name?.charAt(0).toUpperCase();
 
   return (
@@ -30,12 +33,17 @@ export const UserButton = () => {
       <DropdownMenuTrigger className="relative outline-none">
         <Avatar className="size-10 transition hover:opacity-75">
           <AvatarImage alt={name} src={image} />
-
           <AvatarFallback className="text-base">{avatarFallback}</AvatarFallback>
         </Avatar>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="center" side="right" className="w060">
+      <DropdownMenuContent align="center" side="right" className="w-60">
+        {onOpenProfile && (
+          <DropdownMenuItem onClick={onOpenProfile} className="h-10">
+            <UserRound className="mr-2 size-4" />
+            Profile &amp; settings
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem
           onClick={async () => {
             await chatAuth.logout();

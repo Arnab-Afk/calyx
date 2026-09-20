@@ -63,7 +63,7 @@ export const WorkspaceHeader = ({ workspace, isAdmin }: WorkspaceHeaderProps) =>
                 <DropdownMenuSeparator />
 
                 <DropdownMenuItem className="cursor-pointer py-2" onClick={() => setPreferencesOpen(true)}>
-                  Preferences
+                  Settings
                 </DropdownMenuItem>
               </>
             )}
