@@ -12,6 +12,10 @@ export interface ChatWorkspace {
   joinCode: string;
   ownerId: string;
   createdAt: string;
+  kind?: 'standard' | 'project_share';
+  parentWorkspaceId?: string;
+  scopedProjectId?: string;
+  scopedProjectSlug?: string;
 }
 
 export interface ChatMember {
@@ -146,9 +150,30 @@ export const chatApi = {
     }),
   workspace: (id: string, signal?: AbortSignal) => request<ChatWorkspace>(`/v1/workspaces/${encodeURIComponent(id)}`, { signal }),
   workspaceInfo: (id: string, signal?: AbortSignal) =>
-    request<{ name: string; isMember: boolean; role: '' | 'admin' | 'member' }>(`/v1/workspaces/${encodeURIComponent(id)}/info`, {
+    request<{
+      name: string;
+      isMember: boolean;
+      role: '' | 'admin' | 'member';
+      kind?: 'standard' | 'project_share';
+      parentWorkspaceId?: string;
+      scopedProjectId?: string;
+      scopedProjectSlug?: string;
+    }>(`/v1/workspaces/${encodeURIComponent(id)}/info`, {
       signal,
     }),
+  inviteToWorkspace: (workspaceId: string, email: string, role: 'admin' | 'member' = 'member') =>
+    request<{ status: string; memberId?: string; inviteId?: string; email: string }>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/invites`,
+      { method: 'POST', body: JSON.stringify({ email, role }) },
+    ),
+  shareProject: (
+    workspaceId: string,
+    input: { email: string; projectId: string; projectSlug: string; projectName?: string; role?: 'admin' | 'member' },
+  ) =>
+    request<{ workspace: ChatWorkspace; invite: { status: string; email: string } }>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/share-project`,
+      { method: 'POST', body: JSON.stringify(input) },
+    ),
   updateWorkspace: (id: string, name: string) =>
     request<{ id: string; name: string }>(`/v1/workspaces/${encodeURIComponent(id)}`, {
       method: 'PATCH',

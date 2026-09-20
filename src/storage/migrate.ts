@@ -420,6 +420,18 @@ CREATE TABLE IF NOT EXISTS workspace_tenant_links (
 CREATE INDEX IF NOT EXISTS workspace_tenant_links_tenant
   ON workspace_tenant_links (tenant_id);
 
+CREATE TABLE IF NOT EXISTS workspace_project_scopes (
+  workspace_id      TEXT        NOT NULL PRIMARY KEY,
+  tenant_id         TEXT        NOT NULL,
+  project_id        UUID        NOT NULL,
+  project_slug      TEXT        NOT NULL,
+  host_workspace_id TEXT        NOT NULL,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS workspace_project_scopes_project
+  ON workspace_project_scopes (project_id);
+
 CREATE TABLE IF NOT EXISTS mcp_oauth_rate_limits (
   subject       TEXT        NOT NULL,
   window_start  TIMESTAMPTZ NOT NULL,

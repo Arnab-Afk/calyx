@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { useLogsOnboarding } from '@/features/onboarding/store/use-logs-onboarding';
 
 import { useCreateWorkspace } from '../api/use-create-workspace';
 import { useCreateWorkspaceModal } from '../store/use-create-workspace-modal';
@@ -17,6 +18,7 @@ export const CreateWorkspaceModal = () => {
   const [name, setName] = useState('');
   const [open, setOpen] = useCreateWorkspaceModal();
   const { isPending, mutate } = useCreateWorkspace();
+  const { openFor } = useLogsOnboarding();
 
   const handleClose = () => {
     setOpen(false);
@@ -31,8 +33,8 @@ export const CreateWorkspaceModal = () => {
       {
         onSuccess: (id) => {
           toast.success('Workspace created!');
+          openFor(String(id));
           router.push(`/workspace/${id}`);
-
           handleClose();
         },
         onError: (error) => {

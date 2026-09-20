@@ -12,8 +12,10 @@ import (
 
 func (s *Server) getWorkspaceInfo(w http.ResponseWriter, r *http.Request) {
 	wsID := chi.URLParam(r, "workspaceID")
-	var name string
-	if err := s.db.QueryRow(r.Context(), `SELECT name FROM chat_workspaces WHERE id=$1`, wsID).Scan(&name); err != nil {
+	ws, err := scanWorkspace(s.db.QueryRow(r.Context(),
+		`SELECT `+workspaceCols+` FROM chat_workspaces WHERE id=$1`, wsID,
+	))
+	if err != nil {
 		writeErr(w, http.StatusNotFound, "workspace not found")
 		return
 	}
@@ -22,7 +24,15 @@ func (s *Server) getWorkspaceInfo(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		role = member.Role
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"name": name, "isMember": err == nil, "role": role})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"name":              ws.Name,
+		"isMember":          err == nil,
+		"role":              role,
+		"kind":              ws.Kind,
+		"parentWorkspaceId": ws.ParentWorkspaceID,
+		"scopedProjectId":   ws.ScopedProjectID,
+		"scopedProjectSlug": ws.ScopedProjectSlug,
+	})
 }
 
 func (s *Server) updateWorkspace(w http.ResponseWriter, r *http.Request) {

@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { useOpsProjects, useOpsSources } from '@/features/control/api/use-ops';
+import { ProjectsPanel } from '@/features/control/components/projects-panel';
 import { McpCredentialsModal } from '@/features/mcp/components/mcp-credentials-modal';
 import { useCurrentMember } from '@/features/members/api/use-current-member';
 import { useGetMembers } from '@/features/members/api/use-get-members';
@@ -21,6 +21,7 @@ import { useNewJoinCode } from '@/features/workspaces/api/use-new-join-code';
 import { useRemoveWorkspace } from '@/features/workspaces/api/use-remove-workspace';
 import { useUpdateWorkspace } from '@/features/workspaces/api/use-update-workspace';
 import { useWorkspaceId } from '@/hooks/use-workspace-id';
+import { chatApi } from '@/lib/chat-api';
 import { cn } from '@/lib/utils';
 
 export type ControlSection = 'start' | 'profile' | 'workspace' | 'members' | 'projects' | 'connections';
@@ -113,8 +114,8 @@ function StartPanel({ onGo }: { onGo: (s: ControlSection) => void }) {
   const steps = [
     { id: 'profile' as const, title: 'Confirm your profile', body: 'Name and email for this account.' },
     { id: 'workspace' as const, title: 'Set up the workspace', body: 'Rename, invite, or rotate the join code.' },
-    { id: 'projects' as const, title: 'Connect a project', body: 'Create a Calyx project and log sources.' },
-    { id: 'connections' as const, title: 'Wire GitHub & agents', body: 'Repo webhooks and MCP credentials.' },
+    { id: 'projects' as const, title: 'Projects, API keys & repo', body: 'Create sources, rotate tokens, connect GitHub.' },
+    { id: 'connections' as const, title: 'Agent connectors', body: 'MCP credentials for Cursor, Claude Code, Codex.' },
   ];
 
   return (
@@ -170,8 +171,8 @@ function ProfilePanel() {
           <div>
             <p className="text-sm font-medium">Sign-in methods</p>
             <p className="mt-1 text-xs text-white/45">
-              Email &amp; password is live. Google / GitHub account linking for chat login is next — use Connections for GitHub{' '}
-              <em>repo</em> webhooks today.
+              Email &amp; password, Google, and GitHub all work. If Google and GitHub share the same verified email, you land on the same Calyx account.
+              Connect a <em>repository</em> under Projects &amp; logs.
             </p>
           </div>
         </div>
@@ -285,9 +286,45 @@ function MembersPanel() {
   const { mutate: updateMember } = useUpdateMember();
   const { mutate: removeMember } = useRemoveMember();
   const isAdmin = me?.role === 'admin';
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviting, setInviting] = useState(false);
 
   return (
-    <Panel title="Members" subtitle="People in this workspace">
+    <Panel title="Members" subtitle="Workspace members see every project. Share a single project from Projects & logs.">
+      {isAdmin && (
+        <Card>
+          <p className="text-sm font-medium">Invite to workspace</p>
+          <p className="mt-1 text-xs text-white/45">
+            They get access to all projects under this workspace (e.g. invite to <em>prod</em> → they see workspace <em>prod</em>).
+          </p>
+          <div className="mt-3 flex gap-2">
+            <Input
+              type="email"
+              placeholder="teammate@company.com"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              className="border-white/15 bg-black/40 text-white"
+            />
+            <Button
+              disabled={inviting || !inviteEmail.includes('@')}
+              onClick={async () => {
+                setInviting(true);
+                try {
+                  const res = await chatApi.inviteToWorkspace(String(workspaceId), inviteEmail.trim());
+                  toast.success(res.status === 'added' ? 'Member added' : 'Invite saved — they join on next login');
+                  setInviteEmail('');
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : 'Invite failed');
+                } finally {
+                  setInviting(false);
+                }
+              }}
+            >
+              Invite
+            </Button>
+          </div>
+        </Card>
+      )}
       {isLoading && (
         <div className="flex justify-center py-8">
           <Loader2 className="size-5 animate-spin text-white/40" />
@@ -350,186 +387,6 @@ function MembersPanel() {
   );
 }
 
-function ProjectsPanel() {
-  const { projects, loading, error, create, reload } = useOpsProjects();
-  const [slug, setSlug] = useState('');
-  const [selected, setSelected] = useState<string | null>(null);
-  const { sources, createSource, connectGithub, reload: reloadSources } = useOpsSources(selected);
-  const [busy, setBusy] = useState(false);
-  const [lastToken, setLastToken] = useState<string | null>(null);
-  const [githubRepo, setGithubRepo] = useState('');
-
-  return (
-    <Panel title="Projects & logs" subtitle="Observability projects live here — same surface as chat, no separate console.">
-      {error && (
-        <Card className="border-amber-500/30 text-sm text-amber-100/90">
-          {error}
-          <p className="mt-2 text-xs text-white/45">
-            Set <code className="text-white/70">CALYX_API_URL</code> and <code className="text-white/70">CALYX_MGMT_TOKEN</code> on the web
-            server to enable this panel.
-          </p>
-        </Card>
-      )}
-
-      <Card>
-        <p className="text-sm font-medium">Create project</p>
-        <div className="mt-2 flex gap-2">
-          <Input
-            placeholder="my-app"
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-            className="border-white/15 bg-black/40 text-white"
-          />
-          <Button
-            disabled={busy || slug.trim().length < 2}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                await create(slug.trim().toLowerCase());
-                toast.success('Project created');
-                setSlug('');
-                await reload();
-              } catch (e) {
-                toast.error(e instanceof Error ? e.message : 'Create failed');
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            Create
-          </Button>
-        </div>
-      </Card>
-
-      <Card>
-        <p className="mb-2 text-sm font-medium">Your projects</p>
-        {loading && <Loader2 className="size-4 animate-spin text-white/40" />}
-        {!loading && projects.length === 0 && <p className="text-xs text-white/45">No projects yet — create one above.</p>}
-        <ul className="space-y-1">
-          {projects.map((p) => (
-            <li key={p.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelected(p.slug);
-                  setLastToken(null);
-                }}
-                className={cn(
-                  'flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm',
-                  selected === p.slug ? 'bg-white/10 text-white' : 'text-white/65 hover:bg-white/5',
-                )}
-              >
-                <span>{p.slug}</span>
-                <span className="text-[11px] uppercase text-white/35">{p.environment ?? 'prod'}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </Card>
-
-      {selected && (
-        <>
-          <Card>
-            <p className="text-sm font-medium">Log sources — {selected}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  try {
-                    const res = await createSource({
-                      role: 'frontend',
-                      service: 'web',
-                      name: `${selected}-frontend`,
-                      provider: 'http',
-                    });
-                    setLastToken(res.token ?? null);
-                    toast.success('Frontend source created');
-                    await reloadSources();
-                  } catch (e) {
-                    toast.error(e instanceof Error ? e.message : 'Failed');
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                Add frontend source
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  try {
-                    const res = await createSource({
-                      role: 'backend',
-                      service: 'api',
-                      name: `${selected}-backend`,
-                      provider: 'http',
-                    });
-                    setLastToken(res.token ?? null);
-                    toast.success('Backend source created');
-                    await reloadSources();
-                  } catch (e) {
-                    toast.error(e instanceof Error ? e.message : 'Failed');
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                Add backend source
-              </Button>
-            </div>
-            <ul className="mt-3 space-y-1 text-xs text-white/55">
-              {sources.map((s) => (
-                <li key={s.id}>
-                  {s.name} · {s.role}/{s.service} · {s.lastEventAt ? 'receiving' : 'waiting'}
-                </li>
-              ))}
-            </ul>
-            {lastToken && (
-              <p className="mt-3 break-all rounded-md bg-black/50 p-2 font-mono text-[11px] text-emerald-300/90">
-                Token (copy now): {lastToken}
-              </p>
-            )}
-          </Card>
-
-          <Card>
-            <p className="text-sm font-medium">GitHub repo</p>
-            <div className="mt-2 flex gap-2">
-              <Input
-                placeholder="owner/repo"
-                value={githubRepo}
-                onChange={(e) => setGithubRepo(e.target.value)}
-                className="border-white/15 bg-black/40 text-white"
-              />
-              <Button
-                disabled={busy || !githubRepo.includes('/')}
-                onClick={async () => {
-                  setBusy(true);
-                  try {
-                    const res = await connectGithub(githubRepo.trim());
-                    window.location.assign(res.installationUrl);
-                  } catch (e) {
-                    toast.error(e instanceof Error ? e.message : 'Failed');
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                <GitBranch className="mr-1 size-4" />
-                Connect
-              </Button>
-            </div>
-          </Card>
-        </>
-      )}
-    </Panel>
-  );
-}
 
 function ConnectionsPanel() {
   const workspaceId = useWorkspaceId();
@@ -556,29 +413,20 @@ function ConnectionsPanel() {
         <div className="flex items-start gap-3">
           <GitBranch className="mt-0.5 size-4 text-white/45" />
           <div>
-            <p className="text-sm font-medium">GitHub</p>
+            <p className="text-sm font-medium">GitHub repository</p>
             <p className="mt-1 text-xs text-white/45">
-              Repo webhooks: use <strong className="font-medium text-white/70">Projects &amp; logs</strong>. Full GitHub App OAuth for login
-              / code search is not enabled yet.
+              Connect <code className="text-white/70">owner/repo</code> under{' '}
+              <strong className="font-medium text-white/70">Projects &amp; logs</strong> so Calyx can correlate commits and open fix PRs.
             </p>
           </div>
         </div>
       </Card>
 
-      <Card className="opacity-80">
+      <Card>
         <p className="text-sm font-medium">Google / GitHub sign-in</p>
         <p className="mt-1 text-xs text-white/45">
-          Chat auth today is email + password. Social login for the same account will land here when OAuth apps are configured — no separate
-          admin console.
+          Use either provider on the auth page. Matching verified emails resolve to one account (same as email &amp; password).
         </p>
-        <div className="mt-3 flex gap-2">
-          <Button size="sm" variant="outline" disabled>
-            Connect Google
-          </Button>
-          <Button size="sm" variant="outline" disabled>
-            Connect GitHub
-          </Button>
-        </div>
       </Card>
     </Panel>
   );

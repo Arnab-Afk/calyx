@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,6 +13,8 @@ import (
 	"time"
 
 	"github.com/Arnab-Afk/calyx/apps/api/internal/models"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 const (
@@ -87,6 +90,10 @@ func (s *Server) googleCallback(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadGateway, "google profile failed")
 		return
 	}
+	if !profile.EmailVerified {
+		http.Redirect(w, r, strings.TrimRight(s.webAppURL, "/")+"/auth?error="+url.QueryEscape("google_email_unverified"), http.StatusFound)
+		return
+	}
 	email := strings.TrimSpace(strings.ToLower(profile.Email))
 	name := strings.TrimSpace(profile.Name)
 	if name == "" {
@@ -138,14 +145,16 @@ func (s *Server) exchangeGoogleCode(r *http.Request, code string) (string, error
 }
 
 func (s *Server) fetchGoogleProfile(r *http.Request, accessToken string) (struct {
-	Email   string `json:"email"`
-	Name    string `json:"name"`
-	Picture string `json:"picture"`
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
+	Name          string `json:"name"`
+	Picture       string `json:"picture"`
 }, error) {
 	var profile struct {
-		Email   string `json:"email"`
-		Name    string `json:"name"`
-		Picture string `json:"picture"`
+		Email         string `json:"email"`
+		EmailVerified bool   `json:"email_verified"`
+		Name          string `json:"name"`
+		Picture       string `json:"picture"`
 	}
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, googleUserInfoURL, nil)
 	if err != nil {
@@ -167,6 +176,8 @@ func (s *Server) fetchGoogleProfile(r *http.Request, accessToken string) (struct
 	return profile, nil
 }
 
+// upsertOAuthUser finds or creates a chat user by normalized email so Google,
+// GitHub, and password sign-in with the same address share one account.
 func (s *Server) upsertOAuthUser(r *http.Request, email, name, image string) (*models.User, error) {
 	var u models.User
 	err := s.db.QueryRow(r.Context(),
@@ -180,7 +191,11 @@ func (s *Server) upsertOAuthUser(r *http.Request, email, name, image string) (*m
 			)
 			u.Image = &image
 		}
+		s.acceptPendingInvites(r.Context(), u.ID, u.Email)
 		return &u, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
 	}
 	hash, err := s.auth.HashPassword(randomPassword())
 	if err != nil {
@@ -195,10 +210,22 @@ func (s *Server) upsertOAuthUser(r *http.Request, email, name, image string) (*m
 		 RETURNING id::text, email, name, image, created_at`,
 		email, name, hash, img,
 	).Scan(&u.ID, &u.Email, &u.Name, &u.Image, &u.CreatedAt)
-	if err != nil {
-		return nil, err
+	if err == nil {
+		s.acceptPendingInvites(r.Context(), u.ID, u.Email)
+		return &u, nil
 	}
-	return &u, nil
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		err = s.db.QueryRow(r.Context(),
+			`SELECT id::text, email, name, image, created_at FROM chat_users WHERE email=$1`, email,
+		).Scan(&u.ID, &u.Email, &u.Name, &u.Image, &u.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		s.acceptPendingInvites(r.Context(), u.ID, u.Email)
+		return &u, nil
+	}
+	return nil, err
 }
 
 func randomHex(n int) (string, error) {

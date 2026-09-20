@@ -11,11 +11,15 @@ type User struct {
 }
 
 type Workspace struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	JoinCode  string    `json:"joinCode"`
-	OwnerID   string    `json:"ownerId"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID                 string    `json:"id"`
+	Name               string    `json:"name"`
+	JoinCode           string    `json:"joinCode"`
+	OwnerID            string    `json:"ownerId"`
+	CreatedAt          time.Time `json:"createdAt"`
+	Kind               string    `json:"kind"`
+	ParentWorkspaceID  *string   `json:"parentWorkspaceId,omitempty"`
+	ScopedProjectID    *string   `json:"scopedProjectId,omitempty"`
+	ScopedProjectSlug  *string   `json:"scopedProjectSlug,omitempty"`
 }
 
 type Member struct {

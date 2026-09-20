@@ -12,10 +12,12 @@ import {
   createProject,
   deleteGithubConnection,
   getGithubConnection,
+  getLogSourceById,
   getProject,
   getSlackBinding,
   listLogSources,
   listProjects,
+  rotateLogSourceToken,
   upsertGithubConnection,
   upsertSlackBinding,
   type SourceRole,
@@ -213,6 +215,40 @@ export async function projectsRoute(app: FastifyInstance): Promise<void> {
     });
   });
 
+  app.post("/v1/projects/:id/sources/:sourceId/rotate", async (request, reply) => {
+    const principal = await requireMgmt(request, reply, "sources:write");
+    if (!principal) return;
+
+    const { id, sourceId } = request.params as { id: string; sourceId: string };
+    const project = await getProject(principal.tenantId, id);
+    if (!project) return reply.status(404).send({ error: "Project not found" });
+
+    const existing = await getLogSourceById(sourceId);
+    if (!existing || existing.projectId !== project.id) {
+      return reply.status(404).send({ error: "Source not found" });
+    }
+
+    const source = await rotateLogSourceToken(sourceId, principal.tenantId);
+    if (!source) return reply.status(404).send({ error: "Source not found" });
+
+    const intake = intakeBaseUrl(request);
+    return reply.send({
+      source: {
+        id: source.id,
+        projectId: source.projectId,
+        name: source.name,
+        role: source.role,
+        service: source.service,
+        provider: source.provider,
+        lastEventAt: source.lastEventAt,
+        createdAt: source.createdAt,
+      },
+      token: source.token,
+      intakeUrl: `${intake}/v1/logs`,
+      note: "Previous token is revoked. Copy the new token now — it is shown once.",
+    });
+  });
+
   app.get("/v1/projects/:id/sources", async (request, reply) => {
     const principal = await requireMgmt(request, reply, "sources:write");
     if (!principal) return;
@@ -328,6 +364,11 @@ export async function projectsRoute(app: FastifyInstance): Promise<void> {
         installationId: parsed.data.installation_id,
         webhookSecret,
       });
+      const webBase = (process.env.CALYX_WEB_URL || process.env.WEB_APP_URL || "").replace(/\/$/, "");
+      if (webBase && String(request.headers.accept || "").includes("text/html")) {
+        const dest = `${webBase}/?github=connected&repo=${encodeURIComponent(connection.repo)}`;
+        return reply.redirect(dest);
+      }
       return {
         connected: true,
         projectId: state.projectId,

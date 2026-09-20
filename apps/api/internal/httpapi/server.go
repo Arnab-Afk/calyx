@@ -135,6 +135,8 @@ func New(
 			r.Patch("/workspaces/{workspaceID}", s.updateWorkspace)
 			r.Delete("/workspaces/{workspaceID}", s.deleteWorkspace)
 			r.Post("/workspaces/{workspaceID}/join-code", s.rotateJoinCode)
+			r.Post("/workspaces/{workspaceID}/invites", s.inviteToWorkspace)
+			r.Post("/workspaces/{workspaceID}/share-project", s.shareProject)
 			r.Get("/workspaces/{workspaceID}/mcp-credentials", s.listMCPCredentials)
 			r.Post("/workspaces/{workspaceID}/mcp-credentials", s.createMCPCredential)
 			r.Delete("/workspaces/{workspaceID}/mcp-credentials/{credentialID}", s.revokeMCPCredential)
@@ -315,6 +317,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.setSessionCookie(w, token)
+	s.acceptPendingInvites(r.Context(), u.ID, u.Email)
 	writeJSON(w, http.StatusCreated, map[string]any{"token": token, "user": u})
 }
 
@@ -344,6 +347,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.setSessionCookie(w, token)
+	s.acceptPendingInvites(r.Context(), u.ID, u.Email)
 	writeJSON(w, http.StatusOK, map[string]any{"token": token, "user": u})
 }
 
@@ -372,7 +376,7 @@ func (s *Server) getUser(ctx context.Context, id string) (*models.User, error) {
 func (s *Server) listWorkspaces(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r.Context())
 	rows, err := s.db.Query(r.Context(),
-		`SELECT w.id::text, w.name, w.join_code, w.owner_id::text, w.created_at
+		`SELECT `+workspaceCols+`
 		 FROM chat_workspaces w
 		 JOIN chat_members m ON m.workspace_id = w.id
 		 WHERE m.user_id=$1
@@ -384,8 +388,8 @@ func (s *Server) listWorkspaces(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	out := []models.Workspace{}
 	for rows.Next() {
-		var ws models.Workspace
-		if err := rows.Scan(&ws.ID, &ws.Name, &ws.JoinCode, &ws.OwnerID, &ws.CreatedAt); err != nil {
+		ws, err := scanWorkspace(rows)
+		if err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -417,11 +421,12 @@ func (s *Server) createWorkspace(w http.ResponseWriter, r *http.Request) {
 
 	code := joinCode()
 	var ws models.Workspace
-	err = tx.QueryRow(r.Context(),
+	row := tx.QueryRow(r.Context(),
 		`INSERT INTO chat_workspaces (name, join_code, owner_id) VALUES ($1,$2,$3)
-		 RETURNING id::text, name, join_code, owner_id::text, created_at`,
+		 RETURNING `+workspaceCols,
 		body.Name, code, uid,
-	).Scan(&ws.ID, &ws.Name, &ws.JoinCode, &ws.OwnerID, &ws.CreatedAt)
+	)
+	ws, err = scanWorkspace(row)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -459,11 +464,10 @@ func (s *Server) joinWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body.JoinCode = strings.ToLower(strings.TrimSpace(body.JoinCode))
-	var ws models.Workspace
-	err := s.db.QueryRow(r.Context(),
-		`SELECT id::text, name, join_code, owner_id::text, created_at FROM chat_workspaces WHERE id=$1`,
+	ws, err := scanWorkspace(s.db.QueryRow(r.Context(),
+		`SELECT `+workspaceCols+` FROM chat_workspaces WHERE id=$1`,
 		body.WorkspaceID,
-	).Scan(&ws.ID, &ws.Name, &ws.JoinCode, &ws.OwnerID, &ws.CreatedAt)
+	))
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "workspace not found")
 		return
@@ -490,10 +494,9 @@ func (s *Server) getWorkspace(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, "not a member")
 		return
 	}
-	var ws models.Workspace
-	err := s.db.QueryRow(r.Context(),
-		`SELECT id::text, name, join_code, owner_id::text, created_at FROM chat_workspaces WHERE id=$1`, wsID,
-	).Scan(&ws.ID, &ws.Name, &ws.JoinCode, &ws.OwnerID, &ws.CreatedAt)
+	ws, err := scanWorkspace(s.db.QueryRow(r.Context(),
+		`SELECT `+workspaceCols+` FROM chat_workspaces WHERE id=$1`, wsID,
+	))
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "workspace not found")
 		return

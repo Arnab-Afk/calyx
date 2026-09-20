@@ -177,14 +177,13 @@ func (s *Server) fetchGitHubProfile(r *http.Request, accessToken string) (struct
 	out.Name = user.Name
 	out.Login = user.Login
 	out.AvatarURL = user.AvatarURL
-	out.Email = strings.TrimSpace(user.Email)
-	if out.Email == "" {
-		email, err := s.fetchGitHubPrimaryEmail(r, accessToken)
-		if err != nil {
-			return out, err
-		}
-		out.Email = email
+	// Always prefer a verified email from /user/emails so Google + GitHub
+	// with the same address land on one chat_users row.
+	email, err := s.fetchGitHubPrimaryEmail(r, accessToken)
+	if err != nil {
+		return out, err
 	}
+	out.Email = email
 	return out, nil
 }
 

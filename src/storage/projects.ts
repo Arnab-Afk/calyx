@@ -232,6 +232,25 @@ export async function touchLogSource(sourceId: string): Promise<void> {
   );
 }
 
+/** Issue a new source token; previous token stops working immediately. */
+export async function rotateLogSourceToken(
+  sourceId: string,
+  tenantId: string,
+): Promise<CreatedLogSource | null> {
+  const token = `${SOURCE_TOKEN_PREFIX}${crypto.randomUUID().replaceAll("-", "")}_${crypto.randomBytes(24).toString("base64url")}`;
+  const prefix = token.slice(0, 32);
+  const digest = hashToken(token);
+  const result = await getPool().query(
+    `UPDATE log_sources
+     SET token_prefix = $3, token_hash = $4
+     WHERE id = $1 AND tenant_id = $2
+     RETURNING *`,
+    [sourceId, tenantId, prefix, digest],
+  );
+  if (result.rowCount !== 1) return null;
+  return { ...mapSource(result.rows[0]), token };
+}
+
 export async function upsertGithubConnection(input: {
   projectId: string;
   tenantId: string;

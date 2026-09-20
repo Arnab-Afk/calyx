@@ -19,6 +19,30 @@ export type OpsSource = {
   service: string;
   provider: string;
   lastEventAt?: string | null;
+  createdAt?: string;
+  status?: string;
+  drainUrl?: string;
+};
+
+export type OpsGithub = {
+  repo: string;
+  connectedAt: string;
+  installationId?: string | null;
+} | null;
+
+export type OpsProjectDetail = {
+  project: OpsProject;
+  sources: OpsSource[];
+  github: OpsGithub;
+  slack: { channelId: string; channelName?: string; teamId?: string; connectedAt: string } | null;
+};
+
+export type SourceTokenResult = {
+  source: OpsSource;
+  token?: string;
+  intakeUrl?: string;
+  curlExample?: string;
+  note?: string;
 };
 
 export async function opsFetch<T>(workspaceId: string, path: string, init?: RequestInit): Promise<T> {
@@ -76,28 +100,25 @@ export function useOpsProjects() {
   return { projects, loading, error, reload, create };
 }
 
-export function useOpsSources(projectSlug: string | null) {
+export function useOpsProjectDetail(projectSlug: string | null) {
   const workspaceId = useWorkspaceId();
-  const [sources, setSources] = useState<OpsSource[]>([]);
+  const [detail, setDetail] = useState<OpsProjectDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     if (!projectSlug) {
-      setSources([]);
+      setDetail(null);
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      const data = await opsFetch<{ sources?: OpsSource[] } | OpsSource[]>(
-        workspaceId,
-        `projects/${encodeURIComponent(projectSlug)}/sources`,
-      );
-      setSources(Array.isArray(data) ? data : (data.sources ?? []));
+      const data = await opsFetch<OpsProjectDetail>(workspaceId, `projects/${encodeURIComponent(projectSlug)}`);
+      setDetail(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load sources');
-      setSources([]);
+      setError(err instanceof Error ? err.message : 'Failed to load project');
+      setDetail(null);
     } finally {
       setLoading(false);
     }
@@ -110,10 +131,21 @@ export function useOpsSources(projectSlug: string | null) {
   const createSource = useCallback(
     async (input: { role: string; service: string; name: string; provider?: string }) => {
       if (!projectSlug) throw new Error('No project selected');
-      return opsFetch<{ source: OpsSource; token?: string; intakeUrl?: string }>(
+      return opsFetch<SourceTokenResult>(workspaceId, `projects/${encodeURIComponent(projectSlug)}/sources`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+    },
+    [projectSlug, workspaceId],
+  );
+
+  const rotateToken = useCallback(
+    async (sourceId: string) => {
+      if (!projectSlug) throw new Error('No project selected');
+      return opsFetch<SourceTokenResult>(
         workspaceId,
-        `projects/${encodeURIComponent(projectSlug)}/sources`,
-        { method: 'POST', body: JSON.stringify(input) },
+        `projects/${encodeURIComponent(projectSlug)}/sources/${encodeURIComponent(sourceId)}/rotate`,
+        { method: 'POST' },
       );
     },
     [projectSlug, workspaceId],
@@ -131,5 +163,38 @@ export function useOpsSources(projectSlug: string | null) {
     [projectSlug, workspaceId],
   );
 
-  return { sources, loading, error, reload, createSource, connectGithub };
+  const disconnectGithub = useCallback(async () => {
+    if (!projectSlug) throw new Error('No project selected');
+    return opsFetch<{ disconnected: boolean; warning?: string }>(
+      workspaceId,
+      `projects/${encodeURIComponent(projectSlug)}/github`,
+      { method: 'DELETE' },
+    );
+  }, [projectSlug, workspaceId]);
+
+  return {
+    detail,
+    sources: detail?.sources ?? [],
+    github: detail?.github ?? null,
+    loading,
+    error,
+    reload,
+    createSource,
+    rotateToken,
+    connectGithub,
+    disconnectGithub,
+  };
+}
+
+/** @deprecated Prefer useOpsProjectDetail for full project management. */
+export function useOpsSources(projectSlug: string | null) {
+  const detail = useOpsProjectDetail(projectSlug);
+  return {
+    sources: detail.sources,
+    loading: detail.loading,
+    error: detail.error,
+    reload: detail.reload,
+    createSource: detail.createSource,
+    connectGithub: detail.connectGithub,
+  };
 }

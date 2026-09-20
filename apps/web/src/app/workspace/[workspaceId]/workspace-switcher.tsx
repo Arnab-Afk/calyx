@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useGetWorkspace } from '@/features/workspaces/api/use-get-workspace';
 import { useGetWorkspaces } from '@/features/workspaces/api/use-get-workspaces';
+import { useChatWorkspaces } from '@/features/workspaces/api/use-chat-workspaces';
 import { useCreateWorkspaceModal } from '@/features/workspaces/store/use-create-workspace-modal';
 import { useWorkspaceId } from '@/hooks/use-workspace-id';
 
@@ -21,10 +22,13 @@ export const WorkspaceSwitcher = () => {
   const workspaceId = useWorkspaceId();
   const [_open, setOpen] = useCreateWorkspaceModal();
 
-  const { data: workspaces, isLoading: workspacesLoading } = useGetWorkspaces();
+  const { data: workspaces } = useGetWorkspaces();
   const { data: workspace, isLoading: workspaceLoading } = useGetWorkspace({ id: workspaceId });
+  const { data: workspacesRaw } = useChatWorkspaces();
 
   const filteredWorkspaces = workspaces?.filter((workspace) => workspace?._id !== workspaceId);
+  const kindById = new Map(workspacesRaw.map((w) => [w.id, w.kind ?? 'standard']));
+  const activeKind = kindById.get(String(workspaceId)) ?? 'standard';
 
   return (
     <DropdownMenu>
@@ -40,23 +44,33 @@ export const WorkspaceSwitcher = () => {
           className="cursor-pointer flex-col items-start justify-start capitalize"
         >
           {workspace?.name}
-
-          <span className="text-xs text-muted-foreground">Active workspace</span>
+          <span className="text-xs text-muted-foreground">
+            {activeKind === 'project_share' ? 'Shared project' : 'Active workspace'}
+          </span>
         </DropdownMenuItem>
 
-        {filteredWorkspaces?.map((workspace) => (
-          <DropdownMenuItem
-            key={workspace._id}
-            className="cursor-pointer overflow-hidden capitalize"
-            onClick={() => router.push(`/workspace/${workspace._id}`)}
-          >
-            <div className="relative mr-2 flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-[#616061] text-xl font-semibold text-white">
-              {workspace.name.charAt(0).toUpperCase()}
-            </div>
-            <p className="truncate">{workspace.name}</p>
-          </DropdownMenuItem>
-        ))}
+        {filteredWorkspaces?.map((item) => {
+          const kind = kindById.get(String(item._id)) ?? 'standard';
+          return (
+            <DropdownMenuItem
+              key={item._id}
+              className="cursor-pointer overflow-hidden capitalize"
+              onClick={() => router.push(`/workspace/${item._id}`)}
+            >
+              <div className="relative mr-2 flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-[#616061] text-xl font-semibold text-white">
+                {item.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate">{item.name}</p>
+                {kind === 'project_share' && (
+                  <p className="text-[10px] normal-case text-muted-foreground">Shared project</p>
+                )}
+              </div>
+            </DropdownMenuItem>
+          );
+        })}
 
+        <DropdownMenuSeparator />
         <DropdownMenuItem className="cursor-pointer" onClick={() => setOpen(true)}>
           <div className="relative mr-2 flex size-9 items-center justify-center overflow-hidden rounded-md bg-[#F2F2F2] text-xl font-semibold text-slate-800">
             <Plus />

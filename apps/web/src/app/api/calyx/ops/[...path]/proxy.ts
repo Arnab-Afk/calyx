@@ -16,11 +16,13 @@ function internalKey() {
   return process.env.CALYX_INTERNAL_API_KEY?.trim() || '';
 }
 
-async function authorizeWorkspaceAdmin(
+type ProjectScope = { projectId: string; projectSlug: string; hostWorkspaceId?: string };
+
+async function authorizeWorkspaceMember(
   request: NextRequest,
   workspaceId: string,
   token: string,
-): Promise<{ actorId: string } | NextResponse> {
+): Promise<{ actorId: string; projectScope: ProjectScope | null } | NextResponse> {
   const cookie = request.headers.get('cookie');
   if (!cookie) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
 
@@ -40,8 +42,8 @@ async function authorizeWorkspaceAdmin(
     return NextResponse.json({ error: 'Workspace membership required' }, { status: 403 });
   }
   const member = (await memberResponse.json().catch(() => null)) as { id?: string; role?: string } | null;
-  if (member?.role !== 'admin' || !member.id) {
-    return NextResponse.json({ error: 'Workspace admin access required' }, { status: 403 });
+  if (!member?.id) {
+    return NextResponse.json({ error: 'Workspace membership required' }, { status: 403 });
   }
 
   let tenantResponse: Response;
@@ -63,7 +65,43 @@ async function authorizeWorkspaceAdmin(
       { status: tenantResponse.status === 401 ? 503 : 403 },
     );
   }
-  return { actorId: `web:${workspaceId}:${member.id}` };
+  const authBody = (await tenantResponse.json().catch(() => null)) as {
+    projectScope?: ProjectScope | null;
+  } | null;
+
+  return {
+    actorId: `web:${workspaceId}:${member.id}`,
+    projectScope: authBody?.projectScope ?? null,
+  };
+}
+
+function projectPathAllowed(path: string[], scope: ProjectScope | null): boolean {
+  if (!scope) return true;
+  // Scoped workspaces cannot create new projects.
+  if (path.length === 1 && path[0] === 'projects') {
+    return true; // GET list filtered; POST blocked separately
+  }
+  if (path[0] !== 'projects' || path.length < 2) return true;
+  const idOrSlug = decodeURIComponent(path[1]);
+  return idOrSlug === scope.projectId || idOrSlug === scope.projectSlug;
+}
+
+function filterProjectsPayload(text: string, scope: ProjectScope): string {
+  try {
+    const data = JSON.parse(text) as { projects?: Array<{ id?: string; slug?: string }> } | Array<{ id?: string; slug?: string }>;
+    if (Array.isArray(data)) {
+      return JSON.stringify(data.filter((p) => p.id === scope.projectId || p.slug === scope.projectSlug));
+    }
+    if (data && Array.isArray(data.projects)) {
+      return JSON.stringify({
+        ...data,
+        projects: data.projects.filter((p) => p.id === scope.projectId || p.slug === scope.projectSlug),
+      });
+    }
+  } catch {
+    /* keep original */
+  }
+  return text;
 }
 
 export async function proxyOpsRequest(request: NextRequest, path: string[]) {
@@ -77,8 +115,16 @@ export async function proxyOpsRequest(request: NextRequest, path: string[]) {
   if (!workspaceId) {
     return NextResponse.json({ error: 'workspaceId is required' }, { status: 400 });
   }
-  const authorization = await authorizeWorkspaceAdmin(request, workspaceId, token);
+  const authorization = await authorizeWorkspaceMember(request, workspaceId, token);
   if (authorization instanceof NextResponse) return authorization;
+
+  const scope = authorization.projectScope;
+  if (scope && request.method === 'POST' && path.length === 1 && path[0] === 'projects') {
+    return NextResponse.json({ error: 'This shared project workspace cannot create new projects' }, { status: 403 });
+  }
+  if (!projectPathAllowed(path, scope)) {
+    return NextResponse.json({ error: 'Project is outside this workspace scope' }, { status: 403 });
+  }
 
   requestUrl.searchParams.delete('workspaceId');
   const suffix = path.join('/');
@@ -95,7 +141,16 @@ export async function proxyOpsRequest(request: NextRequest, path: string[]) {
 
   try {
     const upstream = await fetch(target, { method: request.method, headers, body });
-    const text = await upstream.text();
+    let text = await upstream.text();
+    if (
+      scope &&
+      request.method === 'GET' &&
+      path.length === 1 &&
+      path[0] === 'projects' &&
+      upstream.ok
+    ) {
+      text = filterProjectsPayload(text, scope);
+    }
     return new NextResponse(text, {
       status: upstream.status,
       headers: { 'Content-Type': upstream.headers.get('Content-Type') || 'application/json' },
