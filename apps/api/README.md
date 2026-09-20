@@ -52,6 +52,8 @@ Registration and login return a bearer token for CLI clients and also set an HTT
 | `GET` | `/v1/workspaces/:id/info` |
 | `POST` | `/v1/workspaces/:id/join-code` |
 | `GET` | `/v1/workspaces/:id/members` and `/v1/workspaces/:id/members/me` |
+| `POST` | `/v1/workspaces/:id/uploads` (multipart `file`, images up to 5 MiB) |
+| `GET` | `/v1/uploads/:id` (workspace-member authenticated) |
 | `GET/PATCH/DELETE` | `/v1/members/:id` |
 | `GET/POST` | `/v1/workspaces/:id/channels` |
 | `GET/PATCH/DELETE` | `/v1/channels/:id` |
@@ -78,6 +80,12 @@ Registration and login return a bearer token for CLI clients and also set an HTT
 | `CORS_ORIGINS` | local Next.js origins | Comma-separated; wildcard rejected in production |
 | `CALYX_ASK_URL` | unset | Node ingestion origin, for example `http://ingestion:3000` |
 | `CALYX_INTERNAL_API_KEY` | unset | Shared server-only key; must be configured with `CALYX_ASK_URL` |
+
+## Image uploads
+
+Upload JPEG, PNG, GIF, or WebP files as authenticated multipart requests. The API detects content from bytes, caps files at 5 MiB, and stores them under the canonical workspace. Message creation accepts `imageId`; arbitrary external image URLs and cross-workspace IDs are rejected. Reads require current workspace membership.
+
+The first-party v1 stores bounded images in shared PostgreSQL so multi-instance deployments remain correct without another required service. Move blobs to S3/R2 behind the same API before high-volume use.
 
 ## Trusted Calyx investigations
 

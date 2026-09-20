@@ -46,7 +46,7 @@ func New(db *pgxpool.Pool, authSvc *auth.Service, hub *realtime.Hub, corsOrigins
 	}
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.RealIP, middleware.Logger, middleware.Recoverer)
-	r.Use(maxRequestBody(1 << 20))
+	r.Use(maxRequestBody(1<<20, 6<<20))
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   strings.Split(corsOrigins, ","),
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
@@ -78,6 +78,8 @@ func New(db *pgxpool.Pool, authSvc *auth.Service, hub *realtime.Hub, corsOrigins
 			r.Post("/workspaces/{workspaceID}/join-code", s.rotateJoinCode)
 
 			r.Get("/workspaces/{workspaceID}/members", s.listMembers)
+			r.Post("/workspaces/{workspaceID}/uploads", s.createUpload)
+			r.Get("/uploads/{uploadID}", s.getUpload)
 			r.Get("/workspaces/{workspaceID}/members/me", s.currentMember)
 			r.Get("/members/{memberID}", s.getMember)
 			r.Patch("/members/{memberID}", s.updateMember)
@@ -113,9 +115,13 @@ type ctxKey string
 
 const userIDKey ctxKey = "userID"
 
-func maxRequestBody(limit int64) func(http.Handler) http.Handler {
+func maxRequestBody(defaultLimit, uploadLimit int64) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			limit := defaultLimit
+			if strings.Contains(r.URL.Path, "/uploads") {
+				limit = uploadLimit
+			}
 			r.Body = http.MaxBytesReader(w, r.Body, limit)
 			next.ServeHTTP(w, r)
 		})
@@ -743,7 +749,7 @@ func (s *Server) createMessage(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Body            string  `json:"body"`
 		ParentMessageID *string `json:"parentMessageId"`
-		ImageURL        *string `json:"imageUrl"`
+		ImageID         *string `json:"imageId"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid json")
@@ -767,12 +773,17 @@ func (s *Server) createMessage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	imageURL, err := s.uploadURL(r, wsID, body.ImageID)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	row := s.db.QueryRow(r.Context(),
 		`INSERT INTO chat_messages (body, member_id, workspace_id, channel_id, parent_message_id, image_url, calyx_data)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7)
 		 RETURNING id::text, body, member_id::text, workspace_id::text, channel_id::text,
 		           parent_message_id::text, conversation_id::text, image_url, calyx_data, created_at, updated_at`,
-		body.Body, mem.ID, wsID, channelID, body.ParentMessageID, body.ImageURL, nil,
+		body.Body, mem.ID, wsID, channelID, body.ParentMessageID, imageURL, nil,
 	)
 	msg, err := scanMessage(row)
 	if err != nil {

@@ -85,6 +85,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS chat_conversations_pair
     GREATEST(member_one_id, member_two_id)
   );
 
+CREATE TABLE IF NOT EXISTS chat_uploads (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES chat_workspaces(id) ON DELETE CASCADE,
+  member_id    UUID NOT NULL REFERENCES chat_members(id) ON DELETE CASCADE,
+  content_type TEXT NOT NULL,
+  size_bytes   INTEGER NOT NULL CHECK (size_bytes > 0 AND size_bytes <= 5242880),
+  data         BYTEA NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS chat_uploads_workspace ON chat_uploads (workspace_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS chat_messages (
   id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   body               TEXT NOT NULL,

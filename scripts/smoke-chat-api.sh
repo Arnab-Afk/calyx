@@ -36,5 +36,18 @@ MSG=$(curl -sf -X POST "$BASE/v1/channels/$CH_ID/messages" \
 MSG_ID=$(echo "$MSG" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
 echo "message $MSG_ID"
 curl -sf "$BASE/v1/messages/$MSG_ID" -H "Authorization: Bearer $TOKEN" >/dev/null
+
+PNG=$(mktemp)
+trap 'rm -f "$PNG"' EXIT
+printf 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=' | base64 -d > "$PNG"
+UPLOAD=$(curl -sf -X POST "$BASE/v1/workspaces/$WS_ID/uploads" \
+  -H "Authorization: Bearer $TOKEN" -F "file=@$PNG;type=image/png")
+UPLOAD_ID=$(echo "$UPLOAD" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+UPLOAD_URL=$(echo "$UPLOAD" | python3 -c "import sys,json; print(json.load(sys.stdin)['url'])")
+curl -sf -X POST "$BASE/v1/channels/$CH_ID/messages" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d "{\"body\":\"image smoke\",\"imageId\":\"$UPLOAD_ID\"}" >/dev/null
+curl -sf "$BASE$UPLOAD_URL" -H "Authorization: Bearer $TOKEN" >/dev/null
+
 curl -sf -X DELETE "$BASE/v1/workspaces/$WS_ID" -H "Authorization: Bearer $TOKEN" >/dev/null
 echo "OK"
