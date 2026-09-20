@@ -1,0 +1,93 @@
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+CREATE TABLE IF NOT EXISTS chat_users (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email         TEXT NOT NULL UNIQUE,
+  name          TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  image         TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS chat_workspaces (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name       TEXT NOT NULL,
+  join_code  TEXT NOT NULL,
+  owner_id   UUID NOT NULL REFERENCES chat_users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS chat_workspaces_owner ON chat_workspaces (owner_id);
+CREATE UNIQUE INDEX IF NOT EXISTS chat_workspaces_join_code ON chat_workspaces (join_code);
+
+CREATE TABLE IF NOT EXISTS chat_members (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id      UUID NOT NULL REFERENCES chat_users(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES chat_workspaces(id) ON DELETE CASCADE,
+  role         TEXT NOT NULL CHECK (role IN ('admin','member')),
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (workspace_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS chat_members_user ON chat_members (user_id);
+CREATE INDEX IF NOT EXISTS chat_members_workspace ON chat_members (workspace_id);
+
+CREATE TABLE IF NOT EXISTS chat_channels (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name         TEXT NOT NULL,
+  workspace_id UUID NOT NULL REFERENCES chat_workspaces(id) ON DELETE CASCADE,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (workspace_id, name)
+);
+CREATE INDEX IF NOT EXISTS chat_channels_workspace ON chat_channels (workspace_id);
+
+CREATE TABLE IF NOT EXISTS chat_conversations (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id  UUID NOT NULL REFERENCES chat_workspaces(id) ON DELETE CASCADE,
+  member_one_id UUID NOT NULL REFERENCES chat_members(id) ON DELETE CASCADE,
+  member_two_id UUID NOT NULL REFERENCES chat_members(id) ON DELETE CASCADE,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS chat_conversations_workspace ON chat_conversations (workspace_id);
+CREATE UNIQUE INDEX IF NOT EXISTS chat_conversations_pair
+  ON chat_conversations (
+    workspace_id,
+    LEAST(member_one_id, member_two_id),
+    GREATEST(member_one_id, member_two_id)
+  );
+
+CREATE TABLE IF NOT EXISTS chat_uploads (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES chat_workspaces(id) ON DELETE CASCADE,
+  member_id    UUID NOT NULL REFERENCES chat_members(id) ON DELETE CASCADE,
+  content_type TEXT NOT NULL,
+  size_bytes   INTEGER NOT NULL CHECK (size_bytes > 0 AND size_bytes <= 5242880),
+  data         BYTEA NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS chat_uploads_workspace ON chat_uploads (workspace_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  body               TEXT NOT NULL,
+  member_id          UUID NOT NULL REFERENCES chat_members(id) ON DELETE CASCADE,
+  workspace_id       UUID NOT NULL REFERENCES chat_workspaces(id) ON DELETE CASCADE,
+  channel_id         UUID REFERENCES chat_channels(id) ON DELETE CASCADE,
+  parent_message_id  UUID REFERENCES chat_messages(id) ON DELETE CASCADE,
+  conversation_id    UUID REFERENCES chat_conversations(id) ON DELETE CASCADE,
+  image_url          TEXT,
+  calyx_data         JSONB,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS chat_messages_channel_time ON chat_messages (channel_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS chat_messages_parent ON chat_messages (parent_message_id);
+CREATE INDEX IF NOT EXISTS chat_messages_workspace ON chat_messages (workspace_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS chat_reactions (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES chat_workspaces(id) ON DELETE CASCADE,
+  message_id   UUID NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+  member_id    UUID NOT NULL REFERENCES chat_members(id) ON DELETE CASCADE,
+  value        TEXT NOT NULL,
+  UNIQUE (message_id, member_id, value)
+);
+CREATE INDEX IF NOT EXISTS chat_reactions_message ON chat_reactions (message_id);

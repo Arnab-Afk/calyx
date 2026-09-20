@@ -161,12 +161,25 @@ services:
         condition: service_healthy
 
   # Go chat API — Convex replacement for auth/workspaces/channels/messages
+  chat-migrate:
+    profiles: ["chat"]
+    build:
+      context: ./apps/api
+    entrypoint: ["/app/calyx-migrate"]
+    environment:
+      DATABASE_URL: postgres://calyx:calyx@postgres:5432/calyx
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   chat-api:
     profiles: ["chat"]
     build:
       context: ./apps/api
     environment:
       DATABASE_URL: postgres://calyx:calyx@postgres:5432/calyx
+      REDIS_URL: redis://redis:6379
       ADDR: ":14000"
       APP_ENV: ${APP_ENV:-development}
       JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-calyx-chat-api}
@@ -178,7 +191,9 @@ services:
     ports:
       - "14000:14000"
     depends_on:
-      postgres:
+      chat-migrate:
+        condition: service_completed_successfully
+      redis:
         condition: service_healthy
     healthcheck:
       test:

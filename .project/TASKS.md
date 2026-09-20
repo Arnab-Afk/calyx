@@ -4,11 +4,11 @@
 
 ## In progress
 
-- [ ] Add shared Go realtime pub/sub and versioned database migrations.
+- [ ] Move workspace image storage from PostgreSQL to S3/R2.
 
 ## Next
 
-- [ ] Move workspace image storage from PostgreSQL to S3/R2.
+- [ ] Run end-to-end production deployment and recovery smoke tests.
 
 ## Backlog
 
@@ -17,6 +17,7 @@
 
 ## Done
 
+- [x] Add shared Redis-backed Go realtime fan-out and versioned database migrations — 2026-09-20
 - [x] Add GitHub App installation state, repository validation, and automatic webhook provisioning — 2026-09-20
 - [x] Add durable coding-agent jobs, bounded repository access, callbacks, and draft pull-request creation — 2026-09-20
 - [x] Replace the web approval card’s local state with authenticated tenant-scoped remediation APIs — 2026-09-20
