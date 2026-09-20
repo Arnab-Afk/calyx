@@ -1,89 +1,62 @@
 # Calyx Web
 
-Slack-style workspace UI for Calyx. Chat stays familiar; Calyx AI replies can include Grafana-like charts from observability data.
+Slack-style workspace UI backed by the first-party Go chat API. The browser uses HTTP-only session cookies; workspace identity and observability tenant mapping are always resolved server-side.
 
-> **Migration status:** existing screens still use Convex while they are moved in vertical slices. The first-party Go client, HTTP-only session provider, and workspace API hooks are now available for migration. New chat features should target [`../api`](../api), not add Convex functions. The current Convex instructions remain valid until screen cutover lands.
+## Prerequisites
 
-## Run on any machine
+- Node 20+ and `pnpm`
+- PostgreSQL and the Go API from [`../api`](../api)
+- Node ingestion service for trusted `/calyx` investigations and MCP credential administration
 
-### Prerequisites
-- Node 20+ (or 24) and `pnpm`
-- A Convex account ([dashboard.convex.dev](https://dashboard.convex.dev))
-- Optional: Calyx backend reachable for `/calyx` asks (`CALYX_API_URL`)
+## Local setup
 
-### 1. Clone and install
+From the repository root:
+
 ```bash
-git clone https://github.com/Arnab-Afk/calyx.git
-cd calyx/apps/web
+docker compose up -d postgres redis
+DATABASE_URL=postgres://calyx:calyx@localhost:15432/calyx npm run migrate
+docker compose --profile chat up -d --build chat-api
+```
+
+Configure the web app:
+
+```bash
+cd apps/web
+cp .env.example .env.local
 pnpm install
+pnpm dev
 ```
 
-### 2. Link Convex (first time on this machine)
-```bash
-pnpm exec convex login
-pnpm exec convex dev
-```
-When prompted, pick the existing project (**slacktry** / team **arnab-bhowmik**) or create a new one.  
-This writes into `.env.local`:
-- `NEXT_PUBLIC_CONVEX_URL`
-- `CONVEX_DEPLOYMENT`
-- `NEXT_PUBLIC_CONVEX_SITE_URL`
+The default values expect:
 
-Leave `convex dev` running in this terminal (or re-run it whenever you change `convex/`).
+- Web: `http://localhost:3000`
+- Go chat API: `http://localhost:14000`
+- Hosted MCP: `http://localhost:13002/mcp`
 
-### 3. Auth keys (once per Convex deployment)
-```bash
-node node_modules/@convex-dev/auth/dist/bin.cjs \
-  --skip-git-check \
-  --web-server-url 'http://localhost:3000'
+## Go-to-Node trusted boundary
 
-# If the UI is served on a public host instead:
-# --web-server-url 'https://calyx.arnabbhowmik.in'
-pnpm exec convex env set SITE_URL "http://localhost:3000"
-```
-Confirm: `pnpm exec convex env list` shows `JWT_PRIVATE_KEY`, `JWKS`, `SITE_URL`.
-
-### 4. App env
-```bash
-cat >> .env.local <<'EOF'
-NEXT_PUBLIC_CALYX_CHAT_URL=http://localhost:14000
-CALYX_API_URL=http://127.0.0.1:13000
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-NEXT_PUBLIC_CALYX_MCP_URL=http://localhost:13002/mcp
-EOF
-```
-
-MCP credential management and `/calyx` investigations run through authenticated server-side workspace calls. Give Convex the backend URL and the same service-to-service secret configured as `CALYX_INTERNAL_API_KEY` on the Calyx ingestion service:
+Configure the same server-only key on Go and Node:
 
 ```bash
-INTERNAL_KEY="$(openssl rand -hex 32)"
-pnpm exec convex env set CALYX_API_URL "https://your-calyx-backend.example.com"
-pnpm exec convex env set CALYX_INTERNAL_API_KEY "$INTERNAL_KEY"
-# Put the same INTERNAL_KEY in the root Calyx .env as CALYX_INTERNAL_API_KEY.
+CALYX_INTERNAL_API_KEY="$(openssl rand -hex 32)"
+CALYX_ASK_URL=http://localhost:13000
 ```
 
-Before the connector screen can issue credentials, link the Convex workspace ID to its canonical observability tenant from an operator environment:
+Never expose `CALYX_INTERNAL_API_KEY` through a `NEXT_PUBLIC_` variable. Go verifies the user session and workspace-admin membership before proxying MCP credential operations. Node resolves the workspace's canonical observability tenant.
+
+Before using `/calyx` or issuing connector credentials, link the Go workspace UUID to a tenant:
 
 ```bash
 DATABASE_URL=postgres://calyx:calyx@localhost:15432/calyx \
-  npm run mcp:workspace-link -- --workspace <convex-workspace-id> --tenant <calyx-tenant-id>
+  npm run mcp:workspace-link -- --workspace <workspace-uuid> --tenant <tenant-id>
 ```
 
-For a hosted Convex deployment, `CALYX_API_URL` must be a reachable HTTPS URL. Never expose `CALYX_INTERNAL_API_KEY` through a `NEXT_PUBLIC_` variable.
-Point `CALYX_API_URL` at wherever Calyx ingestion runs (local Docker or remote).
+## Validation
 
-### 5. Start Next.js (second terminal)
 ```bash
-pnpm dev
-# http://localhost:3000
+pnpm exec tsc --noEmit
+pnpm exec eslint src
+NEXT_PUBLIC_CALYX_CHAT_URL=http://localhost:14000 pnpm build
 ```
 
-### 6. Sign up
-Open `/auth` → **Sign up** with email + password (Google/GitHub optional).
-
-Ask Calyx in a channel: `/calyx why are errors spiking?`
-
-## Notes
-- Do **not** commit `.env.local`.
-- Same Convex project can be shared across machines via `convex login` + existing project.
-- Charts register Chart.js scales before first paint; hard-refresh if an old tab still errors.
+Do not commit `.env.local` or service credentials.

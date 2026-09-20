@@ -8,13 +8,10 @@ import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import type { Id } from '@/../convex/_generated/dataModel';
-import { useCalyxAsk } from '@/components/calyx/use-calyx-ask';
 import { useCreateMessage } from '@/features/messages/api/use-create-message';
-import { useGenerateUploadUrl } from '@/features/upload/api/use-generate-upload-url';
 import { useChannelId } from '@/hooks/use-channel-id';
 import { useWorkspaceId } from '@/hooks/use-workspace-id';
 import { chatApi, uploadChatImage } from '@/lib/chat-api';
-import { isGoChatBackend } from '@/lib/chat-backend';
 
 const Editor = dynamic(() => import('@/components/editor'), {
   ssr: false,
@@ -34,14 +31,6 @@ type CreateMessageValues = {
   workspaceId: Id<'workspaces'>;
   body: string;
   image?: Id<'_storage'>;
-  calyxData?: {
-    query: string;
-    answer: string;
-    chartType?: string;
-    chartData?: string;
-    toolNames: string[];
-    tenantId: string;
-  };
 };
 
 // Extract plain text from a Quill delta JSON string
@@ -68,8 +57,6 @@ export const ChatInput = ({ placeholder }: ChatInputProps) => {
   const channelId = useChannelId();
 
   const { mutate: createMessage } = useCreateMessage();
-  const { mutate: generateUploadUrl } = useGenerateUploadUrl();
-  const { ask, buildCalyxData } = useCalyxAsk(workspaceId);
 
   const handleSubmit = async ({ body, image }: { body: string; image: File | null }) => {
     try {
@@ -87,45 +74,9 @@ export const ChatInput = ({ placeholder }: ChatInputProps) => {
           return;
         }
 
-        if (isGoChatBackend) {
-          setEditorKey((k) => k + 1);
-          setIsCalyxThinking(true);
-          await chatApi.askCalyx(String(channelId), query);
-          setIsCalyxThinking(false);
-          return;
-        }
-
-        // Post user's question first
-        await createMessage({ channelId, workspaceId, body }, { throwError: true });
         setEditorKey((k) => k + 1);
-
-        // Now run the agent (show thinking indicator)
         setIsCalyxThinking(true);
-        const result = await ask(query);
-        setIsCalyxThinking(false);
-
-        if (!result) {
-          toast.error('Calyx could not answer that question. Is the Calyx server running?');
-          return;
-        }
-
-        const calyxData = buildCalyxData(query, result);
-
-        // Post the Calyx bot response as a special message
-        // body is a minimal Quill delta so it renders gracefully if calyxData is stripped
-        const botBody = JSON.stringify({
-          ops: [{ insert: `[Calyx] ${calyxData.answer.slice(0, 200)}${calyxData.answer.length > 200 ? '…' : ''}` }],
-        });
-
-        await createMessage(
-          {
-            channelId,
-            workspaceId,
-            body: botBody,
-            calyxData,
-          } as CreateMessageValues,
-          { throwError: true },
-        );
+        await chatApi.askCalyx(String(channelId), query);
         return;
       }
 
@@ -138,23 +89,8 @@ export const ChatInput = ({ placeholder }: ChatInputProps) => {
       };
 
       if (image) {
-        if (isGoChatBackend) {
-          const upload = await uploadChatImage(String(workspaceId), image);
-          values.image = upload.id as Id<'_storage'>;
-        } else {
-          const url = await generateUploadUrl({}, { throwError: true });
-          if (!url) throw new Error('URL not found.');
-
-          const result = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-type': image.type },
-            body: image,
-          });
-
-          if (!result.ok) throw new Error('Failed to upload image.');
-          const { storageId } = await result.json();
-          values.image = storageId;
-        }
+        const upload = await uploadChatImage(String(workspaceId), image);
+        values.image = upload.id as Id<'_storage'>;
       }
 
       await createMessage(values, { throwError: true });

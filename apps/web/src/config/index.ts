@@ -8,7 +8,6 @@ export const siteConfig: Metadata = {
     'calyx',
     'observability',
     'nextjs',
-    'convex',
     'real-time-messaging',
     'typescript',
   ] as Array<string>,

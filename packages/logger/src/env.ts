@@ -8,8 +8,8 @@ function readEnv(): EnvBag {
   const out: EnvBag = {};
 
   try {
-    const meta = import.meta as ImportMeta & { env?: EnvBag };
-    if (meta.env) Object.assign(out, meta.env);
+    const metaEnv = (import.meta as ImportMeta & { env?: EnvBag }).env;
+    if (metaEnv) Object.assign(out, metaEnv);
   } catch {
     /* ignore */
   }
