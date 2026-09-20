@@ -14,6 +14,7 @@ export type RemediationStatus =
 export interface RemediationRequest {
   id: string;
   tenantId: string;
+  incidentId?: string;
   actionName: string;
   params: unknown;
   tier: ApprovalTier;
@@ -36,6 +37,7 @@ export interface RemediationRequest {
 interface RequestRow {
   id: string;
   tenant_id: string;
+  incident_id: string | null;
   action_name: string;
   params: unknown;
   tier: ApprovalTier;
@@ -59,6 +61,7 @@ function mapRequest(row: RequestRow): RemediationRequest {
   return {
     id: row.id,
     tenantId: row.tenant_id,
+    ...(row.incident_id && { incidentId: row.incident_id }),
     actionName: row.action_name,
     params: row.params,
     tier: row.tier,
@@ -79,7 +82,7 @@ function mapRequest(row: RequestRow): RemediationRequest {
   };
 }
 
-const columns = `id, tenant_id, action_name, params, tier, reversible, status, proposed_by,
+const columns = `id, tenant_id, incident_id, action_name, params, tier, reversible, status, proposed_by,
   dry_run_result, execute_result, undo_result, approved_by, approval_reason,
   rejected_by, rejection_reason, created_at, decided_at, executed_at, undone_at`;
 
@@ -109,7 +112,9 @@ async function appendEvent(
 }
 
 export async function createRemediationRequest(input: {
+  id: string;
   tenantId: string;
+  incidentId?: string;
   actionName: string;
   params: unknown;
   tier: ApprovalTier;
@@ -121,13 +126,25 @@ export async function createRemediationRequest(input: {
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
+    if (input.incidentId) {
+      const incident = await client.query(
+        "SELECT 1 FROM incidents WHERE id=$1 AND tenant_id=$2",
+        [input.incidentId, input.tenantId],
+      );
+      if (!incident.rows[0]) {
+        throw new Error(`Incident not found for tenant: ${input.incidentId}`);
+      }
+    }
     const result = await client.query<RequestRow>(
       `INSERT INTO remediation_requests
-         (tenant_id, action_name, params, tier, reversible, status, proposed_by, dry_run_result)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         (id, tenant_id, incident_id, action_name, params, tier, reversible, status, proposed_by, dry_run_result)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       ON CONFLICT DO NOTHING
        RETURNING ${columns}`,
       [
+        input.id,
         input.tenantId,
+        input.incidentId ?? null,
         input.actionName,
         input.params,
         input.tier,
@@ -137,6 +154,22 @@ export async function createRemediationRequest(input: {
         input.dryRunResult,
       ],
     );
+    if (!result.rows[0]) {
+      const existing = input.incidentId
+        ? await client.query<RequestRow>(
+            `SELECT ${columns} FROM remediation_requests
+             WHERE tenant_id=$1 AND incident_id=$2 AND action_name=$3 AND params=$4
+               AND status IN ('pending','executing')
+             ORDER BY created_at ASC LIMIT 1`,
+            [input.tenantId, input.incidentId, input.actionName, input.params],
+          )
+        : null;
+      if (!existing?.rows[0]) {
+        throw new Error("Could not create remediation request");
+      }
+      await client.query("COMMIT");
+      return mapRequest(existing.rows[0]);
+    }
     const request = mapRequest(result.rows[0]);
     await appendEvent(client, {
       requestId: request.id,
@@ -162,6 +195,22 @@ export async function createRemediationRequest(input: {
   } finally {
     client.release();
   }
+}
+
+export async function findActiveRemediation(input: {
+  tenantId: string;
+  incidentId: string;
+  actionName: string;
+  params: unknown;
+}): Promise<RemediationRequest | null> {
+  const result = await getPool().query<RequestRow>(
+    `SELECT ${columns} FROM remediation_requests
+     WHERE tenant_id=$1 AND incident_id=$2 AND action_name=$3 AND params=$4
+       AND status IN ('pending','executing')
+     ORDER BY created_at ASC LIMIT 1`,
+    [input.tenantId, input.incidentId, input.actionName, input.params],
+  );
+  return result.rows[0] ? mapRequest(result.rows[0]) : null;
 }
 
 export async function getRemediationRequest(

@@ -15,10 +15,15 @@ export interface AgentRunOptions {
   model?: string;
   /** Prevent wrapper tools such as `ask` from recursively invoking themselves. */
   excludeTools?: string[];
+  /** Server-derived identity attached to mutation tool calls. */
+  actorId?: string;
 }
 
 function looksLikeNvidiaModel(model: string): boolean {
-  return /^(nvidia|meta|mistralai|moonshotai)\//.test(model) || /nemotron/i.test(model);
+  return (
+    /^(nvidia|meta|mistralai|moonshotai)\//.test(model) ||
+    /nemotron/i.test(model)
+  );
 }
 
 export function agentProvider(override?: AgentProvider): AgentProvider {
@@ -57,17 +62,27 @@ export async function runAgent(
   systemPrompt?: string,
   systemSuffix?: string,
   maxTokens = 4096,
-  options?: AgentRunOptions
+  options?: AgentRunOptions,
 ): Promise<AgentResponse> {
   if (agentProvider(options?.provider) === "nvidia") {
-    return runNvidiaAgent(tenantId, userMessage, systemPrompt, systemSuffix, maxTokens, options?.excludeTools);
+    return runNvidiaAgent(
+      tenantId,
+      userMessage,
+      systemPrompt,
+      systemSuffix,
+      maxTokens,
+      options?.excludeTools,
+      options?.actorId,
+    );
   }
 
   const model = anthropicModel(options?.model);
   const useAdaptiveThinking = !/haiku/i.test(model);
   const client = new Anthropic();
   const excludedTools = new Set(["ask", ...(options?.excludeTools ?? [])]);
-  const tools = getAllTools().filter((tool) => !excludedTools.has(tool.name)).map(toApiTool);
+  const tools = getAllTools()
+    .filter((tool) => !excludedTools.has(tool.name))
+    .map(toApiTool);
 
   const base =
     systemPrompt ??
@@ -76,7 +91,8 @@ happening in their production systems by analyzing logs and metrics. The tenant 
 assisting has tenant_id: "${tenantId}". Always use this tenant_id when calling tools.
 
 When you cannot find data, say so clearly rather than guessing. When you do find data,
-cite specific numbers and service names from the tool results.`;
+cite specific numbers and service names from the tool results. Never call a mutation or
+remediation proposal tool unless the user explicitly asked you to prepare that action.`;
 
   const system = systemSuffix ? `${base}\n${systemSuffix}` : base;
 
@@ -93,7 +109,9 @@ cite specific numbers and service names from the tool results.`;
     const response = await client.messages.create({
       model,
       max_tokens: maxTokens,
-      ...(useAdaptiveThinking ? { thinking: { type: "adaptive" as const } } : {}),
+      ...(useAdaptiveThinking
+        ? { thinking: { type: "adaptive" as const } }
+        : {}),
       system,
       tools,
       messages,
@@ -108,12 +126,16 @@ cite specific numbers and service names from the tool results.`;
       messages.push({ role: "assistant", content: response.content });
 
       const toolUseBlocks = response.content.filter(
-        (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
+        (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
       );
 
       const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
         toolUseBlocks.map(async (block) => {
-          const input = { ...(block.input as ToolInput), tenant_id: tenantId };
+          const input = {
+            ...(block.input as ToolInput),
+            tenant_id: tenantId,
+            ...(options?.actorId && { actor_id: options.actorId }),
+          };
           const result = await executeTool(block.name, input);
           const record: ToolCallRecord = {
             toolName: block.name,
@@ -133,7 +155,7 @@ cite specific numbers and service names from the tool results.`;
               : JSON.stringify({ error: result.error }),
             is_error: !result.ok,
           };
-        })
+        }),
       );
 
       messages.push({ role: "user", content: toolResults });

@@ -1,4 +1,6 @@
+import crypto from "node:crypto";
 import { getActionRegistry } from "./registry.js";
+import { getIncident } from "../storage/incidents.js";
 import { decide } from "./policy.js";
 import {
   claimApprovedRemediation,
@@ -6,6 +8,7 @@ import {
   completeRemediation,
   completeUndo,
   createRemediationRequest,
+  findActiveRemediation,
   getRemediationRequest,
   rejectRemediation,
   type RemediationRequest,
@@ -16,6 +19,7 @@ export interface ProposeActionRequest {
   actionName: string;
   params: unknown;
   proposedBy: string;
+  incidentId?: string;
 }
 
 export interface ActionTransitionResponse {
@@ -29,10 +33,42 @@ export async function proposeAction(
 ): Promise<ActionTransitionResponse> {
   const action = getActionRegistry().get(input.actionName);
   if (!action) throw new Error(`Unknown action: ${input.actionName}`);
+  if (
+    input.incidentId &&
+    !(await getIncident(input.tenantId, input.incidentId))
+  ) {
+    throw new Error(`Incident not found for tenant: ${input.incidentId}`);
+  }
+  if (input.incidentId) {
+    const existing = await findActiveRemediation({
+      tenantId: input.tenantId,
+      incidentId: input.incidentId,
+      actionName: input.actionName,
+      params: input.params,
+    });
+    if (existing) {
+      return {
+        request: existing,
+        executed: false,
+        message: "An equivalent remediation is already awaiting a decision.",
+      };
+    }
+  }
 
-  const dryRunResult = await action.dry_run(input.params);
+  const requestId = crypto.randomUUID();
+  const context = { tenantId: input.tenantId, requestId };
+  let dryRunResult;
+  try {
+    dryRunResult = await action.dry_run(input.params, context);
+  } catch (error) {
+    dryRunResult = {
+      success: false,
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
   const decision = decide(input.tenantId, action);
   const request = await createRemediationRequest({
+    id: requestId,
     tenantId: input.tenantId,
     actionName: action.name,
     params: input.params,
@@ -40,6 +76,7 @@ export async function proposeAction(
     reversible: action.reversible,
     proposedBy: input.proposedBy,
     dryRunResult,
+    incidentId: input.incidentId,
     initialStatus: dryRunResult.success ? "pending" : "failed",
   });
 
@@ -83,7 +120,10 @@ export async function approveAction(input: {
 
   let result;
   try {
-    result = await action.execute(request.params);
+    result = await action.execute(request.params, {
+      tenantId: request.tenantId,
+      requestId: request.id,
+    });
   } catch (error) {
     result = {
       success: false,
@@ -147,7 +187,10 @@ export async function undoAction(input: {
 
   let result;
   try {
-    result = await action.undo(request.params, request.executeResult);
+    result = await action.undo(request.params, request.executeResult, {
+      tenantId: request.tenantId,
+      requestId: request.id,
+    });
   } catch (error) {
     result = {
       success: false,

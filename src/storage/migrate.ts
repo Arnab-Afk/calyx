@@ -261,6 +261,7 @@ CREATE INDEX IF NOT EXISTS audit_events_tenant_time
 CREATE TABLE IF NOT EXISTS remediation_requests (
   id              UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   tenant_id       TEXT        NOT NULL,
+  incident_id     UUID        REFERENCES incidents(id) ON DELETE SET NULL,
   action_name     TEXT        NOT NULL,
   params          JSONB       NOT NULL,
   tier            TEXT        NOT NULL CHECK (tier IN ('0','1','2')),
@@ -281,8 +282,16 @@ CREATE TABLE IF NOT EXISTS remediation_requests (
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE remediation_requests ADD COLUMN IF NOT EXISTS incident_id UUID REFERENCES incidents(id) ON DELETE SET NULL;
+
 CREATE INDEX IF NOT EXISTS remediation_requests_tenant_time
   ON remediation_requests (tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS remediation_requests_incident
+  ON remediation_requests (tenant_id, incident_id, created_at DESC)
+  WHERE incident_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS remediation_requests_active_proposal
+  ON remediation_requests (tenant_id, incident_id, action_name, MD5(params::TEXT))
+  WHERE incident_id IS NOT NULL AND status IN ('pending','executing');
 CREATE INDEX IF NOT EXISTS remediation_requests_pending
   ON remediation_requests (created_at ASC) WHERE status = 'pending';
 
@@ -301,6 +310,28 @@ CREATE INDEX IF NOT EXISTS remediation_events_request_time
   ON remediation_events (request_id, created_at ASC);
 CREATE INDEX IF NOT EXISTS remediation_events_tenant_time
   ON remediation_events (tenant_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS remediation_deliveries (
+  id            UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  tenant_id     TEXT        NOT NULL,
+  request_id    UUID        NOT NULL REFERENCES remediation_requests(id) ON DELETE CASCADE,
+  destination   TEXT        NOT NULL CHECK (destination = 'slack'),
+  target        TEXT        NOT NULL,
+  thread_ts     TEXT        NOT NULL,
+  status        TEXT        NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','processing','delivered','failed')),
+  attempts      INTEGER     NOT NULL DEFAULT 0,
+  available_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  external_id   TEXT,
+  last_error    TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  delivered_at  TIMESTAMPTZ,
+  CONSTRAINT remediation_delivery_once UNIQUE (request_id, destination, target, thread_ts)
+);
+
+CREATE INDEX IF NOT EXISTS remediation_deliveries_pending
+  ON remediation_deliveries (available_at ASC)
+  WHERE status IN ('pending','failed');
 
 CREATE TABLE IF NOT EXISTS mcp_rate_limits (
   credential_id UUID        NOT NULL REFERENCES mcp_api_keys(id) ON DELETE CASCADE,

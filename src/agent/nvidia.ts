@@ -3,7 +3,8 @@ import { toOpenAiTool } from "../schemas/index.js";
 import type { ToolInput } from "../schemas/index.js";
 import type { AgentResponse, ToolCallRecord } from "./loop.js";
 
-const NVIDIA_BASE = process.env.NVIDIA_BASE_URL ?? "https://integrate.api.nvidia.com/v1";
+const NVIDIA_BASE =
+  process.env.NVIDIA_BASE_URL ?? "https://integrate.api.nvidia.com/v1";
 function nvidiaModel(): string {
   const model = process.env.CALYX_MODEL;
   if (model && !/^claude|^haiku/i.test(model)) return model;
@@ -53,8 +54,9 @@ function reasoningBudget(): number {
 }
 
 function extractAnswer(
-  message: { content?: string | null; reasoning_content?: string | null } | undefined,
-  finish: string
+  message:
+    { content?: string | null; reasoning_content?: string | null } | undefined,
+  finish: string,
 ): string {
   const content = (message?.content ?? "").trim();
   const reasoning = (message?.reasoning_content ?? "").trim();
@@ -69,7 +71,11 @@ function extractAnswer(
   return content;
 }
 
-async function chat(messages: ChatMessage[], maxTokens: number, excludedTools: Set<string>): Promise<ChatCompletion> {
+async function chat(
+  messages: ChatMessage[],
+  maxTokens: number,
+  excludedTools: Set<string>,
+): Promise<ChatCompletion> {
   const thinking = thinkingEnabled();
   const budget = reasoningBudget();
   // Thinking tokens count against max_tokens; Slack's 400/800 will starve the answer.
@@ -81,7 +87,9 @@ async function chat(messages: ChatMessage[], maxTokens: number, excludedTools: S
     max_tokens: tokenCap,
     temperature: 1,
     top_p: 0.95,
-    tools: getAllTools().filter((tool) => !excludedTools.has(tool.name)).map(toOpenAiTool),
+    tools: getAllTools()
+      .filter((tool) => !excludedTools.has(tool.name))
+      .map(toOpenAiTool),
     tool_choice: "auto",
     chat_template_kwargs: { enable_thinking: thinking },
   };
@@ -101,12 +109,15 @@ async function chat(messages: ChatMessage[], maxTokens: number, excludedTools: S
   try {
     parsed = JSON.parse(text) as ChatCompletion;
   } catch {
-    throw new Error(`NVIDIA NIM returned non-JSON (${res.status}): ${text.slice(0, 200)}`);
+    throw new Error(
+      `NVIDIA NIM returned non-JSON (${res.status}): ${text.slice(0, 200)}`,
+    );
   }
 
   if (!res.ok) {
     const err = parsed.error;
-    const msg = typeof err === "string" ? err : err?.message ?? text.slice(0, 200);
+    const msg =
+      typeof err === "string" ? err : (err?.message ?? text.slice(0, 200));
     throw new Error(`NVIDIA NIM ${res.status}: ${msg}`);
   }
 
@@ -127,7 +138,8 @@ export async function runNvidiaAgent(
   systemPrompt?: string,
   systemSuffix?: string,
   maxTokens = 4096,
-  excludeTools: string[] = []
+  excludeTools: string[] = [],
+  actorId?: string,
 ): Promise<AgentResponse> {
   const base =
     systemPrompt ??
@@ -165,7 +177,11 @@ cite specific numbers and service names from the tool results.`;
       });
 
       for (const call of toolCalls) {
-        const input = { ...parseArgs(call.function.arguments), tenant_id: tenantId };
+        const input = {
+          ...parseArgs(call.function.arguments),
+          tenant_id: tenantId,
+          ...(actorId && { actor_id: actorId }),
+        };
         const result = await executeTool(call.function.name, input);
         const record: ToolCallRecord = {
           toolName: call.function.name,

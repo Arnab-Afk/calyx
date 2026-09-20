@@ -4,7 +4,7 @@
 
 ## In progress
 
-- [ ] Connect durable remediation proposals to live incidents and a customer-side operator.
+- [ ] Replace the web approval card’s local state with authenticated remediation APIs.
 
 ## Next
 
@@ -18,6 +18,7 @@
 
 ## Done
 
+- [x] Connect incident recommendations to a signed customer-side operator and durable Slack approval delivery — 2026-09-20
 - [x] Replace caller-asserted remediation approval with durable requests and immutable transition events — 2026-09-20
 - [x] Make Go the sole web auth/data backend and remove active Convex runtime paths — 2026-09-20
 - [x] Reconnect MCP credential administration through authenticated Go workspace identity — 2026-09-20

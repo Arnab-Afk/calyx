@@ -301,3 +301,23 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Because.** The action parameters and tenant must come from the persisted proposal, and an atomic `pending → executing` transition guarantees that concurrent approvals cannot both run the action.
 
 **Consequence.** Slack approvers are fail-closed through an explicit user-ID allowlist. A process crash after claiming an action leaves it in `executing` for manual reconciliation rather than risking an automatic duplicate side effect. Real operator integrations must add provider idempotency before production rollout.
+
+---
+
+## D-016 — Execute production remediation through a tenant-owned signed operator
+
+**Date:** 2026-09-20
+**Status:** accepted
+
+**Context.** Calyx needs to turn evidence-backed incident recommendations into real infrastructure changes without receiving customers’ provider credentials or granting the model direct execution authority.
+
+**Options considered.**
+- **Embed provider SDK credentials in Calyx** — convenient, but expands the control plane’s secret and privilege surface.
+- **Let coding agents execute commands directly** — flexible, but difficult to constrain, approve, and reconcile safely.
+- **Call a customer-side operator with a signed, allowlisted protocol** — keeps credentials and final provider policy inside the customer boundary.
+
+**Decision.** Calyx proposes `operator_webhook` requests linked to active incidents. It signs bounded dry-run and execute payloads with a per-tenant secret, uses the remediation request ID as the provider idempotency key, and permits only tenant-configured operation names. Execution still requires the existing durable human approval transition.
+
+**Because.** A narrow operator contract separates recommendation and approval from privileged provider access while giving both systems a stable reconciliation identifier.
+
+**Consequence.** Operator endpoints must use HTTPS in production, verify timestamp/HMAC/idempotency, and enforce their own target policy. Calyx does not automatically replay an execution after an ambiguous timeout. Slack approval-card delivery is a durable retrying outbox rather than an in-process best effort.

@@ -39,7 +39,7 @@ describe("ask tool", () => {
       undefined,
       expect.stringContaining("observed evidence"),
       4096,
-      { excludeTools: ["ask"] }
+      { excludeTools: ["ask", "propose_remediation"] }
     );
     expect(output.summary).toContain("five observed 404");
     expect(output.data).toMatchObject({

@@ -42,7 +42,7 @@ describe("internal MCP credential routes", () => {
     );
   });
 
-  it("rejects missing or incorrect service credentials", async () => {
+  it("rejects incorrect service credentials and provisions an unmapped workspace", async () => {
     const missing = await app.inject({
       method: "POST",
       url: "/v1/mcp/credentials/list",
@@ -64,7 +64,10 @@ describe("internal MCP credential routes", () => {
       headers: { "x-calyx-internal-key": INTERNAL_KEY },
       payload: { workspaceId: "unmapped-workspace" },
     });
-    expect(unmapped.statusCode).toBe(409);
+    expect(unmapped.statusCode).toBe(200);
+    await getPool().query("DELETE FROM workspace_tenant_links WHERE workspace_id = $1", [
+      "unmapped-workspace",
+    ]);
   });
 
   it("creates, lists, and revokes a credential within one tenant", async () => {
