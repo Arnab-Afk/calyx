@@ -9,6 +9,7 @@ import { FcGoogle } from 'react-icons/fc';
 import { useChatAuth } from '@/components/chat-auth-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { chatApiUrl } from '@/lib/chat-api';
 import { cn } from '@/lib/utils';
 
 import type { SignInFlow } from '../types';
@@ -57,8 +58,20 @@ export const SignUpCard = ({ setState }: SignUpCardProps) => {
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3">
-        <SocialButton icon={<FcGoogle className="size-[18px]" />} label="Google" disabled />
-        <SocialButton icon={<FaGithub className="size-[18px]" />} label="Github" disabled />
+        <SocialButton
+          icon={<FcGoogle className="size-[18px]" />}
+          label="Google"
+          onClick={() => {
+            window.location.href = `${chatApiUrl}/v1/auth/google`;
+          }}
+        />
+        <SocialButton
+          icon={<FaGithub className="size-[18px]" />}
+          label="Github"
+          onClick={() => {
+            window.location.href = `${chatApiUrl}/v1/auth/github`;
+          }}
+        />
       </div>
 
       <Divider />
@@ -185,15 +198,18 @@ function SocialButton({
   icon,
   label,
   disabled,
+  onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   disabled?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <button
       type="button"
       disabled={disabled}
+      onClick={onClick}
       title={disabled ? 'Coming soon' : undefined}
       className="flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-[#141416] text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-[#1a1a1e] disabled:cursor-not-allowed disabled:opacity-55"
     >

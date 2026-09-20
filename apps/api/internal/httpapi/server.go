@@ -39,6 +39,13 @@ type Server struct {
 	calyxAskURL        string
 	calyxInternalKey   string
 	calyxDefaultTenant string
+	googleClientID     string
+	googleClientSecret string
+	googleRedirectURL  string
+	githubClientID     string
+	githubClientSecret string
+	githubRedirectURL  string
+	webAppURL          string
 	httpClient         *http.Client
 }
 
@@ -53,6 +60,8 @@ func New(
 	cookieDomain string,
 	cookieTTL time.Duration,
 	calyxAskURL, calyxInternalKey, calyxDefaultTenant string,
+	googleClientID, googleClientSecret, googleRedirectURL, webAppURL string,
+	githubClientID, githubClientSecret, githubRedirectURL string,
 ) http.Handler {
 	origins := strings.Split(corsOrigins, ",")
 	for i := range origins {
@@ -64,6 +73,13 @@ func New(
 		cookieTTL: cookieTTL, wsOrigins: websocketOrigins(corsOrigins),
 		calyxAskURL: strings.TrimRight(calyxAskURL, "/"), calyxInternalKey: calyxInternalKey,
 		calyxDefaultTenant: calyxDefaultTenant,
+		googleClientID:     strings.TrimSpace(googleClientID),
+		googleClientSecret: strings.TrimSpace(googleClientSecret),
+		googleRedirectURL:  strings.TrimSpace(googleRedirectURL),
+		githubClientID:     strings.TrimSpace(githubClientID),
+		githubClientSecret: strings.TrimSpace(githubClientSecret),
+		githubRedirectURL:  strings.TrimSpace(githubRedirectURL),
+		webAppURL:          strings.TrimRight(strings.TrimSpace(webAppURL), "/"),
 		httpClient:         &http.Client{Timeout: 25 * time.Second},
 	}
 	r := chi.NewRouter()
@@ -102,6 +118,10 @@ func New(
 		r.Post("/auth/register", s.register)
 		r.Post("/auth/login", s.login)
 		r.Post("/auth/logout", s.logout)
+		r.Get("/auth/google", s.googleStart)
+		r.Get("/auth/google/callback", s.googleCallback)
+		r.Get("/auth/github", s.githubStart)
+		r.Get("/auth/github/callback", s.githubCallback)
 
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireAuth)

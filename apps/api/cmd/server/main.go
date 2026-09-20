@@ -54,6 +54,8 @@ func main() {
 	handler := httpapi.New(
 		pool, authSvc, hub, objects, cfg.CORSOrigins, cfg.CookieSecure, cfg.CookieSameSite, cfg.CookieDomain, cfg.TokenTTL,
 		cfg.CalyxAskURL, cfg.CalyxInternalKey, cfg.CalyxDefaultTenant,
+		cfg.GoogleClientID, cfg.GoogleClientSecret, cfg.GoogleRedirectURL, cfg.WebAppURL,
+		cfg.GitHubClientID, cfg.GitHubClientSecret, cfg.GitHubRedirectURL,
 	)
 
 	srv := &http.Server{

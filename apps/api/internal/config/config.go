@@ -31,6 +31,13 @@ type Config struct {
 	CalyxAskURL        string
 	CalyxInternalKey   string
 	CalyxDefaultTenant string
+	GoogleClientID     string
+	GoogleClientSecret string
+	GoogleRedirectURL  string
+	GitHubClientID     string
+	GitHubClientSecret string
+	GitHubRedirectURL  string
+	WebAppURL          string
 }
 
 func Load() (Config, error) {
@@ -128,6 +135,13 @@ func Load() (Config, error) {
 		CalyxAskURL:        calyxAskURL,
 		CalyxInternalKey:   calyxInternalKey,
 		CalyxDefaultTenant: envOr("CALYX_DEFAULT_TENANT", "default"),
+		GoogleClientID:     strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_ID")),
+		GoogleClientSecret: strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_SECRET")),
+		GoogleRedirectURL:  strings.TrimSpace(os.Getenv("GOOGLE_REDIRECT_URL")),
+		GitHubClientID:     strings.TrimSpace(os.Getenv("GITHUB_CLIENT_ID")),
+		GitHubClientSecret: strings.TrimSpace(os.Getenv("GITHUB_CLIENT_SECRET")),
+		GitHubRedirectURL:  strings.TrimSpace(os.Getenv("GITHUB_REDIRECT_URL")),
+		WebAppURL:          strings.TrimSpace(envOr("WEB_APP_URL", "")),
 	}, nil
 }
 
