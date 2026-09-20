@@ -19,6 +19,7 @@ type Config struct {
 	ObjectAccessKeyID  string
 	ObjectSecretKey    string
 	ObjectPathStyle    bool
+	ObjectUseIAM       bool
 	JWTSecret          string
 	JWTIssuer          string
 	JWTAudience        string
@@ -65,6 +66,10 @@ func Load() (Config, error) {
 	objectBucket := strings.TrimSpace(os.Getenv("OBJECT_STORAGE_BUCKET"))
 	objectAccessKey := strings.TrimSpace(os.Getenv("OBJECT_STORAGE_ACCESS_KEY_ID"))
 	objectSecretKey := strings.TrimSpace(os.Getenv("OBJECT_STORAGE_SECRET_ACCESS_KEY"))
+	objectUseIAM, err := strconv.ParseBool(envOr("OBJECT_STORAGE_USE_IAM", "false"))
+	if err != nil {
+		return Config{}, fmt.Errorf("OBJECT_STORAGE_USE_IAM must be true or false")
+	}
 	if !production {
 		if objectEndpoint == "" {
 			objectEndpoint = "http://localhost:19000"
@@ -79,8 +84,8 @@ func Load() (Config, error) {
 			objectSecretKey = "calyx-minio-secret"
 		}
 	}
-	if objectEndpoint == "" || objectBucket == "" || objectAccessKey == "" || objectSecretKey == "" {
-		return Config{}, fmt.Errorf("OBJECT_STORAGE_ENDPOINT, OBJECT_STORAGE_BUCKET, OBJECT_STORAGE_ACCESS_KEY_ID, and OBJECT_STORAGE_SECRET_ACCESS_KEY are required")
+	if objectBucket == "" || (!objectUseIAM && (objectEndpoint == "" || objectAccessKey == "" || objectSecretKey == "")) {
+		return Config{}, fmt.Errorf("object storage bucket and either IAM role mode or endpoint credentials are required")
 	}
 	objectPathStyle, err := strconv.ParseBool(envOr("OBJECT_STORAGE_PATH_STYLE", "false"))
 	if err != nil {
@@ -111,6 +116,7 @@ func Load() (Config, error) {
 		ObjectAccessKeyID:  objectAccessKey,
 		ObjectSecretKey:    objectSecretKey,
 		ObjectPathStyle:    objectPathStyle,
+		ObjectUseIAM:       objectUseIAM,
 		JWTSecret:          secret,
 		JWTIssuer:          envOr("JWT_ISSUER", "calyx-chat-api"),
 		JWTAudience:        envOr("JWT_AUDIENCE", "calyx-web"),

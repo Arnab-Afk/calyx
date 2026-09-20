@@ -80,6 +80,7 @@ Registration and login return a bearer token for CLI clients and also set an HTT
 | `OBJECT_STORAGE_ACCESS_KEY_ID` | local development value | Server-only S3/R2 access key |
 | `OBJECT_STORAGE_SECRET_ACCESS_KEY` | local development value | Server-only S3/R2 secret |
 | `OBJECT_STORAGE_PATH_STYLE` | `false` | Set `true` for local MinIO |
+| `OBJECT_STORAGE_USE_IAM` | `false` | Set `true` on ECS to use the task role instead of static S3 keys |
 | `APP_ENV` | `development` | Set to `production` to require secure cookies and fail-closed config |
 | `JWT_SECRET` | dev default | At least 32 characters; **required in production** |
 | `JWT_ISSUER` | `calyx-chat-api` | Validated token issuer |

@@ -1,0 +1,29 @@
+aws_region      = "us-east-1"
+domain_name     = "example.com"
+route53_zone_id = "Z0123456789"
+
+# Replace tags with immutable ECR manifest digests after scripts/aws/push-images.sh.
+node_image_uri = "123456789012.dkr.ecr.us-east-1.amazonaws.com/calyx-node@sha256:replace"
+chat_image_uri = "123456789012.dkr.ecr.us-east-1.amazonaws.com/calyx-chat@sha256:replace"
+web_image_uri  = "123456789012.dkr.ecr.us-east-1.amazonaws.com/calyx-web@sha256:replace"
+
+alarm_email  = "ops@example.com"
+slack_enabled = true
+
+application_secrets = {
+  ANTHROPIC_API_KEY                = "replace"
+  NVIDIA_API_KEY                   = ""
+  GITHUB_APP_ID                    = "replace"
+  GITHUB_APP_SLUG                  = "calyx"
+  GITHUB_APP_PRIVATE_KEY           = "-----BEGIN PRIVATE KEY-----\nreplace\n-----END PRIVATE KEY-----"
+  CALYX_CODING_AGENT_URL           = "https://coding-agent.example.com/jobs"
+  MCP_OAUTH_ISSUER                 = "https://your-cognito-domain.auth.us-east-1.amazoncognito.com"
+  MCP_OAUTH_INTROSPECTION_URL      = "https://your-authorizer.example.com/introspect"
+  MCP_OAUTH_CLIENT_ID              = "replace"
+  MCP_OAUTH_CLIENT_SECRET          = "replace"
+  SLACK_BOT_TOKEN                  = "replace"
+  SLACK_SIGNING_SECRET             = "replace"
+  SLACK_APP_TOKEN                  = "replace"
+  SLACK_REMEDIATION_APPROVER_IDS   = "{}"
+  CALYX_MGMT_TOKEN                 = "calyx_mgmt_bootstrap-replace-after-migration"
+}

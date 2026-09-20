@@ -53,6 +53,21 @@ describe("production preflight", () => {
     ).toThrow();
   });
 
+  it("accepts ECS task-role object storage without static AWS keys", () => {
+    const env = { ...valid, OBJECT_STORAGE_USE_IAM: "true" };
+    delete (env as Partial<typeof valid>).OBJECT_STORAGE_ENDPOINT;
+    delete (env as Partial<typeof valid>).OBJECT_STORAGE_ACCESS_KEY_ID;
+    delete (env as Partial<typeof valid>).OBJECT_STORAGE_SECRET_ACCESS_KEY;
+    expect(
+      execFileSync(process.execPath, ["scripts/production-preflight.mjs"], {
+        cwd: process.cwd(),
+        env: { PATH: process.env.PATH ?? "", ...env },
+        encoding: "utf8",
+        stdio: "pipe",
+      }),
+    ).toContain("Production preflight passed");
+  });
+
   it("rejects mutable image references", () => {
     expect(() => run({ CALYX_NODE_IMAGE: "registry/node:latest" })).toThrow();
   });

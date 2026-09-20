@@ -4,7 +4,7 @@
 
 ## In progress
 
-- [ ] Run end-to-end production deployment and recovery smoke tests.
+- [ ] Apply the AWS Terraform stack and run end-to-end production/recovery smoke tests with real credentials.
 
 ## Next
 
@@ -17,6 +17,7 @@
 
 ## Done
 
+- [x] Add AWS-native ECS/RDS/ElastiCache/S3/ALB/Route53/Secrets/CloudWatch infrastructure and release automation — 2026-09-20
 - [x] Add immutable production images, release gates, readiness probes, preflight, and recovery runbook — 2026-09-20
 - [x] Move private workspace image storage to S3/R2 with backfill and durable cleanup — 2026-09-20
 - [x] Add shared Redis-backed Go realtime fan-out and versioned database migrations — 2026-09-20

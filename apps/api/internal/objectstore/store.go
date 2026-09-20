@@ -32,20 +32,24 @@ type Config struct {
 	AccessKeyID     string
 	SecretAccessKey string
 	UsePathStyle    bool
+	UseIAM          bool
 }
 
 func NewS3(ctx context.Context, cfg Config) (*S3Store, error) {
-	awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
-		awsconfig.WithRegion(cfg.Region),
-		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+	options := []func(*awsconfig.LoadOptions) error{awsconfig.WithRegion(cfg.Region)}
+	if !cfg.UseIAM {
+		options = append(options, awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
 			cfg.AccessKeyID, cfg.SecretAccessKey, "",
-		)),
-	)
+		)))
+	}
+	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, options...)
 	if err != nil {
 		return nil, fmt.Errorf("load object storage config: %w", err)
 	}
 	client := s3.NewFromConfig(awsCfg, func(options *s3.Options) {
-		options.BaseEndpoint = aws.String(cfg.Endpoint)
+		if cfg.Endpoint != "" {
+			options.BaseEndpoint = aws.String(cfg.Endpoint)
+		}
 		options.UsePathStyle = cfg.UsePathStyle
 	})
 	store := &S3Store{client: client, bucket: cfg.Bucket}

@@ -20,10 +20,7 @@ const required = [
   "GITHUB_APP_SLUG",
   "GITHUB_APP_PRIVATE_KEY",
   "CALYX_CODING_AGENT_URL",
-  "OBJECT_STORAGE_ENDPOINT",
   "OBJECT_STORAGE_BUCKET",
-  "OBJECT_STORAGE_ACCESS_KEY_ID",
-  "OBJECT_STORAGE_SECRET_ACCESS_KEY",
   "NEXT_PUBLIC_CALYX_CHAT_URL",
   "CALYX_CHAT_URL",
   "CALYX_API_URL",
@@ -50,6 +47,19 @@ function requireURL(name, protocols = ["https:"]) {
   }
 }
 
+if (process.env.OBJECT_STORAGE_USE_IAM !== "true") {
+  for (const name of [
+    "OBJECT_STORAGE_ENDPOINT",
+    "OBJECT_STORAGE_ACCESS_KEY_ID",
+    "OBJECT_STORAGE_SECRET_ACCESS_KEY",
+  ]) {
+    if (!process.env[name]?.trim())
+      errors.push(
+        `${name} is required when OBJECT_STORAGE_USE_IAM is not true`,
+      );
+  }
+}
+
 for (const name of [
   "CALYX_ASK_URL",
   "CALYX_PUBLIC_URL",
@@ -58,7 +68,7 @@ for (const name of [
   "MCP_OAUTH_ISSUER",
   "MCP_OAUTH_INTROSPECTION_URL",
   "CALYX_CODING_AGENT_URL",
-  "OBJECT_STORAGE_ENDPOINT",
+  ...(process.env.OBJECT_STORAGE_ENDPOINT ? ["OBJECT_STORAGE_ENDPOINT"] : []),
   "NEXT_PUBLIC_CALYX_CHAT_URL",
   "CALYX_CHAT_URL",
   "CALYX_API_URL",

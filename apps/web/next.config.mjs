@@ -6,6 +6,7 @@ const appDirectory = dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   outputFileTracingRoot: resolve(appDirectory, '../..'),
   // Repository-wide legacy style diagnostics are checked separately while the
   // production build still performs Next.js TypeScript validation.

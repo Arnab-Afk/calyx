@@ -412,3 +412,18 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Because.** Deployment correctness is part of the security boundary. A reproducible image and executable release gate prevent configuration drift and make rollback/recovery procedures testable.
 
 **Consequence.** Real deployment still requires infrastructure, DNS, OAuth, Slack, and GitHub credentials supplied outside the repository. `/health` is liveness only; load balancers use `/ready`. Schema rollback is always a forward repair migration rather than mutation of applied history.
+
+---
+
+## D-022 — Use an AWS-native Ship It deployment with ECS task-role credentials
+
+**Date:** 2026-09-20
+**Status:** accepted
+
+**Context.** The Ship It track calls for an AWS-built deployment with a public URL. The generic production boundary still depended on manually provisioned infrastructure and static S3-compatible credentials.
+
+**Decision.** Deploy all public and background workloads as digest-pinned ECS Fargate tasks behind one host-routing ALB, with private RDS PostgreSQL, TLS/authenticated ElastiCache Redis, private S3, ACM, Route 53, Secrets Manager, CloudWatch, and ECR. Go uses the ECS task-role credential chain for S3. Services stay scaled to zero until one-off migrations, backfill, and management-token bootstrap succeed.
+
+**Because.** This makes AWS material to the product’s runtime rather than a superficial integration, while retaining the existing container and security boundaries. Task roles remove long-lived AWS object credentials from application configuration.
+
+**Consequence.** The default cost-optimized stack uses one NAT gateway and single-node data services; production HA can be enabled after judging. Terraform state is sensitive and must use encrypted remote storage. Actual apply remains blocked on AWS account, hosted-zone, provider, and registry credentials.

@@ -192,6 +192,8 @@ GitHub App installation and coding-agent draft PR handoff: [`docs/GITHUB_APP.md`
 
 Production release, acceptance, rollback, and recovery: [`docs/DEPLOY.md`](./docs/DEPLOY.md) and [`docs/PRODUCTION_RUNBOOK.md`](./docs/PRODUCTION_RUNBOOK.md).
 
+AWS Ship It infrastructure and deployment: [`infra/aws/README.md`](./infra/aws/README.md).
+
 Scheduled detection and Slack delivery: [`docs/ALERT_DELIVERY.md`](./docs/ALERT_DELIVERY.md).
 
 ---
