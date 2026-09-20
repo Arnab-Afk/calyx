@@ -233,3 +233,19 @@
     scrollbar-color: rgba(225, 29, 46, 0.35) transparent;
   }
 }
+
+@keyframes calyx-auth-pulse {
+  0%,
+  100% {
+    opacity: 0.28;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.48;
+    transform: scale(1.06);
+  }
+}
+
+.calyx-auth-pulse {
+  animation: calyx-auth-pulse 8s ease-in-out infinite;
+}
