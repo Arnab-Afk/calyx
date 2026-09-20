@@ -41,7 +41,8 @@ function parseParams(params: unknown): FlagToggleParams {
   return {
     flag_key: p.flag_key,
     target_value: p.target_value,
-    environment: typeof p.environment === "string" ? p.environment : "production",
+    environment:
+      typeof p.environment === "string" ? p.environment : "production",
   };
 }
 
@@ -50,7 +51,7 @@ export const flagToggleAction: Action = {
   description:
     "Toggle a feature flag on or off. Instant, cheap, and fully reversible — " +
     "the safest automated action in the execution layer.",
-  defaultTier: "1",
+  defaultTier: "0",
   reversible: true,
 
   async dry_run(params: unknown): Promise<ActionResult> {
@@ -61,7 +62,7 @@ export const flagToggleAction: Action = {
       return {
         success: true,
         message: `Flag "${flag_key}" is already ${target_value} in ${environment}. No change needed.`,
-        before: current,
+        before: current ?? null,
         after: target_value,
       };
     }
@@ -71,7 +72,7 @@ export const flagToggleAction: Action = {
       message:
         `Dry run: would set "${flag_key}" from ${current ?? "unset"} → ${target_value} ` +
         `in ${environment}.`,
-      before: current,
+      before: current ?? null,
       after: target_value,
     };
   },
@@ -84,24 +85,31 @@ export const flagToggleAction: Action = {
     return {
       success: true,
       message: `Set "${flag_key}" to ${target_value} in ${environment}.`,
-      before,
+      before: before ?? null,
       after: target_value,
     };
   },
 
-  async undo(params: unknown): Promise<ActionResult> {
+  async undo(
+    params: unknown,
+    executionResult?: ActionResult,
+  ): Promise<ActionResult> {
     const { flag_key, environment } = parseParams(params);
-    // Undo means flipping back to the original value.
-    // We stored it as `before` in the audit log — the executor passes it through.
-    // For simplicity in MVP, undo just flips the current value.
     const current = flagStore.get(flag_key);
-    const restored = !current;
-    flagStore.set(flag_key, restored);
+    const restored = executionResult?.before;
+    if (restored !== null && typeof restored !== "boolean") {
+      return {
+        success: false,
+        message: `Cannot restore "${flag_key}" because its prior value was not captured.`,
+      };
+    }
+    if (restored === null) flagStore.delete(flag_key);
+    else flagStore.set(flag_key, restored);
 
     return {
       success: true,
-      message: `Undid flag toggle: "${flag_key}" restored to ${restored} in ${environment}.`,
-      before: current,
+      message: `Undid flag toggle: "${flag_key}" restored to ${restored ?? "unset"} in ${environment}.`,
+      before: current ?? null,
       after: restored,
     };
   },

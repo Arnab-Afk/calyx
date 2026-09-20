@@ -4,11 +4,11 @@
 
 ## In progress
 
-- [ ] Add human-approved remediation and coding-agent pull-request handoff.
+- [ ] Connect durable remediation proposals to live incidents and a customer-side operator.
 
 ## Next
 
-- [ ] Add durable remediation approval requests and immutable execution audits.
+- [ ] Add coding-agent pull-request handoff.
 - [ ] Add GitHub App installation OAuth and automatic webhook provisioning.
 
 ## Backlog
@@ -18,6 +18,7 @@
 
 ## Done
 
+- [x] Replace caller-asserted remediation approval with durable requests and immutable transition events — 2026-09-20
 - [x] Make Go the sole web auth/data backend and remove active Convex runtime paths — 2026-09-20
 - [x] Reconnect MCP credential administration through authenticated Go workspace identity — 2026-09-20
 - [x] Adapt Next.js message, thread, reaction, upload, trusted ask, and realtime paths to the feature-gated Go backend — 2026-09-20

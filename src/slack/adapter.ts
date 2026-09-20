@@ -16,18 +16,14 @@ import {
 import { shouldHandleUnmentionedReply, stripBotMentions } from "./thread-replies.js";
 import { autoChartType, renderChartForSlack } from "./charts/index.js";
 import { acknowledgeAlert, resolveAlert, getAlertState } from "./alert-state.js";
-import {
-  storePendingAction,
-  getPendingAction,
-  removePendingAction,
-} from "./pending-actions.js";
 import { buildApprovalModal } from "./modals/approval.js";
 import {
   buildTimeRangeButtons,
   hoursToTimeRange,
 } from "./blocks/time-range-filter.js";
 import { buildServiceDrilldownButtons } from "./blocks/service-drilldown.js";
-import { executeAction } from "../execution/executor.js";
+import { approveAction, getRemediationRequest, rejectAction } from "../execution/executor.js";
+import type { RemediationRequest } from "../storage/remediations.js";
 import { executeTool } from "../agent/registry.js";
 import { buildStatusOverviewCard } from "./blocks/status-card.js";
 import {
@@ -50,6 +46,13 @@ import type { ToolCallRecord } from "../agent/loop.js";
 // Tenant lookup: for MVP, every workspace maps to one tenant.
 function tenantForTeam(teamId: string): string {
   return process.env[`CALYX_TENANT_${teamId}`] ?? teamId;
+}
+
+export function isRemediationApprover(userId: string, teamId?: string): boolean {
+  const configured = (teamId ? process.env[`SLACK_REMEDIATION_APPROVER_IDS_${teamId}`] : undefined)
+    ?? process.env.SLACK_REMEDIATION_APPROVER_IDS
+    ?? "";
+  return configured.split(",").map((value) => value.trim()).filter(Boolean).includes(userId);
 }
 
 function pickWidestStatsCall(calls: ToolCallRecord[]): ToolCallRecord | undefined {
@@ -596,26 +599,33 @@ export function createSlackApp(): App {
     const actionBody = body as {
       actions: { value: string }[];
       channel: { id: string };
+      message: { thread_ts?: string; ts: string };
       trigger_id: string;
+      user: { id: string };
+      team?: { id: string };
     };
-    const actionId = actionBody.actions[0]?.value;
-    const pending = getPendingAction(actionId);
-    if (!pending) {
-      await client.chat
-        .postMessage({
-          channel: actionBody.channel.id,
-          text: `:warning: Could not find pending action \`${actionId}\` — it may have expired or already been handled.`,
-        })
-        .catch(() => {});
+    if (!isRemediationApprover(actionBody.user.id, actionBody.team?.id)) {
+      await client.chat.postEphemeral({
+        channel: actionBody.channel.id,
+        user: actionBody.user.id,
+        text: ":no_entry: You are not authorized to approve remediation actions.",
+      }).catch(() => {});
       return;
     }
-
-    await client.views
-      .open({
-        trigger_id: actionBody.trigger_id,
-        view: buildApprovalModal(pending) as never,
-      })
-      .catch(() => {});
+    const requestId = actionBody.actions[0]?.value;
+    const request = requestId ? await getRemediationRequest(requestId) : null;
+    if (!request || request.status !== "pending") {
+      await client.chat.postMessage({
+        channel: actionBody.channel.id,
+        text: `:warning: Remediation \`${requestId}\` is unavailable or already decided.`,
+      }).catch(() => {});
+      return;
+    }
+    const threadTs = actionBody.message.thread_ts ?? actionBody.message.ts;
+    await client.views.open({
+      trigger_id: actionBody.trigger_id,
+      view: buildApprovalModal(request, { channel: actionBody.channel.id, threadTs, teamId: actionBody.team?.id }) as never,
+    }).catch(() => {});
   });
 
   app.action("reject_action", async ({ ack, body, client }) => {
@@ -625,68 +635,70 @@ export function createSlackApp(): App {
       channel: { id: string };
       message: { thread_ts?: string; ts: string };
       user: { id: string };
+      team?: { id: string };
     };
-    const actionId = actionBody.actions[0]?.value;
-    removePendingAction(actionId);
+    const requestId = actionBody.actions[0]?.value;
     const threadTs = actionBody.message.thread_ts ?? actionBody.message.ts;
-
-    await client.chat
-      .postMessage({
+    if (!requestId) return;
+    if (!isRemediationApprover(actionBody.user.id, actionBody.team?.id)) {
+      await client.chat.postEphemeral({
+        channel: actionBody.channel.id,
+        user: actionBody.user.id,
+        text: ":no_entry: You are not authorized to reject remediation actions.",
+      }).catch(() => {});
+      return;
+    }
+    try {
+      const actorId = actionBody.team?.id ? `${actionBody.team.id}:${actionBody.user.id}` : actionBody.user.id;
+      await rejectAction({ requestId, rejectedBy: actorId, reason: "Rejected via Slack" });
+      await client.chat.postMessage({
         channel: actionBody.channel.id,
         thread_ts: threadTs,
-        text: `:no_entry: <@${actionBody.user.id}> rejected the action.`,
-      })
-      .catch(() => {});
+        text: `:no_entry: <@${actionBody.user.id}> rejected remediation \`${requestId}\`.`,
+      });
+    } catch (error) {
+      await client.chat.postMessage({
+        channel: actionBody.channel.id,
+        thread_ts: threadTs,
+        text: `:warning: ${error instanceof Error ? error.message : String(error)}`,
+      }).catch(() => {});
+    }
   });
-
-  // ─── Modal: Approve action submission ────────────────────────────────────────
 
   app.view("approve_action_modal", async ({ ack, view, body, client }) => {
     await ack();
-    const actionId = view.private_metadata;
+    const metadata = JSON.parse(view.private_metadata) as { requestId: string; channel: string; threadTs: string; teamId?: string };
     const userId = body.user.id;
-    const reason =
-      view.state.values.reason_block?.reason_input?.value ?? "Approved via Slack";
+    const reason = view.state.values.reason_block?.reason_input?.value ?? "";
+    if (!isRemediationApprover(userId, metadata.teamId)) {
+      await client.chat.postEphemeral({
+        channel: metadata.channel,
+        user: userId,
+        text: ":no_entry: You are not authorized to approve remediation actions.",
+      }).catch(() => {});
+      return;
+    }
 
-    const pending = getPendingAction(actionId);
-    if (!pending) return;
-
-    removePendingAction(actionId);
-
-    const execResult = await executeAction({
-      tenant_id: pending.tenantId,
-      action_name: pending.actionName,
-      params: pending.params,
-      triggered_by: userId,
-      human_approved: true,
-    });
-
-    const statusEmoji = execResult.executed ? ":white_check_mark:" : ":x:";
-    await client.chat
-      .postMessage({
-        channel: pending.channel,
-        thread_ts: pending.threadTs,
-        text: `${statusEmoji} Action ${pending.actionName}: ${execResult.message}`,
+    try {
+      const actorId = metadata.teamId ? `${metadata.teamId}:${userId}` : userId;
+      const result = await approveAction({ requestId: metadata.requestId, approvedBy: actorId, reason });
+      const statusEmoji = result.executed ? ":white_check_mark:" : ":x:";
+      await client.chat.postMessage({
+        channel: metadata.channel,
+        thread_ts: metadata.threadTs,
+        text: `${statusEmoji} Action ${result.request.actionName}: ${result.message}`,
         blocks: [
-          {
-            type: "section",
-            text: {
-              type: "mrkdwn",
-              text: `${statusEmoji} *\`${pending.actionName}\`* — ${execResult.message}\n_Approved by <@${userId}>: ${reason}_`,
-            },
-          },
-          {
-            type: "context",
-            elements: [
-              {
-                type: "mrkdwn",
-                text: `Audit entry: \`${execResult.entry.id}\``,
-              },
-            ],
-          },
+          { type: "section", text: { type: "mrkdwn", text: `${statusEmoji} *\`${result.request.actionName}\`* — ${result.message}\n_Approved by <@${userId}>: ${reason}_` } },
+          { type: "context", elements: [{ type: "mrkdwn", text: `Remediation request: \`${result.request.id}\`` }] },
         ],
-      })
-      .catch(() => {});
+      });
+    } catch (error) {
+      await client.chat.postMessage({
+        channel: metadata.channel,
+        thread_ts: metadata.threadTs,
+        text: `:warning: ${error instanceof Error ? error.message : String(error)}`,
+      }).catch(() => {});
+    }
   });
 
   // ─── Existing button handlers ─────────────────────────────────────────────────
@@ -736,20 +748,19 @@ export async function postPendingActionCard(
   app: App,
   channelId: string,
   threadTs: string,
-  pending: Parameters<typeof storePendingAction>[0]
+  request: RemediationRequest
 ): Promise<void> {
-  storePendingAction(pending);
-
-  const result = await app.client.chat.postMessage({
+  if (request.status !== "pending") throw new Error(`Remediation request is not pending: ${request.id}`);
+  await app.client.chat.postMessage({
     channel: channelId,
     thread_ts: threadTs,
-    text: `:lock: Action requires approval: \`${pending.actionName}\``,
+    text: `:lock: Action requires approval: \`${request.actionName}\``,
     blocks: [
       {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `:lock: *Action requires your approval*\n*\`${pending.actionName}\`* — ${pending.description}\n\n*Dry-run:* ${pending.dryRunResult.success ? ":white_check_mark: would succeed" : ":x: would fail"} — ${pending.dryRunResult.message}`,
+          text: `:lock: *Action requires your approval*\n*\`${request.actionName}\`*\n\n*Dry-run:* ${request.dryRunResult.success ? ":white_check_mark: would succeed" : ":x: would fail"} — ${request.dryRunResult.message}`,
         },
       },
       {
@@ -759,21 +770,18 @@ export async function postPendingActionCard(
             type: "button",
             text: { type: "plain_text", text: ":white_check_mark: Approve", emoji: true },
             style: "primary",
-            value: pending.actionId,
+            value: request.id,
             action_id: "approve_action",
           },
           {
             type: "button",
             text: { type: "plain_text", text: ":no_entry: Reject", emoji: true },
             style: "danger",
-            value: pending.actionId,
+            value: request.id,
             action_id: "reject_action",
           },
         ],
       },
     ],
   });
-
-  // Store the message ts so we can update it later
-  pending.messageTs = result.ts as string;
 }
