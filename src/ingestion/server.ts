@@ -12,6 +12,7 @@ import { eventsRoute } from "./routes/v1/events.js";
 import { internalAskRoute } from "./routes/v1/internal-ask.js";
 import { internalWorkspaceLinkRoute } from "./routes/v1/internal-workspace-link.js";
 import { remediationsRoute } from "./routes/v1/remediations.js";
+import { codingJobsRoute } from "./routes/v1/coding-jobs.js";
 import { closePool } from "../storage/client.js";
 import { closeRedis } from "./queue.js";
 import { initAgent } from "../agent/index.js";
@@ -36,6 +37,7 @@ await app.register(mcpCredentialsRoute);
 await app.register(internalAskRoute);
 await app.register(internalWorkspaceLinkRoute);
 await app.register(remediationsRoute);
+await app.register(codingJobsRoute);
 
 app.get("/health", async () => ({ status: "ok" }));
 

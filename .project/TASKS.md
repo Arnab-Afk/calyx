@@ -4,11 +4,11 @@
 
 ## In progress
 
-- [ ] Add coding-agent pull-request handoff.
+- [ ] Add GitHub App installation OAuth and automatic webhook provisioning.
 
 ## Next
 
-- [ ] Add GitHub App installation OAuth and automatic webhook provisioning.
+- [ ] Add shared Go realtime pub/sub and versioned database migrations.
 
 ## Backlog
 
@@ -17,6 +17,7 @@
 
 ## Done
 
+- [x] Add durable coding-agent jobs, bounded repository access, callbacks, and draft pull-request creation — 2026-09-20
 - [x] Replace the web approval card’s local state with authenticated tenant-scoped remediation APIs — 2026-09-20
 - [x] Connect incident recommendations to a signed customer-side operator and durable Slack approval delivery — 2026-09-20
 - [x] Replace caller-asserted remediation approval with durable requests and immutable transition events — 2026-09-20
