@@ -1,23 +1,26 @@
 # Tasks
 
-**Updated:** 2026-09-19
+**Updated:** 2026-09-20
 
 ## In progress
 
-- [ ] Add human-approved remediation and coding-agent pull-request handoff.
+- [ ] Complete Go API parity required by the existing Next.js workspace UI.
 
 ## Next
 
+- [ ] Migrate Next.js auth, workspaces, channels, messages, and realtime updates from Convex to the Go API.
+- [ ] Reconnect MCP credential administration through the Go workspace identity boundary.
+- [ ] Add human-approved remediation and coding-agent pull-request handoff.
 - [ ] Add GitHub App installation OAuth and automatic webhook provisioning.
 
 ## Backlog
 
 - Additional telemetry connectors behind the normalized evidence model.
-- Human-approved remediation and coding-agent pull-request handoff.
 - Native MCP resource subscriptions for clients that expose them usefully.
 
 ## Done
 
+- [x] Harden and test the Go chat API identity, browser-session, WebSocket, and trusted-message boundaries — 2026-09-20
 - [x] Persist GitHub commits/deployments and expose tenant-scoped change correlation — 2026-09-20
 - [x] Add authenticated CloudWatch Logs subscription ingestion and onboarding — 2026-09-20
 - [x] Publish the standalone `calyx-mcp@0.1.0` stdio bridge to npm — 2026-09-20

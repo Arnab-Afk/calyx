@@ -17,7 +17,10 @@ import (
 )
 
 func main() {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("config: %v", err)
+	}
 	ctx := context.Background()
 
 	pool, err := db.Connect(ctx, cfg.DatabaseURL)
@@ -32,13 +35,16 @@ func main() {
 	log.Println("chat schema ready")
 
 	hub := realtime.NewHub()
-	authSvc := auth.NewService(cfg.JWTSecret, cfg.TokenTTL)
-	handler := httpapi.New(pool, authSvc, hub, cfg.CORSOrigins)
+	authSvc := auth.NewService(cfg.JWTSecret, cfg.TokenTTL, cfg.JWTIssuer, cfg.JWTAudience)
+	handler := httpapi.New(pool, authSvc, hub, cfg.CORSOrigins, cfg.CookieSecure, cfg.TokenTTL)
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       90 * time.Second,
 	}
 
 	go func() {

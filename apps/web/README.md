@@ -2,6 +2,8 @@
 
 Slack-style workspace UI for Calyx. Chat stays familiar; Calyx AI replies can include Grafana-like charts from observability data.
 
+> **Migration status:** this frontend still uses Convex. The first-party Go replacement is in [`../api`](../api); new chat features should target that API rather than adding Convex functions. The current instructions remain valid until the client migration lands.
+
 ## Run on any machine
 
 ### Prerequisites

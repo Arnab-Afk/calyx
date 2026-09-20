@@ -1,47 +1,62 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
 type Config struct {
-	Addr            string
-	DatabaseURL     string
-	JWTSecret       string
-	TokenTTL        time.Duration
-	CORSOrigins     string
-	CalyxAskURL     string // optional proxy to Node POST /v1/ask
+	Addr         string
+	DatabaseURL  string
+	JWTSecret    string
+	JWTIssuer    string
+	JWTAudience  string
+	TokenTTL     time.Duration
+	CORSOrigins  string
+	CookieSecure bool
+	CalyxAskURL  string // optional proxy to Node POST /v1/ask
 }
 
-func Load() Config {
-	ttlHours := 720 // 30 days
+func Load() (Config, error) {
+	environment := strings.ToLower(envOr("APP_ENV", "development"))
+	production := environment == "production"
+
+	ttlHours := 24
 	if v := os.Getenv("JWT_TTL_HOURS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			ttlHours = n
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 || n > 720 {
+			return Config{}, fmt.Errorf("JWT_TTL_HOURS must be between 1 and 720")
 		}
+		ttlHours = n
 	}
+
 	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
+	if secret == "" && !production {
 		secret = "dev-only-change-me-calyx-chat-api"
 	}
-	addr := os.Getenv("ADDR")
-	if addr == "" {
-		addr = ":14000"
+	if len(secret) < 32 {
+		return Config{}, fmt.Errorf("JWT_SECRET must contain at least 32 characters")
 	}
-	db := os.Getenv("DATABASE_URL")
-	if db == "" {
-		db = "postgres://calyx:calyx@localhost:15432/calyx"
+
+	corsOrigins := envOr("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
+	if production && strings.Contains(corsOrigins, "*") {
+		return Config{}, fmt.Errorf("CORS_ORIGINS must list explicit origins in production")
 	}
+
 	return Config{
-		Addr:        addr,
-		DatabaseURL: db,
-		JWTSecret:   secret,
-		TokenTTL:    time.Duration(ttlHours) * time.Hour,
-		CORSOrigins: envOr("CORS_ORIGINS", "*"),
-		CalyxAskURL: os.Getenv("CALYX_ASK_URL"),
-	}
+		Addr:         envOr("ADDR", ":14000"),
+		DatabaseURL:  envOr("DATABASE_URL", "postgres://calyx:calyx@localhost:15432/calyx"),
+		JWTSecret:    secret,
+		JWTIssuer:    envOr("JWT_ISSUER", "calyx-chat-api"),
+		JWTAudience:  envOr("JWT_AUDIENCE", "calyx-web"),
+		TokenTTL:     time.Duration(ttlHours) * time.Hour,
+		CORSOrigins:  corsOrigins,
+		CookieSecure: production,
+		CalyxAskURL:  os.Getenv("CALYX_ASK_URL"),
+	}, nil
 }
 
 func envOr(k, def string) string {
