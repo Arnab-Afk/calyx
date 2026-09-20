@@ -65,6 +65,25 @@ func (s *Server) askCalyx(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	insert := func(text string, calyx any) (models.Message, error) {
+		return scanMessage(s.db.QueryRow(r.Context(),
+			`INSERT INTO chat_messages
+			   (body, member_id, workspace_id, channel_id, parent_message_id, calyx_data, created_at)
+			 VALUES ($1,$2,$3,$4,$5,$6, clock_timestamp())
+			 RETURNING id::text, body, member_id::text, workspace_id::text, channel_id::text,
+			           parent_message_id::text, conversation_id::text, image_url, calyx_data, created_at, updated_at`,
+			text, member.ID, workspaceID, channelID, body.ParentMessageID, calyx))
+	}
+
+	// Persist the question immediately so it shows in the channel while Calyx thinks.
+	question, err := insert(quillPlainBody(body.Query), nil)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "question persistence failed")
+		return
+	}
+	_ = s.populateMessage(r.Context(), &question)
+	s.hub.Publish(realtime.Event{Type: "message.created", WorkspaceID: workspaceID, ChannelID: channelID, Payload: question})
+
 	payloadMap := map[string]any{
 		"message": body.Query,
 		"actorId": fmt.Sprintf("web:%s:%s", workspaceID, member.ID),
@@ -119,39 +138,12 @@ func (s *Server) askCalyx(w http.ResponseWriter, r *http.Request) {
 	}
 	trustedJSON, _ := json.Marshal(trusted)
 
-	tx, err := s.db.Begin(r.Context())
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "message transaction failed")
-		return
-	}
-	defer tx.Rollback(r.Context())
-	insert := func(text string, calyx any) (models.Message, error) {
-		return scanMessage(tx.QueryRow(r.Context(),
-			`INSERT INTO chat_messages
-			   (body, member_id, workspace_id, channel_id, parent_message_id, calyx_data)
-			 VALUES ($1,$2,$3,$4,$5,$6)
-			 RETURNING id::text, body, member_id::text, workspace_id::text, channel_id::text,
-			           parent_message_id::text, conversation_id::text, image_url, calyx_data, created_at, updated_at`,
-			text, member.ID, workspaceID, channelID, body.ParentMessageID, calyx))
-	}
-	// Match normal chat bodies (Quill delta JSON) so the question renders like any other message.
-	question, err := insert(quillPlainBody(body.Query), nil)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "question persistence failed")
-		return
-	}
 	message, err := insert(quillPlainBody(answer.Answer), trustedJSON)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "answer persistence failed")
 		return
 	}
-	if err := tx.Commit(r.Context()); err != nil {
-		writeErr(w, http.StatusInternalServerError, "message transaction failed")
-		return
-	}
-	_ = s.populateMessage(r.Context(), &question)
 	_ = s.populateMessage(r.Context(), &message)
-	s.hub.Publish(realtime.Event{Type: "message.created", WorkspaceID: workspaceID, ChannelID: channelID, Payload: question})
 	s.hub.Publish(realtime.Event{Type: "message.created", WorkspaceID: workspaceID, ChannelID: channelID, Payload: message})
 	writeJSON(w, http.StatusCreated, map[string]any{"question": question, "message": message})
 }

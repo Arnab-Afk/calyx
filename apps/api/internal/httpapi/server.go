@@ -717,14 +717,14 @@ func (s *Server) listMessages(w http.ResponseWriter, r *http.Request) {
 			        parent_message_id::text, conversation_id::text, image_url, calyx_data, created_at, updated_at
 			 FROM chat_messages
 			 WHERE channel_id=$1 AND parent_message_id=$2
-			 ORDER BY created_at ASC LIMIT $3`, channelID, parent, limit)
+			 ORDER BY created_at ASC, id ASC LIMIT $3`, channelID, parent, limit)
 	} else {
 		rows, err = s.db.Query(r.Context(),
 			`SELECT id::text, body, member_id::text, workspace_id::text, channel_id::text,
 			        parent_message_id::text, conversation_id::text, image_url, calyx_data, created_at, updated_at
 			 FROM chat_messages
 			 WHERE channel_id=$1 AND parent_message_id IS NULL
-			 ORDER BY created_at DESC LIMIT $2`, channelID, limit)
+			 ORDER BY created_at DESC, id DESC LIMIT $2`, channelID, limit)
 	}
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())

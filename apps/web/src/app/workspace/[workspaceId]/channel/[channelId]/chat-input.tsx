@@ -7,8 +7,8 @@ import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import type { Id } from '@/../convex/_generated/dataModel';
-import { CalyxThinking } from '@/components/calyx/calyx-thinking';
 import { useCreateMessage } from '@/features/messages/api/use-create-message';
+import { usePendingAsk } from '@/features/messages/store/use-pending-ask';
 import { useChannelId } from '@/hooks/use-channel-id';
 import { useWorkspaceId } from '@/hooks/use-workspace-id';
 import { chatApi, uploadChatImage } from '@/lib/chat-api';
@@ -63,6 +63,7 @@ export const ChatInput = ({ placeholder }: ChatInputProps) => {
   const channelId = useChannelId();
 
   const { mutate: createMessage } = useCreateMessage();
+  const [, setPendingAsk] = usePendingAsk();
 
   const handleSubmit = async ({ body, image }: { body: string; image: File | null }) => {
     try {
@@ -77,6 +78,7 @@ export const ChatInput = ({ placeholder }: ChatInputProps) => {
         // Clear the composer in place — remounting via key looked like a page refresh.
         innerRef.current?.setContents([] as never);
         innerRef.current?.setText('');
+        setPendingAsk(query);
         setIsCalyxThinking(true);
         await chatApi.askCalyx(String(channelId), query);
         return;
@@ -105,13 +107,13 @@ export const ChatInput = ({ placeholder }: ChatInputProps) => {
     } finally {
       setIsPending(false);
       setIsCalyxThinking(false);
+      setPendingAsk(null);
       innerRef?.current?.enable(true);
     }
   };
 
   return (
     <div className="w-full">
-      {isCalyxThinking && <CalyxThinking className="pb-1" />}
       <div className="px-5">
         <Editor
           placeholder={placeholder ?? 'Ask Calyx about errors, deploys, logs…'}
