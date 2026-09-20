@@ -48,7 +48,7 @@ describe("workspace management authorization", () => {
   it("allows only a management credential for the workspace tenant", async () => {
     const response = await request(token);
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ authorized: true });
+    expect(response.json()).toEqual({ authorized: true, projectScope: null });
   });
 
   it("rejects cross-tenant and invalid service credentials", async () => {
