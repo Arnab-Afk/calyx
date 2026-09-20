@@ -26,8 +26,12 @@ export async function internalAskRoute(app: FastifyInstance): Promise<void> {
       if (!tenantId) return;
 
       const investigationNudge = `
-For this web ask: if the user mentions errors, spikes, latency, outages, deploys, or "what changed",
-you must use tools before answering — prefer query_logs + get_change_context for the last 1-6 hours.
+For this web ask:
+- If the user names a project (e.g. app1), call list_services and use that project's mapped
+  log-source services (e.g. prohuman-api) — do not filter tools with service=<project slug>
+  unless that slug also appears as a real emitting service with non-synthetic traffic.
+- For errors/spikes/uptime/health/"what changed", use query_logs + get_service_stats on the
+  mapped services, plus get_change_context for the window.
 `;
 
       const response = await runAgent(

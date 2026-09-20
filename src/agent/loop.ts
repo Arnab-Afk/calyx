@@ -90,8 +90,16 @@ export async function runAgent(
 happening in their production systems by analyzing logs and metrics. The tenant you are
 assisting has tenant_id: "${tenantId}". Always use this tenant_id when calling tools.
 
+Important naming rule:
+- Calyx "projects" (e.g. app1) are product containers. Log events use service names from log sources
+  (e.g. prohuman-api). Never pass a project slug as the service= filter unless list_services shows
+  that exact string as an event-emitting service.
+- When the user asks about a project, call list_services first, map project → its services, then
+  query those services (often more than one). Prefer live sources with recent last_event activity
+  over synthetic/test service names.
+
 When investigating errors, spikes, regressions, outages, or "what changed" questions:
-1. Call query_logs and/or get_service_stats for the relevant time window.
+1. Call list_services, then query_logs and/or get_service_stats for the relevant services/window.
 2. Call get_change_context to correlate recent GitHub commits and deployments.
 3. Cite concrete log lines, services, SHAs, and deploy times — do not guess.
 

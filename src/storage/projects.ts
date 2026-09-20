@@ -127,6 +127,41 @@ export async function listProjects(tenantId: string): Promise<Project[]> {
   return result.rows.map(mapProject);
 }
 
+/** Project slug/name → configured log source service names (not event-discovered names). */
+export async function listProjectServiceMap(
+  tenantId: string,
+): Promise<
+  Array<{
+    projectId: string;
+    slug: string;
+    name: string;
+    services: string[];
+  }>
+> {
+  const result = await getPool().query(
+    `SELECT p.id, p.slug, p.name,
+            coalesce(
+              array_agg(DISTINCT s.service ORDER BY s.service)
+                FILTER (WHERE s.service IS NOT NULL),
+              '{}'
+            ) AS services
+     FROM projects p
+     LEFT JOIN log_sources s ON s.project_id = p.id
+     WHERE p.tenant_id = $1
+     GROUP BY p.id, p.slug, p.name
+     ORDER BY p.slug`,
+    [tenantId],
+  );
+  return result.rows.map((row) => ({
+    projectId: String(row.id),
+    slug: String(row.slug),
+    name: String(row.name),
+    services: Array.isArray(row.services)
+      ? row.services.map(String).filter(Boolean)
+      : [],
+  }));
+}
+
 export async function getProject(
   tenantId: string,
   idOrSlug: string
