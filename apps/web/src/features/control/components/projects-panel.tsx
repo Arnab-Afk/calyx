@@ -1,7 +1,7 @@
 'use client';
 
 import { Check, Copy, GitBranch, KeyRound, Loader2, Plus, RefreshCw, Unplug } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -39,10 +39,15 @@ function CopyButton({ value, label = 'Copy' }: { value: string; label?: string }
   );
 }
 
-export function ProjectsPanel() {
+export function ProjectsPanel({ initialSlug = null }: { initialSlug?: string | null }) {
   const { projects, loading, error, create, reload } = useOpsProjects();
   const [slug, setSlug] = useState('');
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(initialSlug);
+
+  useEffect(() => {
+    if (initialSlug) setSelected(initialSlug);
+  }, [initialSlug]);
+
   const {
     detail,
     sources,
@@ -68,11 +73,12 @@ export function ProjectsPanel() {
   };
 
   return (
-    <div className="space-y-4 px-6 py-5">
+    <div className="mx-auto max-w-4xl space-y-4 px-6 py-8">
       <div>
-        <h2 className="font-[family-name:var(--font-display)] text-lg text-white">Projects &amp; logs</h2>
+        <p className="font-[family-name:var(--font-display)] text-[11px] uppercase tracking-[0.2em] text-white/40">Dashboard</p>
+        <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-white">Projects &amp; logs</h2>
         <p className="mt-1 text-sm text-white/50">
-          Manage projects, generate source API keys, and connect the GitHub repo Calyx uses for remediations.
+          Workspace → projects → sources &amp; GitHub. Generate API keys and connect the repo Calyx uses for remediations.
         </p>
       </div>
 

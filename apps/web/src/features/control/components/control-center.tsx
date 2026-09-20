@@ -41,6 +41,58 @@ interface ControlCenterProps {
   initialSection?: ControlSection;
 }
 
+export function ControlCenterShell({
+  section,
+  setSection,
+  onClose,
+  className,
+}: {
+  section: ControlSection;
+  setSection: (s: ControlSection) => void;
+  onClose?: () => void;
+  className?: string;
+}) {
+  return (
+    <div className={cn('flex h-full w-full gap-0 overflow-hidden border border-white/10 bg-[#0c0c10] text-white', className)}>
+      <aside className="flex w-[220px] shrink-0 flex-col border-r border-white/10 bg-[#08080b]">
+        <div className="border-b border-white/10 px-4 py-4">
+          <p className="font-[family-name:var(--font-display)] text-[11px] uppercase tracking-[0.2em] text-white/45">Calyx</p>
+          <p className="mt-1 text-sm font-medium text-white/90">Control center</p>
+        </div>
+        <nav className="flex flex-1 flex-col gap-0.5 p-2">
+          {NAV.map((item) => {
+            const Icon = item.icon;
+            const active = section === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setSection(item.id)}
+                className={cn(
+                  'flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition',
+                  active ? 'bg-[var(--sazabi-crimson)]/20 text-white' : 'text-white/60 hover:bg-white/5 hover:text-white',
+                )}
+              >
+                <Icon className="size-4 shrink-0 opacity-80" />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+      </aside>
+
+      <div className="min-w-0 flex-1 overflow-y-auto">
+        {section === 'start' && <StartPanel onGo={setSection} />}
+        {section === 'profile' && <ProfilePanel />}
+        {section === 'workspace' && <WorkspacePanel onClose={onClose} />}
+        {section === 'members' && <MembersPanel />}
+        {section === 'projects' && <ProjectsPanel />}
+        {section === 'connections' && <ConnectionsPanel />}
+      </div>
+    </div>
+  );
+}
+
 export function ControlCenter({ open, setOpen, initialSection = 'start' }: ControlCenterProps) {
   const [section, setSection] = useState<ControlSection>(initialSection);
 
@@ -55,42 +107,7 @@ export function ControlCenter({ open, setOpen, initialSection = 'start' }: Contr
           <DialogTitle>Calyx settings</DialogTitle>
           <DialogDescription>Manage profile, workspace, projects, and connections</DialogDescription>
         </DialogHeader>
-
-        <aside className="flex w-[220px] shrink-0 flex-col border-r border-white/10 bg-[#08080b]">
-          <div className="border-b border-white/10 px-4 py-4">
-            <p className="font-[family-name:var(--font-display)] text-[11px] uppercase tracking-[0.2em] text-white/45">Calyx</p>
-            <p className="mt-1 text-sm font-medium text-white/90">Control center</p>
-          </div>
-          <nav className="flex flex-1 flex-col gap-0.5 p-2">
-            {NAV.map((item) => {
-              const Icon = item.icon;
-              const active = section === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setSection(item.id)}
-                  className={cn(
-                    'flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition',
-                    active ? 'bg-[var(--sazabi-crimson)]/20 text-white' : 'text-white/60 hover:bg-white/5 hover:text-white',
-                  )}
-                >
-                  <Icon className="size-4 shrink-0 opacity-80" />
-                  {item.label}
-                </button>
-              );
-            })}
-          </nav>
-        </aside>
-
-        <div className="min-w-0 flex-1 overflow-y-auto">
-          {section === 'start' && <StartPanel onGo={setSection} />}
-          {section === 'profile' && <ProfilePanel />}
-          {section === 'workspace' && <WorkspacePanel onClose={() => setOpen(false)} />}
-          {section === 'members' && <MembersPanel />}
-          {section === 'projects' && <ProjectsPanel />}
-          {section === 'connections' && <ConnectionsPanel />}
-        </div>
+        <ControlCenterShell section={section} setSection={setSection} onClose={() => setOpen(false)} className="border-0" />
       </DialogContent>
     </Dialog>
   );
@@ -181,7 +198,7 @@ function ProfilePanel() {
   );
 }
 
-function WorkspacePanel({ onClose }: { onClose: () => void }) {
+function WorkspacePanel({ onClose }: { onClose?: () => void }) {
   const router = useRouter();
   const workspaceId = useWorkspaceId();
   const { data: workspace } = useGetWorkspace({ id: workspaceId });
@@ -263,7 +280,7 @@ function WorkspacePanel({ onClose }: { onClose: () => void }) {
                 {
                   onSuccess: () => {
                     toast.success('Workspace deleted');
-                    onClose();
+                    onClose?.();
                     router.replace('/');
                   },
                   onError: (e) => toast.error(e.message),

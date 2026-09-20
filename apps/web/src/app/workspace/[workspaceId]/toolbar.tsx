@@ -59,7 +59,16 @@ export const Toolbar = () => {
 
   return (
     <nav className="flex h-10 items-center justify-between border-b border-white/10 bg-[#0c0c0e] p-1.5">
-      <div className="flex-1" aria-hidden />
+      <div className="flex flex-1 items-center gap-2 pl-2">
+        <span className="hidden font-[family-name:var(--font-display)] text-[11px] uppercase tracking-[0.18em] text-white/35 sm:inline">
+          Calyx
+        </span>
+        {data?.name && (
+          <span className="truncate text-xs text-white/55">
+            <span className="text-white/35">/</span> {data.name}
+          </span>
+        )}
+      </div>
 
       <div className="min-w-[280px] max-w-[642px] shrink grow-[2]">
         <Button onClick={() => setOpen(true)} size="sm" className="h-7 w-full justify-start bg-accent/25 px-2 hover:bg-accent/25">

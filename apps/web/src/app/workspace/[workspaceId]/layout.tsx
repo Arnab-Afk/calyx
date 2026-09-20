@@ -1,6 +1,7 @@
 'use client';
 
 import { Loader } from 'lucide-react';
+import { usePathname } from 'next/navigation';
 import { type PropsWithChildren, useEffect } from 'react';
 
 import type { Id } from '@/../convex/_generated/dataModel';
@@ -8,6 +9,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/componen
 import { Profile } from '@/features/members/components/profile';
 import { Thread } from '@/features/messages/components/thread';
 import { usePanel } from '@/hooks/use-panel';
+import { isChatRoute } from '@/hooks/use-workspace-section';
 import { useWorkspaceId } from '@/hooks/use-workspace-id';
 import { connectChatRealtime } from '@/lib/chat-api';
 
@@ -16,6 +18,8 @@ import { Toolbar } from './toolbar';
 import { WorkspaceSidebar } from './workspace-sidebar';
 
 const WorkspaceIdLayout = ({ children }: Readonly<PropsWithChildren>) => {
+  const pathname = usePathname();
+  const chatMode = isChatRoute(pathname);
   const { parentMessageId, profileMemberId, onClose } = usePanel();
   const workspaceId = useWorkspaceId();
 
@@ -26,7 +30,7 @@ const WorkspaceIdLayout = ({ children }: Readonly<PropsWithChildren>) => {
     return () => socket.close();
   }, [workspaceId]);
 
-  const showPanel = !!parentMessageId || !!profileMemberId;
+  const showPanel = chatMode && (!!parentMessageId || !!profileMemberId);
 
   return (
     <div className="h-full">
@@ -35,34 +39,38 @@ const WorkspaceIdLayout = ({ children }: Readonly<PropsWithChildren>) => {
       <div className="flex h-[calc(100vh_-_40px)]">
         <Sidebar />
 
-        <ResizablePanelGroup direction="horizontal" autoSaveId="slack-clone-workspace-layout">
-          <ResizablePanel defaultSize={20} minSize={11} className="bg-[#101014]">
-            <WorkspaceSidebar />
-          </ResizablePanel>
+        {chatMode ? (
+          <ResizablePanelGroup direction="horizontal" autoSaveId="slack-clone-workspace-layout">
+            <ResizablePanel defaultSize={20} minSize={11} className="bg-[#101014]">
+              <WorkspaceSidebar />
+            </ResizablePanel>
 
-          <ResizableHandle withHandle />
+            <ResizableHandle withHandle />
 
-          <ResizablePanel defaultSize={80} minSize={20}>
-            {children}
-          </ResizablePanel>
+            <ResizablePanel defaultSize={80} minSize={20}>
+              {children}
+            </ResizablePanel>
 
-          {showPanel && (
-            <>
-              <ResizableHandle withHandle />
-              <ResizablePanel minSize={20} defaultSize={29}>
-                {parentMessageId ? (
-                  <Thread messageId={parentMessageId as Id<'messages'>} onClose={onClose} />
-                ) : profileMemberId ? (
-                  <Profile memberId={profileMemberId as Id<'members'>} onClose={onClose} />
-                ) : (
-                  <div className="flex h-full items-center justify-center">
-                    <Loader className="size-5 animate-spin text-muted-foreground" />
-                  </div>
-                )}
-              </ResizablePanel>
-            </>
-          )}
-        </ResizablePanelGroup>
+            {showPanel && (
+              <>
+                <ResizableHandle withHandle />
+                <ResizablePanel minSize={20} defaultSize={29}>
+                  {parentMessageId ? (
+                    <Thread messageId={parentMessageId as Id<'messages'>} onClose={onClose} />
+                  ) : profileMemberId ? (
+                    <Profile memberId={profileMemberId as Id<'members'>} onClose={onClose} />
+                  ) : (
+                    <div className="flex h-full items-center justify-center">
+                      <Loader className="size-5 animate-spin text-muted-foreground" />
+                    </div>
+                  )}
+                </ResizablePanel>
+              </>
+            )}
+          </ResizablePanelGroup>
+        ) : (
+          <main className="min-w-0 flex-1 overflow-hidden bg-[#0a0a0c]">{children}</main>
+        )}
       </div>
     </div>
   );
