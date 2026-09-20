@@ -1,5 +1,7 @@
 # Deploy Calyx end-to-end (web + Go chat + Node intake)
 
+For the AWS Ship It deployment (ECS, RDS, ElastiCache, S3, ALB, ACM, Route 53, Secrets Manager, and CloudWatch), use [`../infra/aws/README.md`](../infra/aws/README.md). The generic Compose path below remains useful outside AWS.
+
 Deploy these three services against the **same Postgres and Redis**. Redis backs both log intake and cross-replica Go realtime delivery.
 
 | Service                | Role                                  | Typical URL                             |

@@ -41,7 +41,7 @@ func main() {
 	objects, err := objectstore.NewS3(ctx, objectstore.Config{
 		Endpoint: cfg.ObjectEndpoint, Region: cfg.ObjectRegion, Bucket: cfg.ObjectBucket,
 		AccessKeyID: cfg.ObjectAccessKeyID, SecretAccessKey: cfg.ObjectSecretKey,
-		UsePathStyle: cfg.ObjectPathStyle,
+		UsePathStyle: cfg.ObjectPathStyle, UseIAM: cfg.ObjectUseIAM,
 	})
 	if err != nil {
 		log.Fatalf("object storage: %v", err)

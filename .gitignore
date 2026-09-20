@@ -6,6 +6,13 @@ dist/
 deploy/*.env
 !deploy/.env.production.example
 tmp/
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+infra/aws/images.auto.tfvars
+infra/aws/cloudwatch-forwarder.zip
 apps/web/node_modules/
 apps/web/.next/
 apps/web/.env*.local

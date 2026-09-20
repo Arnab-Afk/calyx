@@ -32,17 +32,23 @@ func main() {
 	if err != nil {
 		log.Fatalf("OBJECT_STORAGE_PATH_STYLE: %v", err)
 	}
+	useIAM, err := strconv.ParseBool(os.Getenv("OBJECT_STORAGE_USE_IAM"))
+	if err != nil {
+		log.Fatalf("OBJECT_STORAGE_USE_IAM: %v", err)
+	}
 	region := os.Getenv("OBJECT_STORAGE_REGION")
 	if region == "" {
 		region = "auto"
 	}
-	store, err := objectstore.NewS3(ctx, objectstore.Config{
-		Endpoint: required("OBJECT_STORAGE_ENDPOINT"), Region: region,
-		Bucket:          required("OBJECT_STORAGE_BUCKET"),
-		AccessKeyID:     required("OBJECT_STORAGE_ACCESS_KEY_ID"),
-		SecretAccessKey: required("OBJECT_STORAGE_SECRET_ACCESS_KEY"),
-		UsePathStyle:    pathStyle,
-	})
+	storeConfig := objectstore.Config{
+		Endpoint: os.Getenv("OBJECT_STORAGE_ENDPOINT"), Region: region,
+		Bucket: required("OBJECT_STORAGE_BUCKET"), UsePathStyle: pathStyle, UseIAM: useIAM,
+	}
+	if !useIAM {
+		storeConfig.AccessKeyID = required("OBJECT_STORAGE_ACCESS_KEY_ID")
+		storeConfig.SecretAccessKey = required("OBJECT_STORAGE_SECRET_ACCESS_KEY")
+	}
+	store, err := objectstore.NewS3(ctx, storeConfig)
 	if err != nil {
 		log.Fatalf("object storage: %v", err)
 	}

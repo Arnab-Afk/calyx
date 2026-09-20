@@ -68,6 +68,11 @@ jobs:
         working-directory: apps/web
         env:
           NEXT_PUBLIC_CALYX_CHAT_URL: http://localhost:14000
+      - run: >-
+          docker build -f apps/web/Dockerfile
+          --build-arg NEXT_PUBLIC_CALYX_CHAT_URL=https://chat.example.com
+          --build-arg NEXT_PUBLIC_CALYX_MCP_URL=https://mcp.example.com/mcp
+          -t calyx-web-ci .
 
   go:
     runs-on: ubuntu-latest
@@ -78,6 +83,21 @@ jobs:
           -v "$PWD/apps/api:/src" -w /src
           golang:1.26-alpine sh -c 'gofmt -d $(find cmd internal -name "*.go") | tee /tmp/gofmt.diff; test ! -s /tmp/gofmt.diff; go test ./...'
       - run: docker build -t calyx-chat-ci ./apps/api
+
+  aws-infrastructure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+      - run: terraform fmt -check -recursive
+        working-directory: infra/aws
+      - run: terraform init -backend=false
+        working-directory: infra/aws
+      - run: terraform validate
+        working-directory: infra/aws
+      - run: bash -n scripts/aws/bootstrap.sh scripts/aws/push-images.sh scripts/aws/deploy.sh
 
   deployment-config:
     runs-on: ubuntu-latest
