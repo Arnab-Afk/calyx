@@ -4,31 +4,35 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { type ChatWorkspace, chatApi, chatApiUrl } from '@/lib/chat-api';
 
-export function useChatWorkspaces() {
+export function useChatWorkspaces(enabled = true) {
   const [data, setData] = useState<ChatWorkspace[]>([]);
   const [isLoading, setIsLoading] = useState(Boolean(chatApiUrl));
   const [error, setError] = useState<Error | null>(null);
 
-  const reload = useCallback(async (signal?: AbortSignal) => {
-    if (!chatApiUrl) return;
-    try {
-      setError(null);
-      const response = await chatApi.workspaces(signal);
-      setData(response.workspaces);
-    } catch (value) {
-      if ((value as { name?: string }).name !== 'AbortError') {
-        setError(value instanceof Error ? value : new Error(String(value)));
+  const reload = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!chatApiUrl || !enabled) return;
+      try {
+        setError(null);
+        const response = await chatApi.workspaces(signal);
+        setData(response.workspaces);
+      } catch (value) {
+        if ((value as { name?: string }).name !== 'AbortError') {
+          setError(value instanceof Error ? value : new Error(String(value)));
+        }
+      } finally {
+        if (!signal?.aborted) setIsLoading(false);
       }
-    } finally {
-      if (!signal?.aborted) setIsLoading(false);
-    }
-  }, []);
+    },
+    [enabled],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
-    void reload(controller.signal);
+    if (enabled) void reload(controller.signal);
+    else setIsLoading(false);
     return () => controller.abort();
-  }, [reload]);
+  }, [enabled, reload]);
 
   const create = useCallback(async (name: string) => {
     const result = await chatApi.createWorkspace(name);
