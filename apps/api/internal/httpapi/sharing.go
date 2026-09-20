@@ -15,7 +15,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const workspaceCols = `id::text, name, join_code, owner_id::text, created_at,
+const workspaceSelect = `w.id::text, w.name, w.join_code, w.owner_id::text, w.created_at,
+	COALESCE(w.kind, 'standard'), w.parent_workspace_id::text, w.scoped_project_id, w.scoped_project_slug`
+
+const workspaceReturning = `id::text, name, join_code, owner_id::text, created_at,
 	COALESCE(kind, 'standard'), parent_workspace_id::text, scoped_project_id, scoped_project_slug`
 
 func scanWorkspace(scanner interface {
@@ -153,8 +156,8 @@ func (s *Server) shareProject(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) findProjectShareWorkspace(ctx context.Context, hostID, projectID string) (models.Workspace, error) {
 	row := s.db.QueryRow(ctx,
-		`SELECT `+workspaceCols+` FROM chat_workspaces
-		 WHERE parent_workspace_id=$1::uuid AND scoped_project_id=$2 AND kind='project_share'
+		`SELECT `+workspaceSelect+` FROM chat_workspaces w
+		 WHERE w.parent_workspace_id=$1::uuid AND w.scoped_project_id=$2 AND w.kind='project_share'
 		 LIMIT 1`,
 		hostID, projectID,
 	)
@@ -173,7 +176,7 @@ func (s *Server) createProjectShareWorkspace(ctx context.Context, hostID, name, 
 		`INSERT INTO chat_workspaces
 		   (name, join_code, owner_id, kind, parent_workspace_id, scoped_project_id, scoped_project_slug)
 		 VALUES ($1,$2,$3::uuid,'project_share',$4::uuid,$5,$6)
-		 RETURNING `+workspaceCols,
+		 RETURNING `+workspaceReturning,
 		name, code, ownerID, hostID, projectID, projectSlug,
 	)
 	guest, err := scanWorkspace(row)

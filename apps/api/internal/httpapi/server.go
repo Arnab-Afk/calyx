@@ -376,7 +376,7 @@ func (s *Server) getUser(ctx context.Context, id string) (*models.User, error) {
 func (s *Server) listWorkspaces(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r.Context())
 	rows, err := s.db.Query(r.Context(),
-		`SELECT `+workspaceCols+`
+		`SELECT `+workspaceSelect+`
 		 FROM chat_workspaces w
 		 JOIN chat_members m ON m.workspace_id = w.id
 		 WHERE m.user_id=$1
@@ -423,7 +423,7 @@ func (s *Server) createWorkspace(w http.ResponseWriter, r *http.Request) {
 	var ws models.Workspace
 	row := tx.QueryRow(r.Context(),
 		`INSERT INTO chat_workspaces (name, join_code, owner_id) VALUES ($1,$2,$3)
-		 RETURNING `+workspaceCols,
+		 RETURNING `+workspaceReturning,
 		body.Name, code, uid,
 	)
 	ws, err = scanWorkspace(row)
@@ -465,7 +465,7 @@ func (s *Server) joinWorkspace(w http.ResponseWriter, r *http.Request) {
 	}
 	body.JoinCode = strings.ToLower(strings.TrimSpace(body.JoinCode))
 	ws, err := scanWorkspace(s.db.QueryRow(r.Context(),
-		`SELECT `+workspaceCols+` FROM chat_workspaces WHERE id=$1`,
+		`SELECT `+workspaceSelect+` FROM chat_workspaces w WHERE w.id=$1`,
 		body.WorkspaceID,
 	))
 	if err != nil {
@@ -495,7 +495,7 @@ func (s *Server) getWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ws, err := scanWorkspace(s.db.QueryRow(r.Context(),
-		`SELECT `+workspaceCols+` FROM chat_workspaces WHERE id=$1`, wsID,
+		`SELECT `+workspaceSelect+` FROM chat_workspaces w WHERE w.id=$1`, wsID,
 	))
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "workspace not found")

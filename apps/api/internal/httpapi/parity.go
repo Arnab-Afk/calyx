@@ -13,7 +13,7 @@ import (
 func (s *Server) getWorkspaceInfo(w http.ResponseWriter, r *http.Request) {
 	wsID := chi.URLParam(r, "workspaceID")
 	ws, err := scanWorkspace(s.db.QueryRow(r.Context(),
-		`SELECT `+workspaceCols+` FROM chat_workspaces WHERE id=$1`, wsID,
+		`SELECT `+workspaceSelect+` FROM chat_workspaces w WHERE w.id=$1`, wsID,
 	))
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "workspace not found")
