@@ -76,6 +76,9 @@ func New(db *pgxpool.Pool, authSvc *auth.Service, hub *realtime.Hub, corsOrigins
 			r.Patch("/workspaces/{workspaceID}", s.updateWorkspace)
 			r.Delete("/workspaces/{workspaceID}", s.deleteWorkspace)
 			r.Post("/workspaces/{workspaceID}/join-code", s.rotateJoinCode)
+			r.Get("/workspaces/{workspaceID}/mcp-credentials", s.listMCPCredentials)
+			r.Post("/workspaces/{workspaceID}/mcp-credentials", s.createMCPCredential)
+			r.Delete("/workspaces/{workspaceID}/mcp-credentials/{credentialID}", s.revokeMCPCredential)
 
 			r.Get("/workspaces/{workspaceID}/members", s.listMembers)
 			r.Post("/workspaces/{workspaceID}/uploads", s.createUpload)

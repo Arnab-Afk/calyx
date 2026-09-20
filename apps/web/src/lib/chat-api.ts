@@ -47,6 +47,20 @@ export interface ChatCalyxData {
   toolNames: string[];
 }
 
+export interface ChatMcpCredential {
+  credentialId: string;
+  name: string;
+  scopes: string[];
+  createdAt: string;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  revokedAt: string | null;
+}
+
+export interface CreatedChatMcpCredential extends ChatMcpCredential {
+  token: string;
+}
+
 export interface ChatMessage {
   id: string;
   body: string;
@@ -149,6 +163,17 @@ export const chatApi = {
   rotateJoinCode: (workspaceId: string) =>
     request<{ joinCode: string }>(`/v1/workspaces/${encodeURIComponent(workspaceId)}/join-code`, {
       method: 'POST',
+    }),
+  mcpCredentials: (workspaceId: string) =>
+    request<{ credentials: ChatMcpCredential[] }>(`/v1/workspaces/${encodeURIComponent(workspaceId)}/mcp-credentials`),
+  createMcpCredential: (workspaceId: string, name: string, expiresInDays?: number) =>
+    request<{ credential: CreatedChatMcpCredential }>(`/v1/workspaces/${encodeURIComponent(workspaceId)}/mcp-credentials`, {
+      method: 'POST',
+      body: JSON.stringify({ name, expiresInDays }),
+    }),
+  revokeMcpCredential: (workspaceId: string, credentialId: string) =>
+    request<{ revoked: boolean }>(`/v1/workspaces/${encodeURIComponent(workspaceId)}/mcp-credentials/${encodeURIComponent(credentialId)}`, {
+      method: 'DELETE',
     }),
   currentMember: (workspaceId: string, signal?: AbortSignal) =>
     request<ChatMember>(`/v1/workspaces/${encodeURIComponent(workspaceId)}/members/me`, { signal }),
