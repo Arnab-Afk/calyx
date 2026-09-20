@@ -173,6 +173,8 @@ services:
       JWT_ISSUER: ${JWT_ISSUER:-calyx-chat-api}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-calyx-web}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      CALYX_ASK_URL: ${CALYX_ASK_URL:-}
+      CALYX_INTERNAL_API_KEY: ${CALYX_INTERNAL_API_KEY:-}
     ports:
       - "14000:14000"
     depends_on:

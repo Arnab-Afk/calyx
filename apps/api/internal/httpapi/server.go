@@ -26,18 +26,23 @@ import (
 const sessionCookie = "calyx_session"
 
 type Server struct {
-	db           *pgxpool.Pool
-	auth         *auth.Service
-	hub          *realtime.Hub
-	cookieSecure bool
-	cookieTTL    time.Duration
-	wsOrigins    []string
+	db               *pgxpool.Pool
+	auth             *auth.Service
+	hub              *realtime.Hub
+	cookieSecure     bool
+	cookieTTL        time.Duration
+	wsOrigins        []string
+	calyxAskURL      string
+	calyxInternalKey string
+	httpClient       *http.Client
 }
 
-func New(db *pgxpool.Pool, authSvc *auth.Service, hub *realtime.Hub, corsOrigins string, cookieSecure bool, cookieTTL time.Duration) http.Handler {
+func New(db *pgxpool.Pool, authSvc *auth.Service, hub *realtime.Hub, corsOrigins string, cookieSecure bool, cookieTTL time.Duration, calyxAskURL, calyxInternalKey string) http.Handler {
 	s := &Server{
 		db: db, auth: authSvc, hub: hub, cookieSecure: cookieSecure,
 		cookieTTL: cookieTTL, wsOrigins: websocketOrigins(corsOrigins),
+		calyxAskURL: strings.TrimRight(calyxAskURL, "/"), calyxInternalKey: calyxInternalKey,
+		httpClient: &http.Client{Timeout: 25 * time.Second},
 	}
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.RealIP, middleware.Logger, middleware.Recoverer)
@@ -85,6 +90,7 @@ func New(db *pgxpool.Pool, authSvc *auth.Service, hub *realtime.Hub, corsOrigins
 			r.Delete("/channels/{channelID}", s.deleteChannel)
 			r.Get("/channels/{channelID}/messages", s.listMessages)
 			r.Post("/channels/{channelID}/messages", s.createMessage)
+			r.Post("/channels/{channelID}/calyx", s.askCalyx)
 
 			r.Post("/workspaces/{workspaceID}/conversations", s.createOrGetConversation)
 			r.Get("/conversations/{conversationID}", s.getConversation)

@@ -56,6 +56,7 @@ Registration and login return a bearer token for CLI clients and also set an HTT
 | `GET/POST` | `/v1/workspaces/:id/channels` |
 | `GET/PATCH/DELETE` | `/v1/channels/:id` |
 | `GET/POST` | `/v1/channels/:id/messages` |
+| `POST` | `/v1/channels/:id/calyx` (trusted server-side investigation) |
 | `POST` | `/v1/workspaces/:id/conversations` (idempotent create/get) |
 | `GET` | `/v1/conversations/:id` |
 | `GET/POST` | `/v1/conversations/:id/messages` |
@@ -75,6 +76,20 @@ Registration and login return a bearer token for CLI clients and also set an HTT
 | `JWT_AUDIENCE` | `calyx-web` | Validated token audience |
 | `JWT_TTL_HOURS` | `24` | Access/session lifetime; range 1–720 hours |
 | `CORS_ORIGINS` | local Next.js origins | Comma-separated; wildcard rejected in production |
+| `CALYX_ASK_URL` | unset | Node ingestion origin, for example `http://ingestion:3000` |
+| `CALYX_INTERNAL_API_KEY` | unset | Shared server-only key; must be configured with `CALYX_ASK_URL` |
+
+## Trusted Calyx investigations
+
+`POST /v1/channels/:id/calyx` accepts only a query and optional thread parent. The Go API authenticates workspace membership, calls Node through the internal service key, and persists both the question and trusted Calyx response. The browser cannot supply tenant IDs or `calyxData`.
+
+Before using it, link the Go workspace UUID to its observability tenant:
+
+```bash
+npm run mcp:workspace-link -- --workspace <go-workspace-uuid> --tenant <tenant-id>
+```
+
+Configure the same `CALYX_INTERNAL_API_KEY` on Go and Node, and set Go's `CALYX_ASK_URL` to the Node ingestion origin.
 
 ## Deploy
 

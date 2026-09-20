@@ -20,6 +20,9 @@
 
 ## Done
 
+- [x] Add the trusted workspace-to-tenant web investigation boundary and retire caller-selected tenant asks — 2026-09-20
+- [x] Add private direct-conversation and direct-message API parity — 2026-09-20
+- [x] Add workspace/member administration and single-resource API parity — 2026-09-20
 - [x] Harden and test the Go chat API identity, browser-session, WebSocket, and trusted-message boundaries — 2026-09-20
 - [x] Persist GitHub commits/deployments and expose tenant-scoped change correlation — 2026-09-20
 - [x] Add authenticated CloudWatch Logs subscription ingestion and onboarding — 2026-09-20

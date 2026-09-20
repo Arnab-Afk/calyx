@@ -9,15 +9,16 @@ import (
 )
 
 type Config struct {
-	Addr         string
-	DatabaseURL  string
-	JWTSecret    string
-	JWTIssuer    string
-	JWTAudience  string
-	TokenTTL     time.Duration
-	CORSOrigins  string
-	CookieSecure bool
-	CalyxAskURL  string // optional proxy to Node POST /v1/ask
+	Addr             string
+	DatabaseURL      string
+	JWTSecret        string
+	JWTIssuer        string
+	JWTAudience      string
+	TokenTTL         time.Duration
+	CORSOrigins      string
+	CookieSecure     bool
+	CalyxAskURL      string
+	CalyxInternalKey string
 }
 
 func Load() (Config, error) {
@@ -45,17 +46,23 @@ func Load() (Config, error) {
 	if production && strings.Contains(corsOrigins, "*") {
 		return Config{}, fmt.Errorf("CORS_ORIGINS must list explicit origins in production")
 	}
+	calyxAskURL := os.Getenv("CALYX_ASK_URL")
+	calyxInternalKey := os.Getenv("CALYX_INTERNAL_API_KEY")
+	if (calyxAskURL == "") != (calyxInternalKey == "") {
+		return Config{}, fmt.Errorf("CALYX_ASK_URL and CALYX_INTERNAL_API_KEY must be configured together")
+	}
 
 	return Config{
-		Addr:         envOr("ADDR", ":14000"),
-		DatabaseURL:  envOr("DATABASE_URL", "postgres://calyx:calyx@localhost:15432/calyx"),
-		JWTSecret:    secret,
-		JWTIssuer:    envOr("JWT_ISSUER", "calyx-chat-api"),
-		JWTAudience:  envOr("JWT_AUDIENCE", "calyx-web"),
-		TokenTTL:     time.Duration(ttlHours) * time.Hour,
-		CORSOrigins:  corsOrigins,
-		CookieSecure: production,
-		CalyxAskURL:  os.Getenv("CALYX_ASK_URL"),
+		Addr:             envOr("ADDR", ":14000"),
+		DatabaseURL:      envOr("DATABASE_URL", "postgres://calyx:calyx@localhost:15432/calyx"),
+		JWTSecret:        secret,
+		JWTIssuer:        envOr("JWT_ISSUER", "calyx-chat-api"),
+		JWTAudience:      envOr("JWT_AUDIENCE", "calyx-web"),
+		TokenTTL:         time.Duration(ttlHours) * time.Hour,
+		CORSOrigins:      corsOrigins,
+		CookieSecure:     production,
+		CalyxAskURL:      calyxAskURL,
+		CalyxInternalKey: calyxInternalKey,
 	}, nil
 }
 

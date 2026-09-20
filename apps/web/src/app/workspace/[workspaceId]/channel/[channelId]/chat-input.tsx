@@ -55,8 +55,6 @@ function quillBodyToText(body: string): string {
   return body.trim();
 }
 
-const TENANT_ID = process.env.NEXT_PUBLIC_CALYX_TENANT_ID ?? 'default';
-
 export const ChatInput = ({ placeholder }: ChatInputProps) => {
   const [editorKey, setEditorKey] = useState(0);
   const [isPending, setIsPending] = useState(false);
@@ -68,7 +66,7 @@ export const ChatInput = ({ placeholder }: ChatInputProps) => {
 
   const { mutate: createMessage } = useCreateMessage();
   const { mutate: generateUploadUrl } = useGenerateUploadUrl();
-  const { ask, buildCalyxData } = useCalyxAsk(TENANT_ID);
+  const { ask, buildCalyxData } = useCalyxAsk(workspaceId);
 
   const handleSubmit = async ({ body, image }: { body: string; image: File | null }) => {
     try {
