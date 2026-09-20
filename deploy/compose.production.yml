@@ -1,0 +1,105 @@
+services:
+  node-migrate:
+    image: ${CALYX_NODE_IMAGE:?set CALYX_NODE_IMAGE to an immutable image digest}
+    command: ["npm", "run", "migrate:prod"]
+    env_file: ${CALYX_ENV_FILE:-.env.production}
+    restart: "no"
+
+  intake:
+    image: ${CALYX_NODE_IMAGE:?set CALYX_NODE_IMAGE to an immutable image digest}
+    command: ["npm", "run", "start:ingestion"]
+    env_file: ${CALYX_ENV_FILE:-.env.production}
+    depends_on:
+      node-migrate:
+        condition: service_completed_successfully
+    ports: ["127.0.0.1:3000:3000"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/ready').then(r=>{if(!r.ok)process.exit(1)})",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  consumer:
+    image: ${CALYX_NODE_IMAGE:?set CALYX_NODE_IMAGE to an immutable image digest}
+    command: ["npm", "run", "start:consumer"]
+    env_file: ${CALYX_ENV_FILE:-.env.production}
+    depends_on:
+      node-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  detector:
+    image: ${CALYX_NODE_IMAGE:?set CALYX_NODE_IMAGE to an immutable image digest}
+    command: ["npm", "run", "start:detector"]
+    env_file: ${CALYX_ENV_FILE:-.env.production}
+    depends_on:
+      node-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  mcp:
+    image: ${CALYX_NODE_IMAGE:?set CALYX_NODE_IMAGE to an immutable image digest}
+    command: ["npm", "run", "start:mcp:http"]
+    env_file: ${CALYX_ENV_FILE:-.env.production}
+    depends_on:
+      node-migrate:
+        condition: service_completed_successfully
+    ports: ["127.0.0.1:3002:3002"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3002/health').then(r=>{if(!r.ok)process.exit(1)})",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  slack:
+    profiles: ["slack"]
+    image: ${CALYX_NODE_IMAGE:?set CALYX_NODE_IMAGE to an immutable image digest}
+    command: ["npm", "run", "start:slack"]
+    env_file: ${CALYX_ENV_FILE:-.env.production}
+    depends_on:
+      node-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  chat-migrate:
+    image: ${CALYX_CHAT_IMAGE:?set CALYX_CHAT_IMAGE to an immutable image digest}
+    entrypoint: ["/app/calyx-migrate"]
+    env_file: ${CALYX_ENV_FILE:-.env.production}
+    restart: "no"
+
+  chat-backfill:
+    image: ${CALYX_CHAT_IMAGE:?set CALYX_CHAT_IMAGE to an immutable image digest}
+    entrypoint: ["/app/calyx-backfill-uploads"]
+    env_file: ${CALYX_ENV_FILE:-.env.production}
+    depends_on:
+      chat-migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  chat-api:
+    image: ${CALYX_CHAT_IMAGE:?set CALYX_CHAT_IMAGE to an immutable image digest}
+    env_file: ${CALYX_ENV_FILE:-.env.production}
+    depends_on:
+      chat-backfill:
+        condition: service_completed_successfully
+    ports: ["127.0.0.1:14000:14000"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:14000/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped

@@ -1,6 +1,10 @@
 node_modules/
 dist/
 .env
+.env.production
+.env.production.local
+deploy/*.env
+!deploy/.env.production.example
 tmp/
 apps/web/node_modules/
 apps/web/.next/

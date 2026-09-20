@@ -3,6 +3,7 @@ set -euo pipefail
 BASE="${CALYX_CHAT_URL:-http://127.0.0.1:14000}"
 
 echo "health: $(curl -sf "$BASE/health")"
+echo "ready: $(curl -sf "$BASE/ready")"
 
 EMAIL="smoke-$(date +%s)@example.com"
 REG=$(curl -sf -X POST "$BASE/v1/auth/register" \

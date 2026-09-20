@@ -17,6 +17,7 @@
 
 ## Done
 
+- [x] Add immutable production images, release gates, readiness probes, preflight, and recovery runbook — 2026-09-20
 - [x] Move private workspace image storage to S3/R2 with backfill and durable cleanup — 2026-09-20
 - [x] Add shared Redis-backed Go realtime fan-out and versioned database migrations — 2026-09-20
 - [x] Add GitHub App installation state, repository validation, and automatic webhook provisioning — 2026-09-20

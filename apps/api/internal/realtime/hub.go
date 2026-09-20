@@ -149,6 +149,13 @@ func (h *Hub) listen(ctx context.Context, pubsub *redis.PubSub) {
 	}
 }
 
+func (h *Hub) Ready(ctx context.Context) error {
+	if err := h.redis.Ping(ctx).Err(); err != nil {
+		return fmt.Errorf("redis ping: %w", err)
+	}
+	return nil
+}
+
 func (h *Hub) Close() error {
 	h.cancel()
 	_ = h.redis.Close()

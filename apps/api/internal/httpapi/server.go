@@ -80,6 +80,23 @@ func New(
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "service": "calyx-chat-api"})
 	})
+	r.Get("/ready", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		if err := s.db.Ping(ctx); err != nil {
+			writeErr(w, http.StatusServiceUnavailable, "database unavailable")
+			return
+		}
+		if err := s.hub.Ready(ctx); err != nil {
+			writeErr(w, http.StatusServiceUnavailable, "redis unavailable")
+			return
+		}
+		if err := s.objects.Ready(ctx); err != nil {
+			writeErr(w, http.StatusServiceUnavailable, "object storage unavailable")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ready", "service": "calyx-chat-api"})
+	})
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Post("/auth/register", s.register)

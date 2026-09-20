@@ -397,3 +397,18 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Because.** Browser-visible public URLs or bucket credentials would weaken workspace authorization. A database-backed deletion queue preserves cleanup intent across crashes and cascade paths while tolerating repeated object deletion.
 
 **Consequence.** Object storage is required for Go API startup. Deployments apply migration `0002`, run `/app/calyx-backfill-uploads`, verify no legacy bytes remain, and retain the compatibility column until that verification is complete. PostgreSQL remains the authority for access checks and object lifecycle intent.
+
+---
+
+## D-021 — Gate production releases on immutable images and dependency readiness
+
+**Date:** 2026-09-20
+**Status:** accepted
+
+**Context.** Local development commands used `tsx`, health endpoints did not prove dependency availability, and deployment remained a prose checklist. That permitted mutable images, skipped release jobs, incomplete integration configuration, or services declared healthy while PostgreSQL, Redis, or R2 were unavailable.
+
+**Decision.** Compile Node services into a production image without development dependencies; publish Node and Go images by immutable digest. A production Compose boundary runs migration/backfill jobs before replicas, binds service ports to loopback, and waits on dependency-aware readiness. A fail-closed preflight validates TLS URLs, independent secrets, OAuth, GitHub App, R2, coding agent, optional Slack, and digest-pinned images before deployment.
+
+**Because.** Deployment correctness is part of the security boundary. A reproducible image and executable release gate prevent configuration drift and make rollback/recovery procedures testable.
+
+**Consequence.** Real deployment still requires infrastructure, DNS, OAuth, Slack, and GitHub credentials supplied outside the repository. `/health` is liveness only; load balancers use `/ready`. Schema rollback is always a forward repair migration rather than mutation of applied history.
