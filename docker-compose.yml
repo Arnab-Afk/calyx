@@ -28,6 +28,34 @@ services:
       timeout: 3s
       retries: 10
 
+  minio:
+    profiles: ["chat"]
+    image: quay.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: calyx-minio
+      MINIO_ROOT_PASSWORD: calyx-minio-secret
+    ports:
+      - "19000:9000"
+      - "19001:9001"
+    volumes:
+      - calyx_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio-init:
+    profiles: ["chat"]
+    image: quay.io/minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["mc alias set local http://minio:9000 calyx-minio calyx-minio-secret && mc mb --ignore-existing local/calyx-uploads"]
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+
   migrate:
     build: .
     command: ["npm", "run", "migrate"]
@@ -180,6 +208,12 @@ services:
     environment:
       DATABASE_URL: postgres://calyx:calyx@postgres:5432/calyx
       REDIS_URL: redis://redis:6379
+      OBJECT_STORAGE_ENDPOINT: http://minio:9000
+      OBJECT_STORAGE_REGION: us-east-1
+      OBJECT_STORAGE_BUCKET: calyx-uploads
+      OBJECT_STORAGE_ACCESS_KEY_ID: calyx-minio
+      OBJECT_STORAGE_SECRET_ACCESS_KEY: calyx-minio-secret
+      OBJECT_STORAGE_PATH_STYLE: "true"
       ADDR: ":14000"
       APP_ENV: ${APP_ENV:-development}
       JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-calyx-chat-api}
@@ -195,6 +229,8 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     healthcheck:
       test:
         [
@@ -212,4 +248,5 @@ services:
 volumes:
   calyx_pg_data:
   calyx_redis_data:
+  calyx_minio_data:
   calyx_forwarder_data:

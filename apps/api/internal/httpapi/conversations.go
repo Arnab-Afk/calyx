@@ -168,11 +168,11 @@ func (s *Server) createConversationMessage(w http.ResponseWriter, r *http.Reques
 	}
 	message, err := scanMessage(s.db.QueryRow(r.Context(),
 		`INSERT INTO chat_messages
-		   (body, member_id, workspace_id, conversation_id, parent_message_id, image_url)
-		 VALUES ($1,$2,$3,$4,$5,$6)
+		   (body, member_id, workspace_id, conversation_id, parent_message_id, image_url, upload_id)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7)
 		 RETURNING id::text, body, member_id::text, workspace_id::text, channel_id::text,
 		           parent_message_id::text, conversation_id::text, image_url, calyx_data, created_at, updated_at`,
-		body.Body, member.ID, conversation.WorkspaceID, conversationID, body.ParentMessageID, imageURL))
+		body.Body, member.ID, conversation.WorkspaceID, conversationID, body.ParentMessageID, imageURL, body.ImageID))
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "message creation failed")
 		return

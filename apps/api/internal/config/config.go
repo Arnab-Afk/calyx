@@ -13,6 +13,12 @@ type Config struct {
 	Addr               string
 	DatabaseURL        string
 	RedisURL           string
+	ObjectEndpoint     string
+	ObjectRegion       string
+	ObjectBucket       string
+	ObjectAccessKeyID  string
+	ObjectSecretKey    string
+	ObjectPathStyle    bool
 	JWTSecret          string
 	JWTIssuer          string
 	JWTAudience        string
@@ -55,6 +61,31 @@ func Load() (Config, error) {
 	if production && os.Getenv("REDIS_URL") == "" {
 		return Config{}, fmt.Errorf("REDIS_URL is required in production")
 	}
+	objectEndpoint := strings.TrimSpace(os.Getenv("OBJECT_STORAGE_ENDPOINT"))
+	objectBucket := strings.TrimSpace(os.Getenv("OBJECT_STORAGE_BUCKET"))
+	objectAccessKey := strings.TrimSpace(os.Getenv("OBJECT_STORAGE_ACCESS_KEY_ID"))
+	objectSecretKey := strings.TrimSpace(os.Getenv("OBJECT_STORAGE_SECRET_ACCESS_KEY"))
+	if !production {
+		if objectEndpoint == "" {
+			objectEndpoint = "http://localhost:19000"
+		}
+		if objectBucket == "" {
+			objectBucket = "calyx-uploads"
+		}
+		if objectAccessKey == "" {
+			objectAccessKey = "calyx-minio"
+		}
+		if objectSecretKey == "" {
+			objectSecretKey = "calyx-minio-secret"
+		}
+	}
+	if objectEndpoint == "" || objectBucket == "" || objectAccessKey == "" || objectSecretKey == "" {
+		return Config{}, fmt.Errorf("OBJECT_STORAGE_ENDPOINT, OBJECT_STORAGE_BUCKET, OBJECT_STORAGE_ACCESS_KEY_ID, and OBJECT_STORAGE_SECRET_ACCESS_KEY are required")
+	}
+	objectPathStyle, err := strconv.ParseBool(envOr("OBJECT_STORAGE_PATH_STYLE", "false"))
+	if err != nil {
+		return Config{}, fmt.Errorf("OBJECT_STORAGE_PATH_STYLE must be true or false")
+	}
 	calyxAskURL := strings.TrimSpace(os.Getenv("CALYX_ASK_URL"))
 	calyxInternalKey := strings.TrimSpace(os.Getenv("CALYX_INTERNAL_API_KEY"))
 	if (calyxAskURL == "") != (calyxInternalKey == "") {
@@ -74,6 +105,12 @@ func Load() (Config, error) {
 		Addr:               envOr("ADDR", ":14000"),
 		DatabaseURL:        envOr("DATABASE_URL", "postgres://calyx:calyx@localhost:15432/calyx"),
 		RedisURL:           redisURL,
+		ObjectEndpoint:     objectEndpoint,
+		ObjectRegion:       envOr("OBJECT_STORAGE_REGION", "auto"),
+		ObjectBucket:       objectBucket,
+		ObjectAccessKeyID:  objectAccessKey,
+		ObjectSecretKey:    objectSecretKey,
+		ObjectPathStyle:    objectPathStyle,
 		JWTSecret:          secret,
 		JWTIssuer:          envOr("JWT_ISSUER", "calyx-chat-api"),
 		JWTAudience:        envOr("JWT_AUDIENCE", "calyx-web"),

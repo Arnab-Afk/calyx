@@ -14,6 +14,7 @@ import (
 
 	"github.com/Arnab-Afk/calyx/apps/api/internal/auth"
 	"github.com/Arnab-Afk/calyx/apps/api/internal/models"
+	"github.com/Arnab-Afk/calyx/apps/api/internal/objectstore"
 	"github.com/Arnab-Afk/calyx/apps/api/internal/realtime"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -29,6 +30,7 @@ type Server struct {
 	db                 *pgxpool.Pool
 	auth               *auth.Service
 	hub                *realtime.Hub
+	objects            objectstore.Store
 	cookieSecure       bool
 	cookieSameSite     http.SameSite
 	cookieDomain       string
@@ -44,6 +46,7 @@ func New(
 	db *pgxpool.Pool,
 	authSvc *auth.Service,
 	hub *realtime.Hub,
+	objects objectstore.Store,
 	corsOrigins string,
 	cookieSecure bool,
 	cookieSameSite http.SameSite,
@@ -56,7 +59,7 @@ func New(
 		origins[i] = strings.TrimSpace(origins[i])
 	}
 	s := &Server{
-		db: db, auth: authSvc, hub: hub,
+		db: db, auth: authSvc, hub: hub, objects: objects,
 		cookieSecure: cookieSecure, cookieSameSite: cookieSameSite, cookieDomain: cookieDomain,
 		cookieTTL: cookieTTL, wsOrigins: websocketOrigins(corsOrigins),
 		calyxAskURL: strings.TrimRight(calyxAskURL, "/"), calyxInternalKey: calyxInternalKey,
@@ -803,11 +806,11 @@ func (s *Server) createMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	row := s.db.QueryRow(r.Context(),
-		`INSERT INTO chat_messages (body, member_id, workspace_id, channel_id, parent_message_id, image_url, calyx_data)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7)
+		`INSERT INTO chat_messages (body, member_id, workspace_id, channel_id, parent_message_id, image_url, upload_id, calyx_data)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
 		 RETURNING id::text, body, member_id::text, workspace_id::text, channel_id::text,
 		           parent_message_id::text, conversation_id::text, image_url, calyx_data, created_at, updated_at`,
-		body.Body, mem.ID, wsID, channelID, body.ParentMessageID, imageURL, nil,
+		body.Body, mem.ID, wsID, channelID, body.ParentMessageID, imageURL, body.ImageID, nil,
 	)
 	msg, err := scanMessage(row)
 	if err != nil {

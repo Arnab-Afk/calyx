@@ -382,3 +382,18 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Because.** Chat events are ephemeral invalidation/delivery signals while PostgreSQL remains the durable source of truth. Redis provides cross-replica fan-out without making it authoritative. Checksummed migrations make schema state reproducible and prevent silent edits to applied history.
 
 **Consequence.** Redis outages degrade realtime delivery but do not erase persisted chat data. Slow WebSocket clients can still drop events and must refetch durable state. Deployments must run `/app/calyx-migrate` before starting API replicas; the API no longer creates schema at startup.
+
+---
+
+## D-020 — Keep uploads private in S3-compatible object storage
+
+**Date:** 2026-09-20
+**Status:** accepted
+
+**Context.** PostgreSQL bytea made upload authorization straightforward but increased database and backup volume. Deleting rows after moving objects externally can also leak objects if external deletion fails or a database cascade bypasses application code.
+
+**Decision.** Store new image bytes in a private S3-compatible bucket (R2 in production), with PostgreSQL retaining ownership, immutable object key, detected content type, size, and lifecycle state. Authenticated Go reads stream private objects. Database triggers enqueue object deletion for every upload-row cascade, and replicas drain that outbox idempotently. A deterministic, rerunnable command backfills legacy bytes.
+
+**Because.** Browser-visible public URLs or bucket credentials would weaken workspace authorization. A database-backed deletion queue preserves cleanup intent across crashes and cascade paths while tolerating repeated object deletion.
+
+**Consequence.** Object storage is required for Go API startup. Deployments apply migration `0002`, run `/app/calyx-backfill-uploads`, verify no legacy bytes remain, and retain the compatibility column until that verification is complete. PostgreSQL remains the authority for access checks and object lifecycle intent.

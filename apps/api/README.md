@@ -74,6 +74,12 @@ Registration and login return a bearer token for CLI clients and also set an HTT
 | `ADDR` | `:14000` | Listen address |
 | `DATABASE_URL` | local compose Postgres | Same DB as Node; tables prefixed `chat_*` |
 | `REDIS_URL` | `redis://localhost:16379` | Shared realtime pub/sub; **required in production** |
+| `OBJECT_STORAGE_ENDPOINT` | local MinIO | S3-compatible endpoint; use the account-specific R2 S3 endpoint in production |
+| `OBJECT_STORAGE_REGION` | `auto` | R2 uses `auto`; local MinIO uses `us-east-1` |
+| `OBJECT_STORAGE_BUCKET` | `calyx-uploads` locally | Private upload bucket |
+| `OBJECT_STORAGE_ACCESS_KEY_ID` | local development value | Server-only S3/R2 access key |
+| `OBJECT_STORAGE_SECRET_ACCESS_KEY` | local development value | Server-only S3/R2 secret |
+| `OBJECT_STORAGE_PATH_STYLE` | `false` | Set `true` for local MinIO |
 | `APP_ENV` | `development` | Set to `production` to require secure cookies and fail-closed config |
 | `JWT_SECRET` | dev default | At least 32 characters; **required in production** |
 | `JWT_ISSUER` | `calyx-chat-api` | Validated token issuer |
@@ -90,7 +96,17 @@ Registration and login return a bearer token for CLI clients and also set an HTT
 
 Upload JPEG, PNG, GIF, or WebP files as authenticated multipart requests. The API detects content from bytes, caps files at 5 MiB, and stores them under the canonical workspace. Message creation accepts `imageId`; arbitrary external image URLs and cross-workspace IDs are rejected. Reads require current workspace membership.
 
-The first-party v1 stores bounded images in shared PostgreSQL so multi-instance deployments remain correct without another required service. Move blobs to S3/R2 behind the same API before high-volume use.
+Images are private S3-compatible objects (Cloudflare R2 in production, MinIO locally). PostgreSQL stores only ownership, immutable object key, content metadata, and lifecycle state. Reads stream through the authenticated Go endpoint; bucket credentials and public object URLs are never exposed.
+
+Database cascades and message deletion enqueue object keys in `chat_object_deletions`. Every API replica safely competes for cleanup work with `SKIP LOCKED`; deletion is idempotent and retried after failures. Stale pending uploads are reconciled automatically.
+
+After applying migration `0002`, move legacy PostgreSQL bytes before deployment:
+
+```bash
+/app/calyx-backfill-uploads
+```
+
+The command uses deterministic keys, is safe to rerun, and clears `chat_uploads.data` only after the object write succeeds. Keep the compatibility column until production backfill verification is complete.
 
 ## Trusted Calyx investigations
 
@@ -112,7 +128,7 @@ Build and push the image from `apps/api`:
 docker build -t calyx-chat-api ./apps/api
 ```
 
-Run `/app/calyx-migrate` as a release job before starting API replicas. Migrations are ordered, checksummed, transactional, and protected by a PostgreSQL advisory lock. Never edit an applied migration; add the next numbered SQL file.
+Run `/app/calyx-migrate`, then `/app/calyx-backfill-uploads`, as release jobs before starting API replicas. Migrations are ordered, checksummed, transactional, and protected by a PostgreSQL advisory lock. Never edit an applied migration; add the next numbered SQL file.
 
 Set `APP_ENV=production`, `DATABASE_URL`, `REDIS_URL`, a random `JWT_SECRET`, and explicit HTTPS `CORS_ORIGINS`; expose `14000`, then point Next.js at `NEXT_PUBLIC_CALYX_CHAT_URL`. Every API replica subscribes to the same Redis channel, so WebSocket clients receive events created on any replica.
 

@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -44,14 +45,29 @@ func (s *Server) createUpload(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnsupportedMediaType, "only JPEG, PNG, GIF, and WebP images are supported")
 		return
 	}
+
 	var uploadID string
 	err = s.db.QueryRow(r.Context(),
-		`INSERT INTO chat_uploads (workspace_id, member_id, content_type, size_bytes, data)
-		 VALUES ($1,$2,$3,$4,$5) RETURNING id::text`,
-		workspaceID, member.ID, contentType, len(data), data,
+		`INSERT INTO chat_uploads (workspace_id, member_id, content_type, size_bytes, data, storage_status)
+		 VALUES ($1,$2,$3,$4,NULL,'pending') RETURNING id::text`,
+		workspaceID, member.ID, contentType, len(data),
 	).Scan(&uploadID)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "upload persistence failed")
+		return
+	}
+	objectKey := fmt.Sprintf("workspaces/%s/uploads/%s", workspaceID, uploadID)
+	if err := s.objects.Put(r.Context(), objectKey, contentType, data); err != nil {
+		_, _ = s.db.Exec(r.Context(), `UPDATE chat_uploads SET storage_status='failed' WHERE id=$1`, uploadID)
+		writeErr(w, http.StatusBadGateway, "object storage write failed")
+		return
+	}
+	result, err := s.db.Exec(r.Context(), `UPDATE chat_uploads
+		SET object_key=$2, storage_status='ready' WHERE id=$1 AND storage_status='pending'`, uploadID, objectKey)
+	if err != nil || result.RowsAffected() != 1 {
+		_ = s.objects.Delete(r.Context(), objectKey)
+		_, _ = s.db.Exec(r.Context(), `UPDATE chat_uploads SET storage_status='failed' WHERE id=$1`, uploadID)
+		writeErr(w, http.StatusInternalServerError, "upload finalization failed")
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{
@@ -62,11 +78,14 @@ func (s *Server) createUpload(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getUpload(w http.ResponseWriter, r *http.Request) {
 	uploadID := chi.URLParam(r, "uploadID")
-	var workspaceID, contentType string
+	var workspaceID, contentType, status string
+	var objectKey *string
+	var legacyData []byte
 	var size int
 	if err := s.db.QueryRow(r.Context(),
-		`SELECT workspace_id::text, content_type, size_bytes FROM chat_uploads WHERE id=$1`, uploadID,
-	).Scan(&workspaceID, &contentType, &size); err != nil {
+		`SELECT workspace_id::text, content_type, size_bytes, object_key, storage_status, data
+		 FROM chat_uploads WHERE id=$1`, uploadID,
+	).Scan(&workspaceID, &contentType, &size, &objectKey, &status, &legacyData); err != nil {
 		writeErr(w, http.StatusNotFound, "upload not found")
 		return
 	}
@@ -74,17 +93,27 @@ func (s *Server) getUpload(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "upload not found")
 		return
 	}
-	var data []byte
-	if err := s.db.QueryRow(r.Context(), `SELECT data FROM chat_uploads WHERE id=$1`, uploadID).Scan(&data); err != nil {
-		writeErr(w, http.StatusNotFound, "upload not found")
+	var reader io.ReadCloser
+	if status == "ready" && objectKey != nil {
+		var err error
+		reader, err = s.objects.Get(r.Context(), *objectKey)
+		if err != nil {
+			writeErr(w, http.StatusBadGateway, "object storage read failed")
+			return
+		}
+	} else if status == "legacy" && len(legacyData) > 0 {
+		reader = io.NopCloser(bytes.NewReader(legacyData))
+	} else {
+		writeErr(w, http.StatusNotFound, "upload not available")
 		return
 	}
+	defer reader.Close()
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", size))
 	w.Header().Set("Cache-Control", "private, max-age=3600")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(data)
+	_, _ = io.Copy(w, reader)
 }
 
 func (s *Server) uploadURL(r *http.Request, workspaceID string, uploadID *string) (*string, error) {
@@ -93,7 +122,8 @@ func (s *Server) uploadURL(r *http.Request, workspaceID string, uploadID *string
 	}
 	var exists bool
 	err := s.db.QueryRow(r.Context(),
-		`SELECT EXISTS(SELECT 1 FROM chat_uploads WHERE id=$1 AND workspace_id=$2)`,
+		`SELECT EXISTS(SELECT 1 FROM chat_uploads
+		 WHERE id=$1 AND workspace_id=$2 AND storage_status IN ('ready','legacy'))`,
 		*uploadID, workspaceID,
 	).Scan(&exists)
 	if err != nil || !exists {
