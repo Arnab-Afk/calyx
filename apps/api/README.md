@@ -56,6 +56,9 @@ Registration and login return a bearer token for CLI clients and also set an HTT
 | `GET/POST` | `/v1/workspaces/:id/channels` |
 | `GET/PATCH/DELETE` | `/v1/channels/:id` |
 | `GET/POST` | `/v1/channels/:id/messages` |
+| `POST` | `/v1/workspaces/:id/conversations` (idempotent create/get) |
+| `GET` | `/v1/conversations/:id` |
+| `GET/POST` | `/v1/conversations/:id/messages` |
 | `GET/PATCH/DELETE` | `/v1/messages/:id` |
 | `POST` | `/v1/messages/:id/reactions` |
 | `GET` | `/v1/workspaces/:id/ws` (WebSocket) |

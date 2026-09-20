@@ -34,6 +34,14 @@ type Channel struct {
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
+type Conversation struct {
+	ID          string    `json:"id"`
+	WorkspaceID string    `json:"workspaceId"`
+	MemberOneID string    `json:"memberOneId"`
+	MemberTwoID string    `json:"memberTwoId"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
 type CalyxData struct {
 	Query     string   `json:"query"`
 	Answer    string   `json:"answer"`

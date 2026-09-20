@@ -78,6 +78,12 @@ CREATE TABLE IF NOT EXISTS chat_conversations (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS chat_conversations_workspace ON chat_conversations (workspace_id);
+CREATE UNIQUE INDEX IF NOT EXISTS chat_conversations_pair
+  ON chat_conversations (
+    workspace_id,
+    LEAST(member_one_id, member_two_id),
+    GREATEST(member_one_id, member_two_id)
+  );
 
 CREATE TABLE IF NOT EXISTS chat_messages (
   id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
