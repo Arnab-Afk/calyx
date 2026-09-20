@@ -104,7 +104,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
     throw new ChatApiError(response.status, payload?.error ?? `Chat API returned ${response.status}`);
   }
-  return response.json() as Promise<T>;
+  const result = (await response.json()) as T;
+  if (typeof window !== 'undefined' && init?.method && init.method !== 'GET') {
+    window.dispatchEvent(new Event('calyx:chat-mutated'));
+  }
+  return result;
 }
 
 export const chatApi = {
@@ -227,7 +231,9 @@ export async function uploadChatImage(workspaceId: string, file: File) {
     credentials: 'include',
   });
   if (!response.ok) throw new ChatApiError(response.status, 'Image upload failed');
-  return response.json() as Promise<{ id: string; url: string; contentType: string; size: number }>;
+  const result = (await response.json()) as { id: string; url: string; contentType: string; size: number };
+  window.dispatchEvent(new Event('calyx:chat-mutated'));
+  return result;
 }
 
 export function connectChatRealtime(workspaceId: string, onEvent: (event: ChatRealtimeEvent) => void): WebSocket {
