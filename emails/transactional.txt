@@ -1,0 +1,15 @@
+{{heading}}
+
+{{intro}}
+
+{{body_text}}
+
+{{signoff}}
+
+{{cta_label}}
+{{cta_url}}
+
+{{footer_brand}}
+{{footer_reason}}
+Notification settings
+{{settings_url}}

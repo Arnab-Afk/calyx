@@ -1,0 +1,29 @@
+Welcome to Calyx
+
+Incidents, deploys, and the ask stay in the thread — Calyx answers from the same ops room. No dashboard to open first.
+
+Here’s how to get started:
+
+1. Open your workspace
+The night shift lives in one channel. Drop in, read the river, send from the composer.
+
+2. Ask Calyx in the thread
+@Calyx why is checkout 500ing? It investigates in place and attaches a chart — several people can swarm the same incident.
+
+3. Read the alert card
+Severity, impact, root cause, recommended action. Then Investigate or start an incident — without leaving the channel.
+
+4. Wire sources when you are ready
+Logs, GitHub, Slack. Chat, CLI, and MCP are three doors to the same tools.
+
+Stay in the thread.
+
+— Calyx
+
+Open Calyx
+https://app.calyx.dev
+
+CALYX · 2026
+You receive this welcome because you created a Calyx account.
+Notification settings
+https://app.calyx.dev/settings#notifications

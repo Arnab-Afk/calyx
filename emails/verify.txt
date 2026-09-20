@@ -1,0 +1,13 @@
+Confirm your email
+
+One tap to finish signup. This link expires in 24 hours.
+
+Sent to you@example.com
+
+Confirm email
+https://app.calyx.dev/auth/verify
+
+CALYX · 2026
+If you did not create a Calyx account, you can ignore this mail.
+Notification settings
+https://app.calyx.dev/settings#notifications

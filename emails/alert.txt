@@ -1,0 +1,24 @@
+Error spike on checkout-api
+
+CRITICAL · OPEN
+
+Service: checkout-api
+Type: Error spike
+Detected: 20 Sep 2026 · 17:29 UTC
+
+Impact
+Checkout 5xx jumped 18× in 4 minutes. Payments are failing for about 12% of sessions.
+
+Root cause
+Deploy api@7f3a1c at 17:24 UTC coincided with the spike. Timeouts to payments-ledger.
+
+Recommended action
+Roll back api to the previous release, then inspect the ledger client timeout.
+
+Investigate in channel
+https://app.calyx.dev/channels/incidents
+
+CALYX · 2026
+You receive this alert because you are on the payments-prod workspace.
+Notification settings
+https://app.calyx.dev/settings#notifications
