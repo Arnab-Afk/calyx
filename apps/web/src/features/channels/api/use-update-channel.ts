@@ -3,6 +3,8 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { api } from '@/../convex/_generated/api';
 import type { Id } from '@/../convex/_generated/dataModel';
+import { chatApi } from '@/lib/chat-api';
+import { isGoChatBackend } from '@/lib/chat-backend';
 
 type RequestType = { name: string; id: Id<'channels'> };
 type ResponseType = Id<'channels'> | null;
@@ -33,7 +35,9 @@ export const useUpdateChannel = () => {
         setError(null);
         setStatus('pending');
 
-        const response = await mutation(values);
+        const response = isGoChatBackend
+          ? ((await chatApi.updateChannel(String(values.id), values.name)).id as Id<'channels'>)
+          : await mutation(values);
         options?.onSuccess?.(response);
 
         return response;

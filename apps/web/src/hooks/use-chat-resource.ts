@@ -8,6 +8,14 @@ export function useChatResource<T>(key: string, enabled: boolean, loader: (signa
   const [data, setData] = useState<T | undefined>();
   const [error, setError] = useState<Error | null>(null);
   const [isLoading, setIsLoading] = useState(enabled);
+  const [revision, setRevision] = useState(0);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const invalidate = () => setRevision((value) => value + 1);
+    window.addEventListener('calyx:chat-mutated', invalidate);
+    return () => window.removeEventListener('calyx:chat-mutated', invalidate);
+  }, [enabled]);
 
   useEffect(() => {
     if (!enabled) {
@@ -29,7 +37,7 @@ export function useChatResource<T>(key: string, enabled: boolean, loader: (signa
         if (!controller.signal.aborted) setIsLoading(false);
       });
     return () => controller.abort();
-  }, [enabled, key]);
+  }, [enabled, key, revision]);
 
   return { data, error, isLoading, setData };
 }
