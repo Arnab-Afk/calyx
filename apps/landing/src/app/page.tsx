@@ -245,9 +245,6 @@ export default function LandingPage() {
             </a>
           </div>
         </div>
-        <a className={styles.scrollCue} href="#why">
-          SCROLL <ArrowDown size={15} />
-        </a>
       </section>
 
       <section ref={whyRef} className={styles.why} id="why" data-reveal data-label="WHY CALYX">

@@ -13,6 +13,17 @@ body {
   margin: 0;
 }
 
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+a {
+  text-decoration: none;
+}
+
 body {
   --font-pixel: var(--font-display);
   background: #090a0e;

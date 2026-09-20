@@ -388,24 +388,6 @@
   border-color: white;
   background: rgba(255, 255, 255, 0.08);
 }
-.scrollCue {
-  position: absolute;
-  z-index: 9;
-  bottom: 28px;
-  left: 50%;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: #0b0c10;
-  padding: 10px 16px;
-  font:
-    500 10px var(--font-mono),
-    monospace;
-  letter-spacing: 0.2em;
-  transform: translateX(-50%);
-}
-
 .stars i {
   position: absolute;
   z-index: 3;
