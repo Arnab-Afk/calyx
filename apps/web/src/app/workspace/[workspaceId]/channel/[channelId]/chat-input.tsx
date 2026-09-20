@@ -1,18 +1,20 @@
 'use client';
 
 import { Loader } from 'lucide-react';
+import { Bot } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import type Quill from 'quill';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Bot } from 'lucide-react';
 
 import type { Id } from '@/../convex/_generated/dataModel';
+import { useCalyxAsk } from '@/components/calyx/use-calyx-ask';
 import { useCreateMessage } from '@/features/messages/api/use-create-message';
 import { useGenerateUploadUrl } from '@/features/upload/api/use-generate-upload-url';
 import { useChannelId } from '@/hooks/use-channel-id';
 import { useWorkspaceId } from '@/hooks/use-workspace-id';
-import { useCalyxAsk } from '@/components/calyx/use-calyx-ask';
+import { chatApi, uploadChatImage } from '@/lib/chat-api';
+import { isGoChatBackend } from '@/lib/chat-backend';
 
 const Editor = dynamic(() => import('@/components/editor'), {
   ssr: false,
@@ -47,9 +49,10 @@ function quillBodyToText(body: string): string {
   try {
     const delta = JSON.parse(body);
     if (Array.isArray(delta?.ops)) {
-      return delta.ops.map((op: { insert?: unknown }) =>
-        typeof op.insert === 'string' ? op.insert : ''
-      ).join('').trim();
+      return delta.ops
+        .map((op: { insert?: unknown }) => (typeof op.insert === 'string' ? op.insert : ''))
+        .join('')
+        .trim();
     }
   } catch {}
   return body.trim();
@@ -84,11 +87,16 @@ export const ChatInput = ({ placeholder }: ChatInputProps) => {
           return;
         }
 
+        if (isGoChatBackend) {
+          setEditorKey((k) => k + 1);
+          setIsCalyxThinking(true);
+          await chatApi.askCalyx(String(channelId), query);
+          setIsCalyxThinking(false);
+          return;
+        }
+
         // Post user's question first
-        await createMessage(
-          { channelId, workspaceId, body },
-          { throwError: true }
-        );
+        await createMessage({ channelId, workspaceId, body }, { throwError: true });
         setEditorKey((k) => k + 1);
 
         // Now run the agent (show thinking indicator)
@@ -116,7 +124,7 @@ export const ChatInput = ({ placeholder }: ChatInputProps) => {
             body: botBody,
             calyxData,
           } as CreateMessageValues,
-          { throwError: true }
+          { throwError: true },
         );
         return;
       }
@@ -130,18 +138,23 @@ export const ChatInput = ({ placeholder }: ChatInputProps) => {
       };
 
       if (image) {
-        const url = await generateUploadUrl({}, { throwError: true });
-        if (!url) throw new Error('URL not found.');
+        if (isGoChatBackend) {
+          const upload = await uploadChatImage(String(workspaceId), image);
+          values.image = upload.id as Id<'_storage'>;
+        } else {
+          const url = await generateUploadUrl({}, { throwError: true });
+          if (!url) throw new Error('URL not found.');
 
-        const result = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-type': image.type },
-          body: image,
-        });
+          const result = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-type': image.type },
+            body: image,
+          });
 
-        if (!result.ok) throw new Error('Failed to upload image.');
-        const { storageId } = await result.json();
-        values.image = storageId;
+          if (!result.ok) throw new Error('Failed to upload image.');
+          const { storageId } = await result.json();
+          values.image = storageId;
+        }
       }
 
       await createMessage(values, { throwError: true });
@@ -150,6 +163,7 @@ export const ChatInput = ({ placeholder }: ChatInputProps) => {
       toast.error('Failed to send message.');
     } finally {
       setIsPending(false);
+      setIsCalyxThinking(false);
       innerRef?.current?.enable(true);
     }
   };

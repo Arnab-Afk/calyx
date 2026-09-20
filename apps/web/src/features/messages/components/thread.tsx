@@ -15,6 +15,8 @@ import { useGetMessages } from '@/features/messages/api/use-get-messages';
 import { useGenerateUploadUrl } from '@/features/upload/api/use-generate-upload-url';
 import { useChannelId } from '@/hooks/use-channel-id';
 import { useWorkspaceId } from '@/hooks/use-workspace-id';
+import { uploadChatImage } from '@/lib/chat-api';
+import { isGoChatBackend } from '@/lib/chat-backend';
 
 const Editor = dynamic(() => import('@/components/editor'), {
   ssr: false,
@@ -86,26 +88,22 @@ export const Thread = ({ messageId, onClose }: ThreadProps) => {
       };
 
       if (image) {
-        const url = await generateUploadUrl(
-          {},
-          {
-            throwError: true,
-          },
-        );
+        if (isGoChatBackend) {
+          const upload = await uploadChatImage(String(workspaceId), image);
+          values.image = upload.id as Id<'_storage'>;
+        } else {
+          const url = await generateUploadUrl({}, { throwError: true });
+          if (!url) throw new Error('URL not found.');
 
-        if (!url) throw new Error('URL not found.');
-
-        const result = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-type': image.type },
-          body: image,
-        });
-
-        if (!result.ok) throw new Error('Failed to upload image.');
-
-        const { storageId } = await result.json();
-
-        values.image = storageId;
+          const result = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-type': image.type },
+            body: image,
+          });
+          if (!result.ok) throw new Error('Failed to upload image.');
+          const { storageId } = await result.json();
+          values.image = storageId;
+        }
       }
 
       await createMessage(values, { throwError: true });

@@ -1,5 +1,5 @@
 import type { Doc, Id } from '@/../convex/_generated/dataModel';
-import type { ChatChannel, ChatMember, ChatUser, ChatWorkspace } from '@/lib/chat-api';
+import { type ChatChannel, type ChatMember, type ChatMessage, type ChatUser, type ChatWorkspace, chatAssetUrl } from '@/lib/chat-api';
 
 export const convexUser = (user: ChatUser): Doc<'users'> => ({
   _id: user.id as Id<'users'>,
@@ -39,3 +39,43 @@ export const convexMember = (member: ChatMember): Doc<'members'> & { user: Doc<'
     },
   ),
 });
+
+export const convexMessage = (message: ChatMessage) => {
+  const member = convexMember(
+    message.member ?? {
+      id: message.memberId,
+      userId: message.memberId,
+      workspaceId: message.workspaceId,
+      role: 'member',
+      createdAt: message.createdAt,
+    },
+  );
+  return {
+    _id: message.id as Id<'messages'>,
+    _creationTime: Date.parse(message.createdAt),
+    body: message.body,
+    memberId: message.memberId as Id<'members'>,
+    workspaceId: message.workspaceId as Id<'workspaces'>,
+    channelId: message.channelId as Id<'channels'> | undefined,
+    parentMessageId: message.parentMessageId as Id<'messages'> | undefined,
+    conversationId: message.conversationId as Id<'conversations'> | undefined,
+    updatedAt: message.updatedAt ? Date.parse(message.updatedAt) : undefined,
+    image: chatAssetUrl(message.imageUrl),
+    calyxData: message.calyxData ? { ...message.calyxData, tenantId: message.workspaceId } : undefined,
+    member,
+    user: member.user,
+    reactions: (message.reactions ?? []).map((reaction) => ({
+      _id: reaction.id as Id<'reactions'>,
+      _creationTime: Date.parse(message.createdAt),
+      workspaceId: message.workspaceId as Id<'workspaces'>,
+      messageId: message.id as Id<'messages'>,
+      value: reaction.value,
+      count: reaction.count ?? 0,
+      memberIds: (reaction.memberIds ?? []).map((id) => id as Id<'members'>),
+    })),
+    threadCount: message.threadCount,
+    threadImage: undefined,
+    threadName: '',
+    threadTimestamp: 0,
+  };
+};

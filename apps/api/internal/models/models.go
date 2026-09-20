@@ -69,9 +69,10 @@ type Message struct {
 }
 
 type Reaction struct {
-	ID        string `json:"id"`
-	MessageID string `json:"messageId"`
-	MemberID  string `json:"memberId"`
-	Value     string `json:"value"`
-	Count     int    `json:"count,omitempty"`
+	ID        string   `json:"id"`
+	MessageID string   `json:"messageId"`
+	MemberID  string   `json:"memberId"`
+	Value     string   `json:"value"`
+	Count     int      `json:"count,omitempty"`
+	MemberIDs []string `json:"memberIds,omitempty"`
 }

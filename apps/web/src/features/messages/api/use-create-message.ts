@@ -3,6 +3,8 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { api } from '@/../convex/_generated/api';
 import type { Id } from '@/../convex/_generated/dataModel';
+import { chatApi } from '@/lib/chat-api';
+import { isGoChatBackend } from '@/lib/chat-backend';
 
 type RequestType = {
   body: string;
@@ -49,7 +51,24 @@ export const useCreateMessage = () => {
         setError(null);
         setStatus('pending');
 
-        const response = await mutation(values);
+        let response: ResponseType;
+        if (isGoChatBackend) {
+          if (values.calyxData) throw new Error('Trusted Calyx messages must use the server investigation endpoint');
+          const input = {
+            body: values.body,
+            imageId: values.image ? String(values.image) : undefined,
+            parentMessageId: values.parentMessageId ? String(values.parentMessageId) : undefined,
+          };
+          const message = values.channelId
+            ? await chatApi.createChannelMessage(String(values.channelId), input)
+            : values.conversationId
+              ? await chatApi.createConversationMessage(String(values.conversationId), input)
+              : null;
+          if (!message) throw new Error('A channel or conversation is required');
+          response = message.id as Id<'messages'>;
+        } else {
+          response = await mutation(values);
+        }
         options?.onSuccess?.(response);
 
         return response;
