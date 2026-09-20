@@ -3,6 +3,8 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { api } from '@/../convex/_generated/api';
 import type { Id } from '@/../convex/_generated/dataModel';
+import { chatApi } from '@/lib/chat-api';
+import { isGoChatBackend } from '@/lib/chat-backend';
 
 type RequestType = {
   id: Id<'messages'>;
@@ -35,7 +37,7 @@ export const useRemoveMessage = () => {
         setError(null);
         setStatus('pending');
 
-        const response = await mutation(values);
+        const response = isGoChatBackend ? await chatApi.deleteMessage(String(values.id)).then(() => values.id) : await mutation(values);
         options?.onSuccess?.(response);
 
         return response;

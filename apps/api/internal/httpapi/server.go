@@ -716,7 +716,7 @@ func (s *Server) populateMessage(ctx context.Context, m *models.Message) error {
 	).Scan(&m.ThreadCount)
 
 	rows, err := s.db.Query(ctx,
-		`SELECT value, COUNT(*)::int, MIN(id::text)
+		`SELECT value, COUNT(*)::int, MIN(id::text), ARRAY_AGG(member_id::text)
 		 FROM chat_reactions WHERE message_id=$1 GROUP BY value`, m.ID)
 	if err != nil {
 		return nil
@@ -725,7 +725,7 @@ func (s *Server) populateMessage(ctx context.Context, m *models.Message) error {
 	m.Reactions = []models.Reaction{}
 	for rows.Next() {
 		var rx models.Reaction
-		if err := rows.Scan(&rx.Value, &rx.Count, &rx.ID); err != nil {
+		if err := rows.Scan(&rx.Value, &rx.Count, &rx.ID, &rx.MemberIDs); err != nil {
 			return err
 		}
 		rx.MessageID = m.ID
@@ -905,6 +905,10 @@ func (s *Server) toggleReaction(w http.ResponseWriter, r *http.Request) {
 		}
 		added = true
 	}
+	s.hub.Publish(realtime.Event{
+		Type: "reaction.updated", WorkspaceID: wsID,
+		Payload: map[string]string{"messageId": msgID},
+	})
 	writeJSON(w, http.StatusOK, map[string]any{"added": added, "value": body.Value})
 }
 

@@ -3,6 +3,8 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { api } from '@/../convex/_generated/api';
 import type { Id } from '@/../convex/_generated/dataModel';
+import { chatApi } from '@/lib/chat-api';
+import { isGoChatBackend } from '@/lib/chat-backend';
 
 type RequestType = {
   value: string;
@@ -36,7 +38,11 @@ export const useToggleReaction = () => {
         setError(null);
         setStatus('pending');
 
-        const response = await mutation(values);
+        const response = isGoChatBackend
+          ? await chatApi
+              .toggleReaction(String(values.messageId), values.value)
+              .then(() => `${values.messageId}:${values.value}` as Id<'reactions'>)
+          : await mutation(values);
         options?.onSuccess?.(response);
 
         return response;

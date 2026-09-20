@@ -1,13 +1,16 @@
 'use client';
 
 import { Loader } from 'lucide-react';
-import type { PropsWithChildren } from 'react';
+import { type PropsWithChildren, useEffect } from 'react';
 
 import type { Id } from '@/../convex/_generated/dataModel';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Profile } from '@/features/members/components/profile';
 import { Thread } from '@/features/messages/components/thread';
 import { usePanel } from '@/hooks/use-panel';
+import { useWorkspaceId } from '@/hooks/use-workspace-id';
+import { connectChatRealtime } from '@/lib/chat-api';
+import { isGoChatBackend } from '@/lib/chat-backend';
 
 import { Sidebar } from './sidebar';
 import { Toolbar } from './toolbar';
@@ -15,6 +18,15 @@ import { WorkspaceSidebar } from './workspace-sidebar';
 
 const WorkspaceIdLayout = ({ children }: Readonly<PropsWithChildren>) => {
   const { parentMessageId, profileMemberId, onClose } = usePanel();
+  const workspaceId = useWorkspaceId();
+
+  useEffect(() => {
+    if (!isGoChatBackend) return;
+    const socket = connectChatRealtime(String(workspaceId), () => {
+      window.dispatchEvent(new Event('calyx:chat-mutated'));
+    });
+    return () => socket.close();
+  }, [workspaceId]);
 
   const showPanel = !!parentMessageId || !!profileMemberId;
 

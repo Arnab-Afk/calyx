@@ -36,6 +36,7 @@ export interface ChatReaction {
   memberId?: string;
   value: string;
   count?: number;
+  memberIds?: string[];
 }
 
 export interface ChatCalyxData {
@@ -89,6 +90,11 @@ export class ChatApiError extends Error {
 }
 
 export const chatApiUrl = process.env.NEXT_PUBLIC_CALYX_CHAT_URL?.replace(/\/$/, '') ?? '';
+export const chatAssetUrl = (path?: string) => {
+  if (!path) return undefined;
+  const base = chatApiUrl || (typeof window !== 'undefined' ? window.location.origin : '');
+  return base ? new URL(path, `${base}/`).toString() : path;
+};
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!chatApiUrl) throw new ChatApiError(503, 'NEXT_PUBLIC_CALYX_CHAT_URL is not configured');

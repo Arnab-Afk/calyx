@@ -20,6 +20,7 @@
 
 ## Done
 
+- [x] Adapt Next.js message, thread, reaction, upload, trusted ask, and realtime paths to the feature-gated Go backend — 2026-09-20
 - [x] Adapt Next.js workspace, channel, member, and conversation mutations to the feature-gated Go backend — 2026-09-20
 - [x] Adapt Next.js workspace, channel, and member read paths to the feature-gated Go backend — 2026-09-20
 - [x] Add typed Next.js Go clients for channels, messages, conversations, uploads, trusted asks, and realtime events — 2026-09-20
