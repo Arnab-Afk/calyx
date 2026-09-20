@@ -4,8 +4,8 @@ import {
   authenticateMgmtKey,
   bearerToken,
   requireScope,
-} from "../../mgmt/auth.js";
-import { queryEvents } from "../../storage/events.js";
+} from "../../../mgmt/auth.js";
+import { queryEvents } from "../../../storage/events.js";
 
 export async function eventsRoute(app: FastifyInstance): Promise<void> {
   app.get("/v1/events", async (request, reply) => {
