@@ -1,13 +1,16 @@
 import { useAuthActions } from '@convex-dev/auth/react';
 import { TriangleAlert } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { FaGithub } from 'react-icons/fa';
 import { FcGoogle } from 'react-icons/fc';
 
+import { useChatAuth } from '@/components/chat-auth-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
+import { isGoChatBackend } from '@/lib/chat-backend';
 
 import type { SignInFlow } from '../types';
 
@@ -16,7 +19,9 @@ interface SignInCardProps {
 }
 
 export const SignInCard = ({ setState }: SignInCardProps) => {
+  const router = useRouter();
   const { signIn } = useAuthActions();
+  const chatAuth = useChatAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -32,7 +37,9 @@ export const SignInCard = ({ setState }: SignInCardProps) => {
     setPending(true);
     setError('');
 
-    signIn('password', { email, password, flow: 'signIn' })
+    const operation = isGoChatBackend ? chatAuth.login({ email, password }) : signIn('password', { email, password, flow: 'signIn' });
+    operation
+      .then(() => router.replace('/'))
       .catch(() => {
         setError('Invalid email or password!');
       })
@@ -71,19 +78,21 @@ export const SignInCard = ({ setState }: SignInCardProps) => {
           </Button>
         </form>
 
-        <Separator />
+        {!isGoChatBackend && <Separator />}
 
-        <div className="flex flex-col gap-y-2.5">
-          <Button disabled={pending} onClick={() => handleOAuthSignIn('google')} variant="outline" size="lg" className="relative w-full">
-            <FcGoogle className="absolute left-2.5 top-3 size-5" />
-            Continue with Google
-          </Button>
+        {!isGoChatBackend && (
+          <div className="flex flex-col gap-y-2.5">
+            <Button disabled={pending} onClick={() => handleOAuthSignIn('google')} variant="outline" size="lg" className="relative w-full">
+              <FcGoogle className="absolute left-2.5 top-3 size-5" />
+              Continue with Google
+            </Button>
 
-          <Button disabled={pending} onClick={() => handleOAuthSignIn('github')} variant="outline" size="lg" className="relative w-full">
-            <FaGithub className="absolute left-2.5 top-3 size-5" />
-            Continue with GitHub
-          </Button>
-        </div>
+            <Button disabled={pending} onClick={() => handleOAuthSignIn('github')} variant="outline" size="lg" className="relative w-full">
+              <FaGithub className="absolute left-2.5 top-3 size-5" />
+              Continue with GitHub
+            </Button>
+          </div>
+        )}
 
         <p className="text-center text-xs text-muted-foreground">
           Don&apos;t have an account?{' '}

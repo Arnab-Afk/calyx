@@ -5,6 +5,7 @@ import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { PropsWithChildren } from 'react';
 
 import { ChatAuthProvider } from '@/components/chat-auth-provider';
+import { ChatRouteGate } from '@/components/chat-route-gate';
 import { ConvexClientProvider } from '@/components/convex-client-provider';
 import { JotaiProvider } from '@/components/jotai-provider';
 import { ModalProvider } from '@/components/modal-provider';
@@ -42,14 +43,16 @@ const RootLayout = ({ children }: Readonly<PropsWithChildren>) => {
         <body className={`${display.variable} ${body.variable} font-[family-name:var(--font-body)] antialiased`}>
           <ConvexClientProvider>
             <ChatAuthProvider>
-              <JotaiProvider>
-                <NuqsAdapter>
-                  <Toaster theme="dark" richColors closeButton />
-                  <ModalProvider />
+              <ChatRouteGate>
+                <JotaiProvider>
+                  <NuqsAdapter>
+                    <Toaster theme="dark" richColors closeButton />
+                    <ModalProvider />
 
-                  {children}
-                </NuqsAdapter>
-              </JotaiProvider>
+                    {children}
+                  </NuqsAdapter>
+                </JotaiProvider>
+              </ChatRouteGate>
             </ChatAuthProvider>
           </ConvexClientProvider>
         </body>
