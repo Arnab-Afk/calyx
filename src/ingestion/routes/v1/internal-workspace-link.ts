@@ -26,7 +26,15 @@ export async function internalWorkspaceLinkRoute(app: FastifyInstance): Promise<
     const { workspaceId } = request.params as { workspaceId: string };
     const parsed = Body.safeParse(request.body ?? {});
     if (!parsed.success) return reply.status(422).send({ error: parsed.error.flatten() });
-    const tenantId = parsed.data.tenantId?.trim() || process.env.CALYX_DEFAULT_TENANT?.trim() || "default";
+    const tenantId =
+      parsed.data.tenantId?.trim() ||
+      process.env.CALYX_TENANT_ID?.trim() ||
+      process.env.CALYX_DEFAULT_TENANT?.trim();
+    if (!tenantId) {
+      return reply.status(422).send({
+        error: "tenantId is required (or set CALYX_TENANT_ID / CALYX_DEFAULT_TENANT)",
+      });
+    }
 
     try {
       await linkWorkspaceToTenant(workspaceId, tenantId);
@@ -76,8 +84,16 @@ export async function internalWorkspaceLinkRoute(app: FastifyInstance): Promise<
     if (!principal) return reply.status(401).send({ error: "Invalid management credential" });
 
     const { workspaceId } = request.params as { workspaceId: string };
-    const tenantId = await tenantForWorkspace(workspaceId);
-    if (!tenantId || tenantId !== principal.tenantId) {
+    let tenantId = await tenantForWorkspace(workspaceId);
+    // Bind the chat workspace to the mgmt key's real tenant (project tenant), not a soft "default".
+    if (!tenantId) {
+      try {
+        await linkWorkspaceToTenant(workspaceId, principal.tenantId);
+        tenantId = principal.tenantId;
+      } catch {
+        return reply.status(403).send({ error: "Management credential does not belong to this workspace" });
+      }
+    } else if (tenantId !== principal.tenantId) {
       return reply.status(403).send({ error: "Management credential does not belong to this workspace" });
     }
     const scope = await projectScopeForWorkspace(workspaceId);

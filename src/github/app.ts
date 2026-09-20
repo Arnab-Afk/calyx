@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { upsertGithubCommits } from "../storage/github.js";
 
 function appJwt(): string {
   const appId = process.env.GITHUB_APP_ID?.trim();
@@ -96,6 +97,111 @@ export async function searchRepositoryCode(input: {
   }));
 }
 
+export async function listInstallationRepositories(
+  installationId: string,
+): Promise<string[]> {
+  const token = await installationToken(installationId);
+  type RepoRow = {
+    full_name: string;
+    pushed_at?: string | null;
+    updated_at?: string | null;
+    created_at?: string | null;
+  };
+  const collected: RepoRow[] = [];
+  let page = 1;
+  while (page <= 10) {
+    const result = await github<{
+      repositories: RepoRow[];
+      total_count?: number;
+    }>(`/installation/repositories?per_page=100&page=${page}`, token);
+    const batch = result.repositories ?? [];
+    collected.push(...batch);
+    if (batch.length < 100) break;
+    page += 1;
+  }
+
+  const ts = (repo: RepoRow) =>
+    Date.parse(repo.pushed_at || repo.updated_at || repo.created_at || "") || 0;
+
+  return collected
+    .filter((repo) => /^[\w.-]+\/[\w.-]+$/.test(repo.full_name))
+    .sort((a, b) => ts(b) - ts(a))
+    .map((repo) => repo.full_name);
+}
+
+/** Pull recent commits + merged PRs into local tables (webhook only covers future events). */
+export async function backfillGithubRepositoryActivity(input: {
+  installationId: string;
+  repo: string;
+  tenantId: string;
+  projectId: string;
+  commitLimit?: number;
+  prLimit?: number;
+}): Promise<{ commits: number; merges: number }> {
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(input.repo)) {
+    throw new Error("Invalid GitHub repository");
+  }
+  const token = await installationToken(input.installationId);
+  const commitLimit = Math.min(Math.max(input.commitLimit ?? 40, 1), 100);
+  const prLimit = Math.min(Math.max(input.prLimit ?? 30, 1), 50);
+
+  const commits = await github<
+    Array<{
+      sha: string;
+      html_url?: string;
+      commit?: {
+        message?: string;
+        author?: { name?: string; date?: string };
+        committer?: { date?: string };
+      };
+      author?: { login?: string } | null;
+  }>
+  >(`/repos/${input.repo}/commits?per_page=${commitLimit}`, token);
+
+  const commitRows = (commits ?? []).map((c) => ({
+    tenantId: input.tenantId,
+    projectId: input.projectId,
+    repo: input.repo,
+    sha: c.sha,
+    message: String(c.commit?.message ?? "").trim() || c.sha.slice(0, 7),
+    author: c.author?.login || c.commit?.author?.name || undefined,
+    committedAt: String(
+      c.commit?.author?.date || c.commit?.committer?.date || new Date().toISOString(),
+    ),
+    url: c.html_url,
+  }));
+  if (commitRows.length > 0) await upsertGithubCommits(commitRows);
+
+  const pulls = await github<
+    Array<{
+      number: number;
+      title?: string;
+      html_url?: string;
+      merged_at?: string | null;
+      merge_commit_sha?: string | null;
+      user?: { login?: string } | null;
+      base?: { ref?: string } | null;
+    }>
+  >(`/repos/${input.repo}/pulls?state=closed&sort=updated&direction=desc&per_page=${prLimit}`, token);
+
+  const mergeRows = (pulls ?? [])
+    .filter((pr) => pr.merged_at && pr.merge_commit_sha)
+    .map((pr) => ({
+      tenantId: input.tenantId,
+      projectId: input.projectId,
+      repo: input.repo,
+      sha: String(pr.merge_commit_sha),
+      ref: pr.base?.ref ? `refs/heads/${pr.base.ref}` : undefined,
+      message: `Merge pull request #${pr.number}: ${pr.title ?? "pull request"}`,
+      author: pr.user?.login || undefined,
+      committedAt: String(pr.merged_at),
+      url: pr.html_url,
+    }));
+  if (mergeRows.length > 0) await upsertGithubCommits(mergeRows);
+
+  return { commits: commitRows.length, merges: mergeRows.length };
+}
+
 export async function provisionGithubRepository(input: {
   installationId: string;
   repo: string;
@@ -119,7 +225,7 @@ export async function provisionGithubRepository(input: {
   const payload = JSON.stringify({
     name: "web",
     active: true,
-    events: ["push", "deployment", "deployment_status"],
+    events: ["push", "pull_request", "deployment", "deployment_status", "create", "delete", "release"],
     config: {
       url: input.webhookUrl,
       content_type: "json",

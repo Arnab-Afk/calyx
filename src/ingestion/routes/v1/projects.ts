@@ -29,10 +29,88 @@ import {
   consumeGithubInstallationState,
   createGithubInstallationState,
 } from "../../../storage/github-installations.js";
+import { listGithubProjectActivity } from "../../../storage/github.js";
 import {
+  listInstallationRepositories,
+  backfillGithubRepositoryActivity,
   provisionGithubRepository,
   removeGithubRepositoryWebhook,
 } from "../../../github/app.js";
+
+function parseInstallationId(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (/^\d+$/.test(trimmed)) return trimmed;
+  try {
+    const url = new URL(trimmed);
+    const match = url.pathname.match(/\/installations\/(\d+)/);
+    return match?.[1] ?? null;
+  } catch {
+    const match = trimmed.match(/installations\/(\d+)/);
+    return match?.[1] ?? null;
+  }
+}
+
+async function finalizeGithubInstall(input: {
+  tenantId: string;
+  projectId: string;
+  projectSlug: string;
+  installationId: string;
+  repo?: string;
+  webhookUrl: string;
+  /** When true and multiple repos, return the list instead of picking the first. */
+  requireRepoPick?: boolean;
+}): Promise<{ repo: string; installationId: string; connectedAt: string }> {
+  let repo = input.repo?.trim() || "";
+  if (!repo) {
+    const repos = await listInstallationRepositories(input.installationId);
+    if (repos.length === 0) {
+      throw Object.assign(new Error("GitHub App installation has no repositories selected"), {
+        statusCode: 409,
+        repos: [] as string[],
+      });
+    }
+    const preferred = repos.find(
+      (r) => r.split("/")[1]?.toLowerCase() === input.projectSlug.toLowerCase(),
+    );
+    if (!preferred && repos.length > 1 && input.requireRepoPick) {
+      throw Object.assign(new Error("Select a repository to connect"), {
+        statusCode: 409,
+        repos,
+      });
+    }
+    repo = preferred ?? repos[0]!;
+  }
+
+  const webhookSecret = crypto.randomBytes(32).toString("hex");
+  await provisionGithubRepository({
+    installationId: input.installationId,
+    repo,
+    webhookUrl: input.webhookUrl,
+    webhookSecret,
+  });
+  const connection = await upsertGithubConnection({
+    projectId: input.projectId,
+    tenantId: input.tenantId,
+    repo,
+    installationId: input.installationId,
+    webhookSecret,
+  });
+  try {
+    await backfillGithubRepositoryActivity({
+      installationId: input.installationId,
+      repo,
+      tenantId: input.tenantId,
+      projectId: input.projectId,
+    });
+  } catch {
+    // Webhook path still works even if historical backfill fails.
+  }
+  return {
+    repo: connection.repo,
+    installationId: connection.installationId ?? input.installationId,
+    connectedAt: connection.connectedAt,
+  };
+}
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -292,9 +370,11 @@ export async function projectsRoute(app: FastifyInstance): Promise<void> {
         repo: z
           .string()
           .min(3)
-          .regex(/^[\w.-]+\/[\w.-]+$/),
+          .regex(/^[\w.-]+\/[\w.-]+$/)
+          .optional(),
+        returnTo: z.string().url().optional(),
       })
-      .safeParse(request.body);
+      .safeParse(request.body ?? {});
     if (!body.success) {
       return reply
         .status(422)
@@ -310,19 +390,185 @@ export async function projectsRoute(app: FastifyInstance): Promise<void> {
         .status(503)
         .send({ error: "GitHub App installation is not configured" });
     }
+    const webBase = (process.env.CALYX_WEB_URL || process.env.WEB_APP_URL || "").replace(/\/$/, "");
+    let returnTo = body.data.returnTo?.trim() || null;
+    if (returnTo && webBase) {
+      try {
+        const u = new URL(returnTo);
+        const allowed = new URL(webBase);
+        if (u.origin !== allowed.origin) returnTo = null;
+      } catch {
+        returnTo = null;
+      }
+    }
+    const repo = body.data.repo ?? "";
     const state = await createGithubInstallationState({
       tenantId: principal.tenantId,
       projectId: project.id,
-      repo: body.data.repo,
+      repo,
+      returnTo,
     });
     return reply.status(201).send({
-      repo: body.data.repo,
+      repo: repo || null,
       installationUrl: `https://github.com/apps/${encodeURIComponent(slug)}/installations/new?state=${encodeURIComponent(state)}`,
       expiresInSeconds: 600,
     });
   });
 
+  app.get("/v1/projects/:id/github/activity", async (request, reply) => {
+    const principal = await requireMgmt(request, reply, "projects:write");
+    if (!principal) return;
+
+    const { id } = request.params as { id: string };
+    const project = await getProject(principal.tenantId, id);
+    if (!project) return reply.status(404).send({ error: "Project not found" });
+
+    const query = z
+      .object({
+        limit: z.coerce.number().int().min(1).max(200).optional(),
+        sync: z
+          .union([z.literal("1"), z.literal("true"), z.literal("0"), z.literal("false")])
+          .optional(),
+      })
+      .safeParse(request.query);
+    if (!query.success) {
+      return reply.status(422).send({ error: "Validation failed", issues: query.error.issues });
+    }
+
+    const github = await getGithubConnection(project.id);
+    const wantSync = query.data.sync === "1" || query.data.sync === "true";
+    let synced: { commits: number; merges: number } | null = null;
+
+    if (github?.installationId) {
+      // Always attempt a light backfill when empty; force with ?sync=1.
+      const existing = await listGithubProjectActivity({
+        tenantId: principal.tenantId,
+        projectId: project.id,
+        limit: 1,
+      });
+      if (wantSync || existing.length === 0) {
+        try {
+          synced = await backfillGithubRepositoryActivity({
+            installationId: github.installationId,
+            repo: github.repo,
+            tenantId: principal.tenantId,
+            projectId: project.id,
+          });
+        } catch (error) {
+          if (wantSync) {
+            return reply.status(502).send({
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+      }
+    }
+
+    const activity = await listGithubProjectActivity({
+      tenantId: principal.tenantId,
+      projectId: project.id,
+      limit: query.data.limit ?? 80,
+    });
+    const counts = {
+      push: activity.filter((a) => a.kind === "push").length,
+      merge: activity.filter((a) => a.kind === "merge").length,
+      pull_request: activity.filter((a) => a.kind === "pull_request").length,
+      deploy: activity.filter((a) => a.kind === "deploy").length,
+      total: activity.length,
+    };
+    return {
+      repo: github?.repo ?? null,
+      connected: Boolean(github),
+      synced,
+      counts,
+      activity,
+    };
+  });
+
+  // Complete link when GitHub left the user on settings/installations/:id (no Setup URL redirect).
+  app.post("/v1/projects/:id/github/complete", async (request, reply) => {
+    const principal = await requireMgmt(request, reply, "integrations:write");
+    if (!principal) return;
+
+    const { id } = request.params as { id: string };
+    const project = await getProject(principal.tenantId, id);
+    if (!project) return reply.status(404).send({ error: "Project not found" });
+
+    const body = z
+      .object({
+        installationId: z.string().min(1),
+        repo: z
+          .string()
+          .min(3)
+          .regex(/^[\w.-]+\/[\w.-]+$/)
+          .optional(),
+      })
+      .safeParse(request.body ?? {});
+    if (!body.success) {
+      return reply
+        .status(422)
+        .send({ error: "Validation failed", issues: body.error.issues });
+    }
+    const installationId = parseInstallationId(body.data.installationId);
+    if (!installationId) {
+      return reply.status(422).send({
+        error: "Pass a GitHub installation ID or settings URL like https://github.com/settings/installations/123",
+      });
+    }
+
+    try {
+      const connection = await finalizeGithubInstall({
+        tenantId: principal.tenantId,
+        projectId: project.id,
+        projectSlug: project.slug,
+        installationId,
+        repo: body.data.repo,
+        webhookUrl: `${intakeBaseUrl(request)}/v1/webhooks/github/${project.id}`,
+        requireRepoPick: true,
+      });
+      return {
+        connected: true,
+        projectId: project.id,
+        repo: connection.repo,
+        installationId: connection.installationId,
+        connectedAt: connection.connectedAt,
+      };
+    } catch (error) {
+      const err = error as Error & { statusCode?: number; repos?: string[] };
+      if (err.repos) {
+        return reply.status(err.statusCode ?? 409).send({
+          error: err.message,
+          repos: err.repos,
+          installationId,
+        });
+      }
+      return reply
+        .status(502)
+        .send({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
   app.get("/v1/github/install/callback", async (request, reply) => {
+    const webBase = (process.env.CALYX_WEB_URL || process.env.WEB_APP_URL || "").replace(/\/$/, "");
+    const wantsHtml =
+      !String(request.headers.accept || "").includes("application/json") ||
+      String(request.headers.accept || "").includes("text/html");
+    const redirectOrJson = (status: number, payload: Record<string, unknown>, dest?: string | null) => {
+      if (wantsHtml && webBase) {
+        const target = new URL(dest || `${webBase}/`);
+        if (payload.error) target.searchParams.set("github", "error");
+        else target.searchParams.set("github", "connected");
+        for (const [k, v] of Object.entries(payload)) {
+          if (k === "error" || k === "connected") continue;
+          if (v == null) continue;
+          target.searchParams.set(k, String(v));
+        }
+        if (payload.error) target.searchParams.set("message", String(payload.error));
+        return reply.redirect(target.toString());
+      }
+      return reply.status(status).send(payload);
+    };
+
     const parsed = z
       .object({
         state: z.string().min(60),
@@ -330,57 +576,46 @@ export async function projectsRoute(app: FastifyInstance): Promise<void> {
         setup_action: z.string().optional(),
       })
       .safeParse(request.query);
-    if (!parsed.success)
-      return reply
-        .status(422)
-        .send({ error: "Invalid GitHub installation callback" });
+    if (!parsed.success) {
+      return redirectOrJson(422, { error: "Invalid GitHub installation callback" });
+    }
     if (parsed.data.setup_action === "delete") {
-      return reply
-        .status(409)
-        .send({ error: "GitHub installation was removed" });
+      return redirectOrJson(409, { error: "GitHub installation was removed" });
     }
     const state = await consumeGithubInstallationState(parsed.data.state);
-    if (!state)
-      return reply
-        .status(409)
-        .send({
-          error:
-            "GitHub installation state is invalid, expired, or already used",
-        });
+    if (!state) {
+      return redirectOrJson(409, {
+        error: "GitHub installation state is invalid, expired, or already used",
+      });
+    }
 
-    const webhookSecret = crypto.randomBytes(32).toString("hex");
     const webhookUrl = `${intakeBaseUrl(request)}/v1/webhooks/github/${state.projectId}`;
     try {
-      await provisionGithubRepository({
-        installationId: parsed.data.installation_id,
-        repo: state.repo,
-        webhookUrl,
-        webhookSecret,
-      });
-      const connection = await upsertGithubConnection({
-        projectId: state.projectId,
+      const project = await getProject(state.tenantId, state.projectId);
+      const connection = await finalizeGithubInstall({
         tenantId: state.tenantId,
-        repo: state.repo,
-        installationId: parsed.data.installation_id,
-        webhookSecret,
-      });
-      const webBase = (process.env.CALYX_WEB_URL || process.env.WEB_APP_URL || "").replace(/\/$/, "");
-      if (webBase && String(request.headers.accept || "").includes("text/html")) {
-        const dest = `${webBase}/?github=connected&repo=${encodeURIComponent(connection.repo)}`;
-        return reply.redirect(dest);
-      }
-      return {
-        connected: true,
         projectId: state.projectId,
-        repo: connection.repo,
-        installationId: connection.installationId,
-      };
+        projectSlug: project?.slug || "",
+        installationId: parsed.data.installation_id,
+        repo: state.repo.trim() || undefined,
+        webhookUrl,
+      });
+      return redirectOrJson(
+        200,
+        {
+          connected: true,
+          projectId: state.projectId,
+          repo: connection.repo,
+          installationId: connection.installationId,
+        },
+        state.returnTo || `${webBase}/?github=connected&repo=${encodeURIComponent(connection.repo)}`,
+      );
     } catch (error) {
-      return reply
-        .status(502)
-        .send({
-          error: error instanceof Error ? error.message : String(error),
-        });
+      return redirectOrJson(
+        502,
+        { error: error instanceof Error ? error.message : String(error) },
+        state.returnTo,
+      );
     }
   });
 
@@ -421,7 +656,8 @@ export async function projectsRoute(app: FastifyInstance): Promise<void> {
       .object({
         channelId: z.string().min(1),
         channelName: z.string().optional(),
-        botToken: z.string().min(10),
+        /** Optional — defaults to SLACK_BOT_TOKEN from the server env (no browser paste). */
+        botToken: z.string().min(10).optional(),
         teamId: z.string().optional(),
       })
       .safeParse(request.body);
@@ -431,12 +667,21 @@ export async function projectsRoute(app: FastifyInstance): Promise<void> {
         .send({ error: "Validation failed", issues: body.error.issues });
     }
 
+    const botToken =
+      body.data.botToken?.trim() || process.env.SLACK_BOT_TOKEN?.trim();
+    if (!botToken) {
+      return reply.status(503).send({
+        error:
+          "Slack bot is not configured on the server (set SLACK_BOT_TOKEN)",
+      });
+    }
+
     const binding = await upsertSlackBinding({
       projectId: project.id,
       tenantId: principal.tenantId,
       channelId: body.data.channelId,
       channelName: body.data.channelName,
-      botToken: body.data.botToken,
+      botToken,
       teamId: body.data.teamId,
     });
 
@@ -449,7 +694,7 @@ export async function projectsRoute(app: FastifyInstance): Promise<void> {
       },
       nextSteps: [
         "Invite the Calyx bot to the channel",
-        `Run: calyx slack test --project ${project.slug}`,
+        "Use Test in Settings → Integrations, or POST .../slack/test",
       ],
     });
   });
@@ -468,12 +713,21 @@ export async function projectsRoute(app: FastifyInstance): Promise<void> {
         .status(404)
         .send({ error: "Slack not connected for this project" });
 
+    const botToken =
+      binding.botToken?.trim() || process.env.SLACK_BOT_TOKEN?.trim();
+    if (!botToken) {
+      return reply.status(503).send({
+        error:
+          "Slack bot is not configured on the server (set SLACK_BOT_TOKEN)",
+      });
+    }
+
     const alert: Alert = {
       id: `test-${Date.now()}`,
       tenant_id: principal.tenantId,
       severity: "medium",
       impact: `Calyx onboarding test for **${project.name}**. Log sources and GitHub can now page this channel.`,
-      root_cause: "Manual slack test from CLI / API",
+      root_cause: "Manual slack test from Settings / API",
       recommended_action: "No action needed — connection verified.",
       anomaly: {
         type: "error_spike",
@@ -490,7 +744,7 @@ export async function projectsRoute(app: FastifyInstance): Promise<void> {
     };
 
     const card = buildAlertCard(alert);
-    const client = new WebClient(binding.botToken);
+    const client = new WebClient(botToken);
     try {
       const result = await client.chat.postMessage({
         channel: binding.channelId,

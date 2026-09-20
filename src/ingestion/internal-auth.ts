@@ -29,7 +29,12 @@ export async function resolveWorkspaceTenant(
 ): Promise<string | null> {
   let tenantId = await tenantForWorkspace(workspaceId);
   if (!tenantId) {
-    const autoTenant = process.env.CALYX_DEFAULT_TENANT?.trim() || "default";
+    const autoTenant =
+      process.env.CALYX_TENANT_ID?.trim() || process.env.CALYX_DEFAULT_TENANT?.trim();
+    if (!autoTenant) {
+      await reply.status(409).send({ error: "Workspace is not linked to a Calyx tenant" });
+      return null;
+    }
     try {
       await linkWorkspaceToTenant(workspaceId, autoTenant);
       tenantId = autoTenant;

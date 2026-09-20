@@ -28,12 +28,15 @@ export function saveConfig(patch: CalyxConfig): CalyxConfig {
   return next;
 }
 
+/** Public intake — stable production default; override only for local/dev. */
+export const DEFAULT_API_URL = "https://calyx-intake.arnabbhowmik.in";
+
 export function resolveApiUrl(override?: string): string {
   return (
     override ||
     process.env.CALYX_API_URL ||
     loadConfig().apiUrl ||
-    "http://127.0.0.1:13000"
+    DEFAULT_API_URL
   ).replace(/\/$/, "");
 }
 

@@ -90,6 +90,11 @@ export async function runAgent(
 happening in their production systems by analyzing logs and metrics. The tenant you are
 assisting has tenant_id: "${tenantId}". Always use this tenant_id when calling tools.
 
+When investigating errors, spikes, regressions, outages, or "what changed" questions:
+1. Call query_logs and/or get_service_stats for the relevant time window.
+2. Call get_change_context to correlate recent GitHub commits and deployments.
+3. Cite concrete log lines, services, SHAs, and deploy times — do not guess.
+
 When you cannot find data, say so clearly rather than guessing. When you do find data,
 cite specific numbers and service names from the tool results. Never call a mutation or
 remediation proposal tool unless the user explicitly asked you to prepare that action.`;

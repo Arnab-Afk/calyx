@@ -1,11 +1,12 @@
 'use client';
 
-import { Check, Copy, GitBranch, KeyRound, Loader2, Plus, RefreshCw, Unplug } from 'lucide-react';
+import { Check, ChevronRight, Copy, GitBranch, KeyRound, Loader2, Plus, RefreshCw, Unplug } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useOpsProjectDetail, useOpsProjects } from '@/features/control/api/use-ops';
 import { useWorkspaceId } from '@/hooks/use-workspace-id';
 import { chatApi } from '@/lib/chat-api';
@@ -62,7 +63,6 @@ export function ProjectsPanel({ initialSlug = null }: { initialSlug?: string | n
 
   const [busy, setBusy] = useState(false);
   const [lastToken, setLastToken] = useState<{ token: string; sourceName: string; intakeUrl?: string } | null>(null);
-  const [githubRepo, setGithubRepo] = useState('');
   const [sourceName, setSourceName] = useState('');
   const [sourceRole, setSourceRole] = useState<'frontend' | 'backend'>('frontend');
   const [shareEmail, setShareEmail] = useState('');
@@ -77,8 +77,13 @@ export function ProjectsPanel({ initialSlug = null }: { initialSlug?: string | n
       <div>
         <p className="font-[family-name:var(--font-display)] text-[11px] uppercase tracking-[0.2em] text-white/40">Dashboard</p>
         <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-white">Projects &amp; logs</h2>
-        <p className="mt-1 text-sm text-white/50">
-          Workspace → projects → sources &amp; GitHub. Generate API keys and connect the repo Calyx uses for remediations.
+        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-white/50">
+          <span>Workspace</span>
+          <ChevronRight className="size-3.5 text-white/30" />
+          <span>projects</span>
+          <ChevronRight className="size-3.5 text-white/30" />
+          <span>sources &amp; GitHub</span>
+          <span className="w-full sm:w-auto">Generate API keys and connect the repo Calyx uses for remediations.</span>
         </p>
       </div>
 
@@ -139,7 +144,6 @@ export function ProjectsPanel({ initialSlug = null }: { initialSlug?: string | n
                 onClick={() => {
                   setSelected(p.slug);
                   setLastToken(null);
-                  setGithubRepo('');
                 }}
                 className={cn(
                   'flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm',
@@ -175,16 +179,17 @@ export function ProjectsPanel({ initialSlug = null }: { initialSlug?: string | n
                   className="border-white/15 bg-black/40 text-white"
                 />
               </div>
-              <div>
+              <div className="w-[140px]">
                 <label className="mb-1 block text-[11px] uppercase tracking-wide text-white/40">Role</label>
-                <select
-                  value={sourceRole}
-                  onChange={(e) => setSourceRole(e.target.value as 'frontend' | 'backend')}
-                  className="h-9 rounded-md border border-white/15 bg-black/40 px-2 text-sm text-white"
-                >
-                  <option value="frontend">frontend</option>
-                  <option value="backend">backend</option>
-                </select>
+                <Select value={sourceRole} onValueChange={(v) => setSourceRole(v as 'frontend' | 'backend')}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="frontend">frontend</SelectItem>
+                    <SelectItem value="backend">backend</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <Button
                 size="sm"
@@ -285,7 +290,7 @@ CALYX_SOURCE_TOKEN=${lastToken.token}`}</pre>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">GitHub repository</p>
                 <p className="mt-1 text-xs text-white/45">
-                  Connect <code className="text-white/70">owner/repo</code> so Calyx can correlate commits and open remediation PRs.
+                  Install the Calyx GitHub App and pick a repo for commits and remediation PRs.
                 </p>
 
                 {github ? (
@@ -319,31 +324,28 @@ CALYX_SOURCE_TOKEN=${lastToken.token}`}</pre>
                     </Button>
                   </div>
                 ) : (
-                  <div className="mt-3 flex gap-2">
-                    <Input
-                      placeholder="owner/repo"
-                      value={githubRepo}
-                      onChange={(e) => setGithubRepo(e.target.value)}
-                      className="border-white/15 bg-black/40 text-white"
-                    />
-                    <Button
-                      disabled={busy || !githubRepo.includes('/')}
-                      onClick={async () => {
-                        setBusy(true);
-                        try {
-                          const res = await connectGithub(githubRepo.trim());
-                          toast.message('Install the Calyx GitHub App on that repo…');
-                          window.location.assign(res.installationUrl);
-                        } catch (e) {
-                          toast.error(e instanceof Error ? e.message : 'Failed');
-                          setBusy(false);
-                        }
-                      }}
-                    >
-                      <GitBranch className="mr-1 size-4" />
-                      Connect repo
-                    </Button>
-                  </div>
+                  <Button
+                    className="mt-3"
+                    disabled={busy}
+                    onClick={async () => {
+                      setBusy(true);
+                      try {
+                        const returnTo =
+                          typeof window !== 'undefined'
+                            ? `${window.location.origin}/workspace/${workspaceId}/projects/${encodeURIComponent(selected!)}`
+                            : undefined;
+                        const res = await connectGithub({ returnTo });
+                        toast.message('Install the Calyx GitHub App…');
+                        window.location.assign(res.installationUrl);
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : 'Failed');
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    <GitBranch className="mr-1 size-4" />
+                    Connect repository
+                  </Button>
                 )}
               </div>
             </div>

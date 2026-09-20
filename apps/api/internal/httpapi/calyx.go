@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/Arnab-Afk/calyx/apps/api/internal/models"
 	"github.com/Arnab-Afk/calyx/apps/api/internal/realtime"
@@ -64,20 +65,30 @@ func (s *Server) askCalyx(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	payload, _ := json.Marshal(map[string]any{
-		"message":  body.Query,
-		"threadId": body.ParentMessageID,
-		"actorId":  fmt.Sprintf("web:%s:%s", workspaceID, member.ID),
-	})
+	payloadMap := map[string]any{
+		"message": body.Query,
+		"actorId": fmt.Sprintf("web:%s:%s", workspaceID, member.ID),
+	}
+	if body.ParentMessageID != nil && strings.TrimSpace(*body.ParentMessageID) != "" {
+		payloadMap["threadId"] = strings.TrimSpace(*body.ParentMessageID)
+	}
+	payload, _ := json.Marshal(payloadMap)
 	endpoint := fmt.Sprintf("%s/v1/internal/workspaces/%s/ask", s.calyxAskURL, url.PathEscape(workspaceID))
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, endpoint, bytes.NewReader(payload))
+	// Agent tool loops can exceed the default API client timeout.
+	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "investigation request failed")
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Calyx-Internal-Key", s.calyxInternalKey)
-	response, err := s.httpClient.Do(req)
+	client := s.httpClient
+	if client == nil || client.Timeout < 90*time.Second {
+		client = &http.Client{Timeout: 95 * time.Second}
+	}
+	response, err := client.Do(req)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, "Calyx investigation service unavailable")
 		return
@@ -123,12 +134,13 @@ func (s *Server) askCalyx(w http.ResponseWriter, r *http.Request) {
 			           parent_message_id::text, conversation_id::text, image_url, calyx_data, created_at, updated_at`,
 			text, member.ID, workspaceID, channelID, body.ParentMessageID, calyx))
 	}
-	question, err := insert(body.Query, nil)
+	// Match normal chat bodies (Quill delta JSON) so the question renders like any other message.
+	question, err := insert(quillPlainBody(body.Query), nil)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "question persistence failed")
 		return
 	}
-	message, err := insert(answer.Answer, trustedJSON)
+	message, err := insert(quillPlainBody(answer.Answer), trustedJSON)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "answer persistence failed")
 		return
@@ -144,15 +156,111 @@ func (s *Server) askCalyx(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"question": question, "message": message})
 }
 
+// quillPlainBody wraps plain text in the Quill delta JSON shape the web renderer expects.
+func quillPlainBody(text string) string {
+	text = strings.TrimRight(text, "\n")
+	if text == "" {
+		text = " "
+	}
+	payload, err := json.Marshal(map[string]any{
+		"ops": []map[string]string{{"insert": text + "\n"}},
+	})
+	if err != nil {
+		return `{"ops":[{"insert":"\n"}]}`
+	}
+	return string(payload)
+}
+
+// postInternalAlert posts an enriched alert card into the workspace's general channel.
+// Auth: X-Calyx-Internal-Key (detector → chat API).
+func (s *Server) postInternalAlert(w http.ResponseWriter, r *http.Request) {
+	if s.calyxInternalKey == "" {
+		writeErr(w, http.StatusServiceUnavailable, "internal alerts are not configured")
+		return
+	}
+	supplied := strings.TrimSpace(r.Header.Get("X-Calyx-Internal-Key"))
+	if supplied == "" || supplied != s.calyxInternalKey {
+		writeErr(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	workspaceID := chi.URLParam(r, "workspaceID")
+	var body struct {
+		Answer    string          `json:"answer"`
+		ChartType string          `json:"chartType"`
+		ChartData json.RawMessage `json:"chartData"`
+		ToolNames []string        `json:"toolNames"`
+	}
+	if decodeJSON(r, &body) != nil {
+		writeErr(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	body.Answer = strings.TrimSpace(body.Answer)
+	if body.Answer == "" {
+		writeErr(w, http.StatusBadRequest, "answer is required")
+		return
+	}
+	chartType := strings.TrimSpace(body.ChartType)
+	if chartType == "" {
+		chartType = "alert-card"
+	}
+
+	var channelID, memberID string
+	err := s.db.QueryRow(r.Context(),
+		`SELECT c.id::text, m.id::text
+		 FROM chat_channels c
+		 JOIN chat_workspaces w ON w.id = c.workspace_id
+		 JOIN chat_members m ON m.workspace_id = w.id AND m.user_id = w.owner_id
+		 WHERE c.workspace_id = $1 AND c.name = 'general'
+		 LIMIT 1`,
+		workspaceID,
+	).Scan(&channelID, &memberID)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "workspace general channel not found")
+		return
+	}
+
+	var chartData *string
+	if len(body.ChartData) > 0 && string(body.ChartData) != "null" {
+		value := string(body.ChartData)
+		chartData = &value
+	}
+	trusted := models.CalyxData{
+		Query:     "alert",
+		Answer:    body.Answer,
+		ChartType: &chartType,
+		ChartData: chartData,
+		ToolNames: body.ToolNames,
+	}
+	trustedJSON, _ := json.Marshal(trusted)
+
+	message, err := scanMessage(s.db.QueryRow(r.Context(),
+		`INSERT INTO chat_messages
+		   (body, member_id, workspace_id, channel_id, calyx_data)
+		 VALUES ($1,$2,$3,$4,$5)
+		 RETURNING id::text, body, member_id::text, workspace_id::text, channel_id::text,
+		           parent_message_id::text, conversation_id::text, image_url, calyx_data, created_at, updated_at`,
+		body.Answer, memberID, workspaceID, channelID, trustedJSON))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "alert persistence failed")
+		return
+	}
+	_ = s.populateMessage(r.Context(), &message)
+	s.hub.Publish(realtime.Event{
+		Type: "message.created", WorkspaceID: workspaceID, ChannelID: channelID, Payload: message,
+	})
+	writeJSON(w, http.StatusCreated, map[string]any{"message": message})
+}
+
 // linkWorkspaceTenant best-effort maps a new chat workspace to the observability tenant
 // so /calyx ask and MCP credentials work without a separate CLI step.
+// Prefer CALYX_TENANT_ID (ops/mgmt tenant) over CALYX_DEFAULT_TENANT; never invent a tenant.
 func (s *Server) linkWorkspaceTenant(ctx context.Context, workspaceID string) {
 	if s.calyxAskURL == "" || s.calyxInternalKey == "" {
 		return
 	}
 	tenant := strings.TrimSpace(s.calyxDefaultTenant)
 	if tenant == "" {
-		tenant = "default"
+		return
 	}
 	payload, _ := json.Marshal(map[string]string{"tenantId": tenant})
 	endpoint := fmt.Sprintf("%s/v1/internal/workspaces/%s/link", s.calyxAskURL, url.PathEscape(workspaceID))

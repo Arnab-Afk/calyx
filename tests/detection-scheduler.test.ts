@@ -84,7 +84,8 @@ describe("durable alert delivery", () => {
         seen.push(delivery.id);
         expect(alert.id).toBe(alertId);
         expect(alert.tenant_id).toBe(TENANT);
-        expect(alert.root_cause).toBe("Not yet verified");
+        expect(alert.root_cause.length).toBeGreaterThan(0);
+        expect(alert.recommended_action.length).toBeGreaterThan(0);
         return { externalId: "1700000000.000001" };
       },
     });

@@ -365,7 +365,7 @@ export function AwsSqsDlq({
         items={[
           { label: 'Depth', value: String(data.depth) },
           { label: 'Oldest', value: data.oldestAge },
-          { label: 'Action', value: 'Inspect → replay' },
+          { label: 'Action', value: 'Inspect & replay' },
         ]}
       />
     </div>

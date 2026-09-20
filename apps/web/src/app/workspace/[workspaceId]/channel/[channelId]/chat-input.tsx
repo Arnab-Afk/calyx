@@ -1,13 +1,13 @@
 'use client';
 
 import { Loader } from 'lucide-react';
-import { Bot } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import type Quill from 'quill';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import type { Id } from '@/../convex/_generated/dataModel';
+import { CalyxThinking } from '@/components/calyx/calyx-thinking';
 import { useCreateMessage } from '@/features/messages/api/use-create-message';
 import { useChannelId } from '@/hooks/use-channel-id';
 import { useWorkspaceId } from '@/hooks/use-workspace-id';
@@ -33,7 +33,7 @@ type CreateMessageValues = {
   image?: Id<'_storage'>;
 };
 
-// Extract plain text from a Quill delta JSON string
+/** Extract plain text from a Quill delta JSON string. */
 function quillBodyToText(body: string): string {
   try {
     const delta = JSON.parse(body);
@@ -43,12 +43,18 @@ function quillBodyToText(body: string): string {
         .join('')
         .trim();
     }
-  } catch {}
+  } catch {
+    /* plain text */
+  }
   return body.trim();
 }
 
+/** Strip optional /calyx prefix; every channel message can be an investigation. */
+function calyxQueryFromText(plainText: string): string {
+  return plainText.replace(/^\/calyx\s*/i, '').trim();
+}
+
 export const ChatInput = ({ placeholder }: ChatInputProps) => {
-  const [editorKey, setEditorKey] = useState(0);
   const [isPending, setIsPending] = useState(false);
   const [isCalyxThinking, setIsCalyxThinking] = useState(false);
 
@@ -64,39 +70,38 @@ export const ChatInput = ({ placeholder }: ChatInputProps) => {
       innerRef.current?.enable(false);
 
       const plainText = quillBodyToText(body);
+      const query = calyxQueryFromText(plainText);
 
-      // /calyx <question> → run through AI agent
-      if (plainText.startsWith('/calyx ') || plainText.toLowerCase() === '/calyx') {
-        const query = plainText.replace(/^\/calyx\s*/i, '').trim();
-        if (!query) {
-          toast.info('Usage: /calyx <your question about the system>');
-          setEditorKey((k) => k + 1);
-          return;
-        }
-
-        setEditorKey((k) => k + 1);
+      // Text + optional image → Calyx agent (charts / tool-backed answers)
+      if (query) {
+        // Clear the composer in place — remounting via key looked like a page refresh.
+        innerRef.current?.setContents([] as never);
+        innerRef.current?.setText('');
         setIsCalyxThinking(true);
         await chatApi.askCalyx(String(channelId), query);
         return;
       }
 
-      // Normal message path
+      // Image-only (or empty text) stays on the normal message path
+      if (!image) {
+        toast.info('Type a question for Calyx, or attach an image.');
+        return;
+      }
+
       const values: CreateMessageValues = {
         channelId,
         workspaceId,
         body,
         image: undefined,
       };
-
-      if (image) {
-        const upload = await uploadChatImage(String(workspaceId), image);
-        values.image = upload.id as Id<'_storage'>;
-      }
-
+      const upload = await uploadChatImage(String(workspaceId), image);
+      values.image = upload.id as Id<'_storage'>;
       await createMessage(values, { throwError: true });
-      setEditorKey((k) => k + 1);
+      innerRef.current?.setContents([] as never);
+      innerRef.current?.setText('');
     } catch (error) {
-      toast.error('Failed to send message.');
+      const detail = error instanceof Error && error.message ? error.message : 'Failed to send message.';
+      toast.error(detail);
     } finally {
       setIsPending(false);
       setIsCalyxThinking(false);
@@ -105,20 +110,16 @@ export const ChatInput = ({ placeholder }: ChatInputProps) => {
   };
 
   return (
-    <div className="w-full px-5">
-      {isCalyxThinking && (
-        <div className="sazabi-glass mb-2 flex items-center gap-2 rounded-xl border border-[var(--sazabi-border)] px-3 py-2 text-sm text-[var(--sazabi-mention)]">
-          <Bot className="size-4 animate-pulse text-[var(--sazabi-crimson)]" />
-          Calyx is thinking…
-        </div>
-      )}
-      <Editor
-        placeholder={placeholder ?? 'Message or /calyx <question>'}
-        key={editorKey}
-        onSubmit={handleSubmit}
-        disabled={isPending || isCalyxThinking}
-        innerRef={innerRef}
-      />
+    <div className="w-full">
+      {isCalyxThinking && <CalyxThinking className="pb-1" />}
+      <div className="px-5">
+        <Editor
+          placeholder={placeholder ?? 'Ask Calyx about errors, deploys, logs…'}
+          onSubmit={handleSubmit}
+          disabled={isPending || isCalyxThinking}
+          innerRef={innerRef}
+        />
+      </div>
     </div>
   );
 };

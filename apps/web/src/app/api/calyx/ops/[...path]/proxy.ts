@@ -26,14 +26,29 @@ async function authorizeWorkspaceMember(
   const cookie = request.headers.get('cookie');
   if (!cookie) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
 
+  const memberUrl = `${chatBase()}/v1/workspaces/${encodeURIComponent(workspaceId)}/members/me`;
+  const tenantUrl = `${opsBase()}/v1/internal/workspaces/${encodeURIComponent(workspaceId)}/authorize-management`;
+
   let memberResponse: Response;
+  let tenantResponse: Response;
   try {
-    memberResponse = await fetch(`${chatBase()}/v1/workspaces/${encodeURIComponent(workspaceId)}/members/me`, {
-      headers: { Accept: 'application/json', Cookie: cookie },
-      cache: 'no-store',
-    });
+    // Parallel — these don't depend on each other.
+    ;[memberResponse, tenantResponse] = await Promise.all([
+      fetch(memberUrl, {
+        headers: { Accept: 'application/json', Cookie: cookie },
+        cache: 'no-store',
+      }),
+      fetch(tenantUrl, {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+          'X-Calyx-Internal-Key': internalKey(),
+        },
+        cache: 'no-store',
+      }),
+    ]);
   } catch {
-    return NextResponse.json({ error: 'Calyx chat API unreachable' }, { status: 502 });
+    return NextResponse.json({ error: 'Calyx backend unreachable' }, { status: 502 });
   }
   if (memberResponse.status === 401) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
@@ -46,19 +61,6 @@ async function authorizeWorkspaceMember(
     return NextResponse.json({ error: 'Workspace membership required' }, { status: 403 });
   }
 
-  let tenantResponse: Response;
-  try {
-    tenantResponse = await fetch(`${opsBase()}/v1/internal/workspaces/${encodeURIComponent(workspaceId)}/authorize-management`, {
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${token}`,
-        'X-Calyx-Internal-Key': internalKey(),
-      },
-      cache: 'no-store',
-    });
-  } catch {
-    return NextResponse.json({ error: 'Calyx observability API unreachable' }, { status: 502 });
-  }
   if (!tenantResponse.ok) {
     return NextResponse.json(
       { error: 'Workspace is not authorized for this observability tenant' },

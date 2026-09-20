@@ -1,6 +1,6 @@
 'use client';
 
-import { FolderKanban, GitBranch, KeyRound, Loader2, Plug, Rocket, Settings2, Shield, UserRound, Users } from 'lucide-react';
+import { ChevronRight, FolderKanban, GitBranch, KeyRound, Loader2, Plug, Rocket, Settings2, Shield, UserRound, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { useOpsProjectDetail, useOpsProjects } from '@/features/control/api/use-ops';
 import { ProjectsPanel } from '@/features/control/components/projects-panel';
 import { McpCredentialsModal } from '@/features/mcp/components/mcp-credentials-modal';
 import { useCurrentMember } from '@/features/members/api/use-current-member';
@@ -312,7 +313,9 @@ function MembersPanel() {
         <Card>
           <p className="text-sm font-medium">Invite to workspace</p>
           <p className="mt-1 text-xs text-white/45">
-            They get access to all projects under this workspace (e.g. invite to <em>prod</em> → they see workspace <em>prod</em>).
+            They get access to all projects under this workspace (e.g. invite to <em>prod</em>
+            <ChevronRight className="mx-0.5 inline size-3 align-middle text-white/35" aria-hidden />
+            they see workspace <em>prod</em>).
           </p>
           <div className="mt-3 flex gap-2">
             <Input
@@ -408,6 +411,23 @@ function MembersPanel() {
 function ConnectionsPanel() {
   const workspaceId = useWorkspaceId();
   const [mcpOpen, setMcpOpen] = useState(false);
+  const { projects, loading: projectsLoading } = useOpsProjects();
+  const [projectSlug, setProjectSlug] = useState<string | null>(null);
+  const { slack, connectSlack, testSlack, reload: reloadDetail } = useOpsProjectDetail(projectSlug);
+  const [channelId, setChannelId] = useState('');
+  const [channelName, setChannelName] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!projectSlug && projects[0]?.slug) setProjectSlug(projects[0].slug);
+  }, [projects, projectSlug]);
+
+  useEffect(() => {
+    if (slack?.channelId) {
+      setChannelId(slack.channelId);
+      setChannelName(slack.channelName ?? '');
+    }
+  }, [slack?.channelId, slack?.channelName]);
 
   return (
     <Panel title="Connections" subtitle="Auth providers, agent connectors, and inbound integrations">
@@ -422,6 +442,117 @@ function ConnectionsPanel() {
             <Button size="sm" className="mt-3" variant="outline" onClick={() => setMcpOpen(true)}>
               Manage MCP credentials
             </Button>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="flex items-start gap-3">
+          <Plug className="mt-0.5 size-4 text-white/45" />
+          <div className="min-w-0 flex-1 space-y-3">
+            <div>
+              <p className="text-sm font-medium">Slack alerts</p>
+              <p className="mt-1 text-xs text-white/45">
+                Bind a Slack channel for detector alerts. The bot token lives in server env (
+                <code className="text-white/70">SLACK_BOT_TOKEN</code>) — paste only the channel ID here.
+                Invite the Calyx bot to the channel first.
+              </p>
+            </div>
+            {projectsLoading ? (
+              <p className="text-xs text-white/40">Loading projects…</p>
+            ) : projects.length === 0 ? (
+              <p className="text-xs text-white/40">Create a project under Projects &amp; logs first.</p>
+            ) : (
+              <>
+                <div>
+                  <label className="text-[11px] uppercase tracking-wider text-white/40">Project</label>
+                  <select
+                    className="mt-1 w-full rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm text-white"
+                    value={projectSlug ?? ''}
+                    onChange={(e) => setProjectSlug(e.target.value || null)}
+                  >
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.slug}>
+                        {p.name || p.slug}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div>
+                    <label className="text-[11px] uppercase tracking-wider text-white/40">Channel ID</label>
+                    <Input
+                      value={channelId}
+                      onChange={(e) => setChannelId(e.target.value)}
+                      placeholder="C0123456789"
+                      className="mt-1 border-white/15 bg-black/40 font-mono text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] uppercase tracking-wider text-white/40">Name (optional)</label>
+                    <Input
+                      value={channelName}
+                      onChange={(e) => setChannelName(e.target.value)}
+                      placeholder="#on-call"
+                      className="mt-1 border-white/15 bg-black/40 text-white"
+                    />
+                  </div>
+                </div>
+                {slack?.connectedAt && (
+                  <p className="text-[11px] text-white/40">
+                    Connected {new Date(slack.connectedAt).toLocaleString()}
+                    {slack.channelName ? ` · ${slack.channelName}` : ''}
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    disabled={busy || !projectSlug || channelId.trim().length < 2}
+                    onClick={async () => {
+                      setBusy(true);
+                      try {
+                        await connectSlack({
+                          channelId: channelId.trim(),
+                          channelName: channelName.trim() || undefined,
+                        });
+                        toast.success('Slack channel bound');
+                        await reloadDetail();
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : 'Failed to bind Slack');
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    {busy ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                    Save channel
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy || !projectSlug || !slack}
+                    onClick={async () => {
+                      setBusy(true);
+                      try {
+                        await testSlack();
+                        toast.success('Test alert posted to Slack');
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : 'Slack test failed');
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    Test
+                  </Button>
+                </div>
+                <p className="text-[11px] leading-relaxed text-white/35">
+                  One-time setup: create a Slack app with <code className="text-white/55">chat:write</code> + event
+                  subscriptions, install it, set <code className="text-white/55">SLACK_BOT_TOKEN</code> /
+                  <code className="text-white/55">SLACK_SIGNING_SECRET</code> on the server, then bind the channel here.
+                </p>
+              </>
+            )}
           </div>
         </div>
       </Card>

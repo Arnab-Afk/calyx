@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { Line } from 'react-chartjs-2';
 import { ensureChartRegistered, COLORS, DARK_DEFAULTS } from '../chart-registry';
 import { cn } from '@/lib/utils';
@@ -102,10 +103,10 @@ export function DeployCorrelation({ data, onBrush }: { data: DeployCorrelationDa
         <p className="text-[11px] text-white/45">
           Brush: <span className="text-white/70">{brush.from}</span>
           {brush.to ? (
-            <>
-              {' '}
-              → <span className="text-white/70">{brush.to}</span>
-            </>
+            <span className="inline-flex items-center gap-1">
+              <ChevronRight className="inline size-3 text-white/30" aria-hidden />
+              <span className="text-white/70">{brush.to}</span>
+            </span>
           ) : (
             ' · click another point to set range'
           )}

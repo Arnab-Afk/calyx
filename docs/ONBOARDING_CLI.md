@@ -26,6 +26,47 @@ npm run cli -- login --token calyx_mgmt_… --api-url http://127.0.0.1:13000 --t
 
 Config is stored at `~/.calyx/config.json`.
 
+## Linux VM / journalctl
+
+Install from anywhere (defaults to production intake):
+
+```bash
+curl -fsSL https://calyx-intake.arnabbhowmik.in/install | bash
+```
+
+The installer asks how apps are hosted:
+
+1. **systemd / journalctl**
+2. **PM2**
+3. **Docker**
+4. **Log file** (supervisor, custom apps, …)
+5. **Kubernetes** (`kubectl logs`)
+6. **CLI only**
+
+Non-interactive:
+
+```bash
+curl -fsSL https://calyx-intake.arnabbhowmik.in/install | CALYX_MACHINE_TYPE=pm2 bash
+# linux | pm2 | docker | file | k8s | cli
+```
+
+Flow after install:
+
+1. Browser device login at `https://calyx.arnabbhowmik.in/cli/device`
+2. Terminal picks **project**, then **service** / **container**
+3. A **background** systemd user service (or nohup fallback) keeps shipping — you can close the terminal
+
+```bash
+calyx status
+calyx stop <id>
+```
+
+From a local checkout (dev):
+
+```bash
+npm run journal
+```
+
 ## Guided wizard
 
 ```bash

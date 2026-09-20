@@ -97,3 +97,126 @@ export async function getGithubChangeContext(input: {
   ]);
   return { commits: commits.rows, deployments: deployments.rows };
 }
+
+export type GithubActivityItem = {
+  id: string;
+  kind: "push" | "merge" | "deploy" | "pull_request" | "release" | "branch" | "github";
+  title: string;
+  summary?: string | null;
+  actor?: string | null;
+  ref?: string | null;
+  sha?: string | null;
+  url?: string | null;
+  status?: string | null;
+  environment?: string | null;
+  repo?: string | null;
+  at: string;
+};
+
+function classifyCommitMessage(message: string): "merge" | "push" {
+  const first = message.split("\n")[0] ?? message;
+  if (/^merge(d)?\b/i.test(first) || /merge pull request/i.test(first)) return "merge";
+  return "push";
+}
+
+export async function listGithubProjectActivity(input: {
+  tenantId: string;
+  projectId: string;
+  limit?: number;
+}): Promise<GithubActivityItem[]> {
+  const limit = Math.min(Math.max(input.limit ?? 80, 1), 200);
+  const pool = getPool();
+  const [commits, deployments, events] = await Promise.all([
+    pool.query(
+      `SELECT repo, sha, ref, message, author, committed_at, url
+       FROM github_commits
+       WHERE tenant_id = $1 AND project_id = $2
+       ORDER BY committed_at DESC
+       LIMIT $3`,
+      [input.tenantId, input.projectId, limit],
+    ),
+    pool.query(
+      `SELECT repo, deployment_id, sha, ref, environment, status, description, target_url, deployed_at
+       FROM github_deployments
+       WHERE tenant_id = $1 AND project_id = $2
+       ORDER BY deployed_at DESC
+       LIMIT $3`,
+      [input.tenantId, input.projectId, limit],
+    ),
+    pool.query(
+      `SELECT id, timestamp, message, level, attributes
+       FROM events
+       WHERE tenant_id = $1
+         AND service = 'github'
+         AND (attributes->>'project_id') = $2
+       ORDER BY timestamp DESC
+       LIMIT $3`,
+      [input.tenantId, input.projectId, limit],
+    ),
+  ]);
+
+  const items: GithubActivityItem[] = [];
+
+  for (const row of commits.rows) {
+    const message = String(row.message ?? "");
+    const kind = classifyCommitMessage(message);
+    items.push({
+      id: `commit:${row.sha}`,
+      kind,
+      title: message.split("\n")[0] || (kind === "merge" ? "Merge" : "Push"),
+      summary: row.ref ? String(row.ref).replace(/^refs\/heads\//, "") : null,
+      actor: row.author,
+      ref: row.ref,
+      sha: row.sha,
+      url: row.url,
+      repo: row.repo,
+      at: new Date(row.committed_at).toISOString(),
+    });
+  }
+
+  for (const row of deployments.rows) {
+    items.push({
+      id: `deploy:${row.deployment_id}`,
+      kind: "deploy",
+      title: `Deploy ${row.status}${row.environment ? ` · ${row.environment}` : ""}`,
+      summary: row.description,
+      ref: row.ref,
+      sha: row.sha,
+      url: row.target_url,
+      status: row.status,
+      environment: row.environment,
+      repo: row.repo,
+      at: new Date(row.deployed_at).toISOString(),
+    });
+  }
+
+  for (const row of events.rows) {
+    const attrs = (row.attributes ?? {}) as Record<string, unknown>;
+    const event = String(attrs.event ?? "");
+    // Skip raw push/deploy event copies when we already have durable rows.
+    if (event === "push" || event === "deployment" || event === "deployment_status") continue;
+    let kind: GithubActivityItem["kind"] = "github";
+    if (event === "pull_request" || attrs.pr_action) {
+      const action = String(attrs.pr_action ?? attrs.action ?? "");
+      kind = action === "closed" && attrs.merged === true ? "merge" : "pull_request";
+    } else if (event === "release") kind = "release";
+    else if (event === "create" || event === "delete") kind = "branch";
+
+    items.push({
+      id: `event:${row.id}`,
+      kind,
+      title: String(row.message ?? `github.${event || "event"}`),
+      summary: typeof attrs.ref === "string" ? attrs.ref : null,
+      actor: typeof attrs.author === "string" ? attrs.author : typeof attrs.actor === "string" ? attrs.actor : null,
+      ref: typeof attrs.ref === "string" ? attrs.ref : null,
+      sha: typeof attrs.sha === "string" ? attrs.sha : null,
+      url: typeof attrs.url === "string" ? attrs.url : null,
+      status: typeof attrs.pr_action === "string" ? attrs.pr_action : typeof attrs.action === "string" ? attrs.action : null,
+      repo: typeof attrs.repo === "string" ? attrs.repo : null,
+      at: new Date(row.timestamp).toISOString(),
+    });
+  }
+
+  items.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  return items.slice(0, limit);
+}

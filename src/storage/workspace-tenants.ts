@@ -48,6 +48,14 @@ export async function tenantForWorkspace(workspaceId: string): Promise<string | 
   return result.rows[0]?.tenant_id ?? null;
 }
 
+export async function workspacesForTenant(tenantId: string): Promise<string[]> {
+  const result = await getPool().query(
+    `SELECT workspace_id FROM workspace_tenant_links WHERE tenant_id = $1 ORDER BY workspace_id`,
+    [tenantId],
+  );
+  return result.rows.map((row) => String(row.workspace_id));
+}
+
 export type WorkspaceProjectScope = {
   workspaceId: string;
   tenantId: string;

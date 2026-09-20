@@ -22,6 +22,7 @@
     "dev:loki-forwarder": "tsx src/connectors/loki-forwarder.ts",
     "start:loki-forwarder": "node --enable-source-maps dist/connectors/loki-forwarder.js",
     "cli": "tsx src/cli/index.ts",
+    "journal": "tsx src/cli/index.ts journal",
     "migrate": "tsx src/storage/migrate.ts",
     "migrate:prod": "node --enable-source-maps dist/storage/migrate.js",
     "deploy:preflight": "node scripts/production-preflight.mjs",

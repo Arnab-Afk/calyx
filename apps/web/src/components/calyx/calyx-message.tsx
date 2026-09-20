@@ -27,30 +27,24 @@ const TIME_RANGES = [
 
 /** Map internal tool ids → short human labels for the card meta line. */
 const TOOL_LABELS: Record<string, string> = {
-  runbook: 'Runbook',
   query_logs: 'Logs',
-  query_metrics: 'Metrics',
+  tail_logs: 'Tail',
+  list_services: 'Services',
   get_service_stats: 'Health',
+  get_change_context: 'GitHub changes',
+  get_alert_context: 'Alert',
+  list_incidents: 'Incidents',
+  get_incident: 'Incident',
+  search_incidents: 'Search incidents',
+  search_past_incidents: 'Past incidents',
+  propose_remediation: 'Remediation',
+  ask: 'Ask',
+  // Legacy / aspirational aliases kept for older messages
+  runbook: 'Runbook',
+  query_metrics: 'Metrics',
   get_flags: 'Flags',
   github: 'GitHub',
   github_actions: 'CI',
-  github_releases: 'Releases',
-  dependabot: 'Deps',
-  aws: 'AWS',
-  azure: 'Azure',
-  gcp: 'GCP',
-  cloud: 'Cloud',
-  cloud_cost: 'Cost',
-  cloud_iam: 'IAM',
-  statuspage: 'Status',
-  uptime_probe: 'Uptime',
-  digest: 'Digest',
-  incident: 'Incident',
-  propose_action: 'Action',
-  db_stats: 'Database',
-  auth_stats: 'Auth',
-  email_stats: 'Email',
-  queue_stats: 'Queue',
   deploy: 'Deploy',
   incidents: 'Incidents',
 };
@@ -126,8 +120,8 @@ export function CalyxMessage({ data, createdAt, onTimeRangeSelect }: CalyxMessag
   };
 
   const handleBrush = (from: string, to: string) => {
-    toast.message('Brush → re-ask', {
-      description: `Would re-query ${from} → ${to} for: ${data.query.slice(0, 60)}`,
+    toast.message('Brush range ready', {
+      description: `Would re-query ${from} to ${to} for: ${data.query.slice(0, 60)}`,
     });
   };
 

@@ -114,6 +114,8 @@ CREATE TABLE IF NOT EXISTS github_installation_states (
 CREATE INDEX IF NOT EXISTS github_installation_states_expiry
   ON github_installation_states (expires_at) WHERE consumed_at IS NULL;
 
+ALTER TABLE github_installation_states ADD COLUMN IF NOT EXISTS return_to TEXT;
+
 CREATE TABLE IF NOT EXISTS github_commits (
   tenant_id    TEXT        NOT NULL,
   project_id   UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -441,6 +443,25 @@ CREATE TABLE IF NOT EXISTS mcp_oauth_rate_limits (
 
 CREATE INDEX IF NOT EXISTS mcp_oauth_rate_limits_window
   ON mcp_oauth_rate_limits (window_start);
+
+CREATE TABLE IF NOT EXISTS cli_device_sessions (
+  device_code     TEXT        NOT NULL PRIMARY KEY,
+  user_code       TEXT        NOT NULL UNIQUE,
+  status          TEXT        NOT NULL DEFAULT 'pending',
+  workspace_id    TEXT,
+  tenant_id       TEXT,
+  mgmt_token_hash BYTEA,
+  mgmt_token      TEXT,
+  credential_id   UUID,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at      TIMESTAMPTZ NOT NULL,
+  approved_at     TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS cli_device_sessions_user_code
+  ON cli_device_sessions (user_code);
+CREATE INDEX IF NOT EXISTS cli_device_sessions_expires
+  ON cli_device_sessions (expires_at);
 `;
 
 async function migrate(): Promise<void> {

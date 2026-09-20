@@ -280,9 +280,9 @@ func (s *Server) linkWorkspaceTenantLike(ctx context.Context, guestID, hostID st
 	tenant := s.fetchWorkspaceTenant(ctx, hostID)
 	if tenant == "" {
 		tenant = strings.TrimSpace(s.calyxDefaultTenant)
-		if tenant == "" {
-			tenant = "default"
-		}
+	}
+	if tenant == "" {
+		return
 	}
 	payload, _ := json.Marshal(map[string]string{"tenantId": tenant})
 	endpoint := fmt.Sprintf("%s/v1/internal/workspaces/%s/link", s.calyxAskURL, url.PathEscape(guestID))

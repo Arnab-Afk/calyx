@@ -232,6 +232,7 @@ const Editor = ({
 
               <Button
                 disabled={disabled || isEmpty}
+                type="button"
                 onClick={() => {
                   if (!quillRef.current) return;
 
@@ -250,6 +251,7 @@ const Editor = ({
 
           {variant === 'create' && (
             <Button
+              type="button"
               title="Send Message"
               disabled={disabled || isEmpty}
               onClick={() => {

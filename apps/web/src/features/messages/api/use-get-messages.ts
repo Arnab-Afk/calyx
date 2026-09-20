@@ -43,7 +43,9 @@ export const useGetMessages = ({
 
   return {
     results: resource.data ?? [],
-    status: resource.isLoading ? 'LoadingFirstPage' : 'Exhausted',
+    // Keep the message list mounted during background refetch after send —
+    // only the first empty load should show the full-page spinner.
+    status: resource.isLoading && !resource.data ? 'LoadingFirstPage' : 'Exhausted',
     loadMore: () => undefined,
   };
 };

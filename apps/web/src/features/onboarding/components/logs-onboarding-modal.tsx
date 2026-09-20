@@ -54,6 +54,7 @@ const STACK_ICONS: Record<AppTypeId, typeof Globe> = {
   python: Code2,
   browser: AppWindow,
   docker: Box,
+  journald: Server,
   vercel: Triangle,
   other: Box,
 };
@@ -91,7 +92,11 @@ export function LogsOnboardingModal() {
   const selected = useMemo(() => APP_TYPES.find((a) => a.id === appType) ?? null, [appType]);
   const stage = stepToStage(step);
   const stageRank = STAGE_ORDER.indexOf(stage);
-  const hasTutorial = createdSources.length > 0 || Boolean(frontendToken || backendToken);
+  const hasTutorial =
+    createdSources.length > 0 ||
+    Boolean(frontendToken || backendToken) ||
+    appType === 'journald';
+
 
   const reset = () => {
     setStep('welcome');
@@ -176,7 +181,11 @@ export function LogsOnboardingModal() {
       setFrontendToken(fe);
       setBackendToken(be);
       setStep('tutorial');
-      toast.success('Project + sources ready');
+      toast.success(
+        selected.id === 'journald'
+          ? 'Project ready — run the journal command on your VM'
+          : 'Project + sources ready',
+      );
     } catch (e) {
       setStep('project');
       toast.error(e instanceof Error ? e.message : 'Could not create project');
@@ -583,7 +592,9 @@ function AskPreview() {
       <h3 className="mt-8 font-[family-name:var(--font-display)] text-xl font-semibold tracking-tight">You’re ready</h3>
       <p className="mt-2 max-w-md text-[14px] leading-relaxed text-white/50">
         We’ll open <span className="text-white/80">#general</span>. Once events arrive, ask in the channel. Revisit sources anytime in
-        Settings → Projects &amp; logs.
+        Settings
+        <ChevronRight className="mx-0.5 inline size-3.5 align-text-bottom text-white/35" aria-hidden />
+        Projects &amp; logs.
       </p>
     </div>
   );

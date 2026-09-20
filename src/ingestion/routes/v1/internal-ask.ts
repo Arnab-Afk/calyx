@@ -9,7 +9,7 @@ import {
 
 const Body = z.object({
   message: z.string().trim().min(1).max(4000),
-  threadId: z.string().max(200).optional(),
+  threadId: z.string().max(200).nullish(),
   actorId: z.string().startsWith("web:").max(500).optional(),
 });
 
@@ -25,11 +25,16 @@ export async function internalAskRoute(app: FastifyInstance): Promise<void> {
       const tenantId = await resolveWorkspaceTenant(workspaceId, reply);
       if (!tenantId) return;
 
+      const investigationNudge = `
+For this web ask: if the user mentions errors, spikes, latency, outages, deploys, or "what changed",
+you must use tools before answering — prefer query_logs + get_change_context for the last 1-6 hours.
+`;
+
       const response = await runAgent(
         tenantId,
         parsed.data.message,
         undefined,
-        undefined,
+        investigationNudge,
         4096,
         {
           actorId: parsed.data.actorId,

@@ -152,9 +152,14 @@ services:
     profiles: ["slack", "detector"]
     build: .
     command: ["npm", "run", "start:detector"]
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgres://calyx:calyx@postgres:5432/calyx
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CALYX_INTERNAL_API_KEY: ${CALYX_INTERNAL_API_KEY:-}
+      CALYX_CHAT_URL: ${CALYX_CHAT_URL:-http://chat-api:14000}
       CALYX_TENANT_ID: ${CALYX_TENANT_ID:-}
       CALYX_SLACK_ALERT_CHANNEL: ${CALYX_SLACK_ALERT_CHANNEL:-}
       CALYX_SLACK_ALERT_CHANNELS: ${CALYX_SLACK_ALERT_CHANNELS:-{}}

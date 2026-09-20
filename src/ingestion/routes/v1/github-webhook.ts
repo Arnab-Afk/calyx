@@ -137,6 +137,103 @@ export async function githubWebhookRoute(app: FastifyInstance): Promise<void> {
           event: eventName,
         },
       });
+    } else if (eventName === "pull_request") {
+      const action = String(body.action ?? "updated");
+      const pr = (body.pull_request as Record<string, unknown> | undefined) ?? {};
+      const user = (pr.user as { login?: string } | undefined)?.login
+        ?? (body.sender as { login?: string } | undefined)?.login
+        ?? "unknown";
+      const merged = pr.merged === true;
+      const number = pr.number != null ? String(pr.number) : "";
+      const title = String(pr.title ?? "pull request");
+      const url = typeof pr.html_url === "string" ? pr.html_url : undefined;
+      const baseRef = (pr.base as { ref?: string } | undefined)?.ref;
+      const headRef = (pr.head as { ref?: string } | undefined)?.ref;
+      const sha = typeof pr.merge_commit_sha === "string"
+        ? pr.merge_commit_sha
+        : typeof (pr.head as { sha?: string } | undefined)?.sha === "string"
+          ? (pr.head as { sha: string }).sha
+          : undefined;
+
+      if (merged && sha) {
+        await upsertGithubCommits([{
+          tenantId: conn.tenantId,
+          projectId,
+          repo: conn.repo,
+          sha,
+          ref: baseRef ? `refs/heads/${baseRef}` : undefined,
+          message: `Merge pull request #${number}: ${title}`,
+          author: user,
+          committedAt: String(pr.merged_at ?? pr.closed_at ?? now),
+          url,
+        }]);
+      }
+
+      events.push({
+        tenant_id: conn.tenantId,
+        timestamp: String(pr.updated_at ?? pr.closed_at ?? pr.created_at ?? now),
+        service: "github",
+        level: "info",
+        message: merged
+          ? `merged PR #${number}: ${title}`
+          : `PR #${number} ${action}: ${title}`,
+        attributes: {
+          source: "github_webhook",
+          repo: conn.repo,
+          project_id: projectId,
+          event: "pull_request",
+          pr_action: action,
+          action,
+          merged,
+          number,
+          title,
+          author: user,
+          actor: user,
+          sha,
+          ref: headRef ?? baseRef,
+          url,
+        },
+      });
+    } else if (eventName === "release") {
+      const action = String(body.action ?? "published");
+      const release = (body.release as Record<string, unknown> | undefined) ?? {};
+      const tag = String(release.tag_name ?? "");
+      const name = String(release.name ?? (tag || "release"));
+      events.push({
+        tenant_id: conn.tenantId,
+        timestamp: String(release.published_at ?? release.created_at ?? now),
+        service: "github",
+        level: "info",
+        message: `release ${action}: ${name}`,
+        attributes: {
+          source: "github_webhook",
+          repo: conn.repo,
+          project_id: projectId,
+          event: "release",
+          action,
+          ref: tag,
+          url: typeof release.html_url === "string" ? release.html_url : undefined,
+          author: (release.author as { login?: string } | undefined)?.login,
+        },
+      });
+    } else if (eventName === "create" || eventName === "delete") {
+      const refType = String(body.ref_type ?? "ref");
+      const ref = String(body.ref ?? "");
+      events.push({
+        tenant_id: conn.tenantId,
+        timestamp: now,
+        service: "github",
+        level: "info",
+        message: `${eventName} ${refType} ${ref}`.trim(),
+        attributes: {
+          source: "github_webhook",
+          repo: conn.repo,
+          project_id: projectId,
+          event: eventName,
+          ref,
+          author: (body.sender as { login?: string } | undefined)?.login,
+        },
+      });
     } else if (eventName === "ping") {
       return reply.send({ ok: true, pong: true });
     } else {

@@ -363,3 +363,15 @@ export async function getSlackBinding(projectId: string): Promise<SlackBinding |
     connectedAt: new Date(row.connected_at).toISOString(),
   };
 }
+
+/** Distinct Slack alert channels bound to any project under the tenant. */
+export async function listSlackChannelsForTenant(tenantId: string): Promise<string[]> {
+  const result = await getPool().query(
+    `SELECT DISTINCT channel_id
+     FROM slack_bindings
+     WHERE tenant_id = $1 AND channel_id IS NOT NULL AND channel_id <> ''
+     ORDER BY channel_id`,
+    [tenantId],
+  );
+  return result.rows.map((row) => String(row.channel_id));
+}

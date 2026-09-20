@@ -24,6 +24,7 @@ export function markOnboardingDone(workspaceId: string) {
   localStorage.setItem(doneKey(workspaceId), '1');
 }
 
+/** Pending only matters when the workspace still has zero projects. */
 export function isOnboardingPending(workspaceId: string) {
   if (typeof window === 'undefined') return false;
   if (localStorage.getItem(doneKey(workspaceId))) return false;

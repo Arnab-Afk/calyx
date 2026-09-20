@@ -28,6 +28,16 @@ function request(cookie?: string) {
   });
 }
 
+function mockByUrl(handlers: Record<string, Response | (() => Response)>) {
+  return vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    for (const [match, res] of Object.entries(handlers)) {
+      if (url.includes(match)) return typeof res === 'function' ? res() : res;
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  });
+}
+
 describe('web operations proxy authorization', () => {
   it('rejects requests without the HTTP-only Go session cookie', async () => {
     global.fetch = vi.fn();
@@ -36,35 +46,42 @@ describe('web operations proxy authorization', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('rejects non-admin workspace members before using the management token', async () => {
-    const mockedFetch = vi.fn().mockResolvedValueOnce(
-      new Response(JSON.stringify({ role: 'member' }), {
+  it('rejects workspace members without an id before proxying projects', async () => {
+    const mockedFetch = mockByUrl({
+      '/members/me': new Response(JSON.stringify({ role: 'member' }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),
-    );
+      '/authorize-management': new Response(JSON.stringify({ authorized: true }), { status: 200 }),
+    });
     global.fetch = mockedFetch;
     const response = await proxyOpsRequest(request('calyx_session=signed'), ['projects']);
     expect(response.status).toBe(403);
-    expect(mockedFetch).toHaveBeenCalledTimes(1);
+    expect(mockedFetch).toHaveBeenCalled();
+    expect(mockedFetch.mock.calls.some((c) => String(c[0]).includes('/v1/projects'))).toBe(false);
   });
 
   it('checks workspace tenant binding before proxying and strips workspaceId upstream', async () => {
-    const mockedFetch = vi
-      .fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'member-1', role: 'admin' }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ authorized: true }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ projects: [] }), { status: 200 }));
+    const mockedFetch = mockByUrl({
+      '/members/me': new Response(JSON.stringify({ id: 'member-1', role: 'admin' }), { status: 200 }),
+      '/authorize-management': new Response(JSON.stringify({ authorized: true }), { status: 200 }),
+      '/v1/projects': new Response(JSON.stringify({ projects: [] }), { status: 200 }),
+    });
     global.fetch = mockedFetch;
 
     const response = await proxyOpsRequest(request('calyx_session=signed'), ['projects']);
     expect(response.status).toBe(200);
     expect(mockedFetch).toHaveBeenCalledTimes(3);
-    expect(mockedFetch.mock.calls[0][0]).toBe(`https://chat.example.test/v1/workspaces/${WORKSPACE}/members/me`);
-    expect(mockedFetch.mock.calls[1][0]).toBe(`https://ops.example.test/v1/internal/workspaces/${WORKSPACE}/authorize-management`);
-    expect(mockedFetch.mock.calls[2][0]).toBe('https://ops.example.test/v1/projects');
-    expect(mockedFetch.mock.calls[2][1].headers.Authorization).toBe('Bearer calyx_mgmt_test');
-    expect(mockedFetch.mock.calls[2][1].headers['X-Calyx-Internal-Key']).toBe('internal-test-key');
-    expect(mockedFetch.mock.calls[2][1].headers['X-Calyx-Actor-ID']).toBe(`web:${WORKSPACE}:member-1`);
+
+    const urls = mockedFetch.mock.calls.map((c) => String(c[0]));
+    expect(urls).toContain(`https://chat.example.test/v1/workspaces/${WORKSPACE}/members/me`);
+    expect(urls).toContain(`https://ops.example.test/v1/internal/workspaces/${WORKSPACE}/authorize-management`);
+    expect(urls).toContain('https://ops.example.test/v1/projects');
+
+    const projectsCall = mockedFetch.mock.calls.find((c) => String(c[0]).endsWith('/v1/projects'));
+    const projectsInit = projectsCall?.[1] as { headers?: Record<string, string> } | undefined;
+    expect(projectsInit?.headers?.Authorization).toBe('Bearer calyx_mgmt_test');
+    expect(projectsInit?.headers?.['X-Calyx-Internal-Key']).toBe('internal-test-key');
+    expect(projectsInit?.headers?.['X-Calyx-Actor-ID']).toBe(`web:${WORKSPACE}:member-1`);
   });
 });

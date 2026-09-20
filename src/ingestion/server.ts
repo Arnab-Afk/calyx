@@ -13,6 +13,8 @@ import { internalAskRoute } from "./routes/v1/internal-ask.js";
 import { internalWorkspaceLinkRoute } from "./routes/v1/internal-workspace-link.js";
 import { remediationsRoute } from "./routes/v1/remediations.js";
 import { codingJobsRoute } from "./routes/v1/coding-jobs.js";
+import { cliDeviceRoute } from "./routes/v1/cli-device.js";
+import { installRoute } from "./routes/install.js";
 import { closePool, getPool } from "../storage/client.js";
 import { closeRedis, getRedis } from "./queue.js";
 import { initAgent } from "../agent/index.js";
@@ -38,6 +40,8 @@ await app.register(internalAskRoute);
 await app.register(internalWorkspaceLinkRoute);
 await app.register(remediationsRoute);
 await app.register(codingJobsRoute);
+await app.register(cliDeviceRoute);
+await app.register(installRoute);
 
 app.get("/health", async () => ({ status: "ok" }));
 app.get("/ready", async (_request, reply) => {

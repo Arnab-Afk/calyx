@@ -134,7 +134,11 @@ func Load() (Config, error) {
 		CookieDomain:       cookieDomain,
 		CalyxAskURL:        calyxAskURL,
 		CalyxInternalKey:   calyxInternalKey,
-		CalyxDefaultTenant: envOr("CALYX_DEFAULT_TENANT", "default"),
+		CalyxDefaultTenant: firstNonEmpty(
+			os.Getenv("CALYX_TENANT_ID"),
+			os.Getenv("CALYX_DEFAULT_TENANT"),
+			"default",
+		),
 		GoogleClientID:     strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_ID")),
 		GoogleClientSecret: strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_SECRET")),
 		GoogleRedirectURL:  strings.TrimSpace(os.Getenv("GOOGLE_REDIRECT_URL")),
@@ -143,6 +147,15 @@ func Load() (Config, error) {
 		GitHubRedirectURL:  strings.TrimSpace(os.Getenv("GITHUB_REDIRECT_URL")),
 		WebAppURL:          strings.TrimSpace(envOr("WEB_APP_URL", "")),
 	}, nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
 }
 
 func defaultSameSite(production bool, cookieDomain string) string {

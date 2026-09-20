@@ -1,6 +1,6 @@
 'use client';
 
-import { FolderKanban, Loader2, MessageSquare, Plus, Settings2 } from 'lucide-react';
+import { ChevronRight, FolderKanban, Loader2, MessageSquare, Plus, Settings2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -81,9 +81,10 @@ export function OverviewPage() {
             </div>
             <Link
               href={`/workspace/${workspaceId}/projects`}
-              className="text-xs text-white/45 underline-offset-4 hover:text-white hover:underline"
+              className="inline-flex items-center gap-1 text-xs text-white/45 underline-offset-4 hover:text-white hover:underline"
             >
               View all
+              <ChevronRight className="size-3.5" />
             </Link>
           </div>
 
@@ -116,7 +117,7 @@ export function OverviewPage() {
             {projects.map((project) => (
               <li key={project.id}>
                 <Link
-                  href={`/workspace/${workspaceId}/projects?project=${encodeURIComponent(project.slug)}`}
+                  href={`/workspace/${workspaceId}/projects/${encodeURIComponent(project.slug)}`}
                   className={cn(
                     'group block rounded-xl border border-white/10 bg-white/[0.03] p-4 transition',
                     'hover:border-white/20 hover:bg-white/[0.05]',
@@ -133,7 +134,10 @@ export function OverviewPage() {
                       {project.environment ?? 'prod'}
                     </span>
                   </div>
-                  <p className="mt-4 text-xs text-white/40">Open to manage sources, API keys, and GitHub.</p>
+                  <p className="mt-4 flex items-center gap-1.5 text-xs text-white/40">
+                    Overview, logs, sources, and GitHub
+                    <ChevronRight className="size-3.5 opacity-70 transition group-hover:translate-x-0.5 group-hover:text-white/55" />
+                  </p>
                 </Link>
               </li>
             ))}
@@ -163,9 +167,12 @@ export function OverviewPage() {
             <Link
               key={card.title}
               href={card.href}
-              className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-white/20 hover:bg-white/[0.05]"
+              className="group rounded-xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-white/20 hover:bg-white/[0.05]"
             >
-              <p className="font-[family-name:var(--font-display)] text-sm text-white">{card.title}</p>
+              <p className="flex items-center justify-between gap-2 font-[family-name:var(--font-display)] text-sm text-white">
+                {card.title}
+                <ChevronRight className="size-3.5 text-white/30 transition group-hover:translate-x-0.5 group-hover:text-white/60" />
+              </p>
               <p className="mt-1 text-xs text-white/45">{card.body}</p>
             </Link>
           ))}

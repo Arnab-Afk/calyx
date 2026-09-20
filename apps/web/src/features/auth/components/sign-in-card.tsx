@@ -1,7 +1,7 @@
 'use client';
 
 import { Eye, EyeOff, TriangleAlert } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { FaGithub } from 'react-icons/fa';
 import { FcGoogle } from 'react-icons/fc';
@@ -14,12 +14,19 @@ import { cn } from '@/lib/utils';
 import type { SignInFlow } from '../types';
 import { Divider, Field, SocialButton, fieldClass } from './auth-ui';
 
+function safeNextPath(raw: string | null): string {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/';
+  return raw;
+}
+
 interface SignInCardProps {
   setState: (state: SignInFlow) => void;
 }
 
 export const SignInCard = ({ setState }: SignInCardProps) => {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = safeNextPath(searchParams.get('next'));
   const chatAuth = useChatAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,7 +41,7 @@ export const SignInCard = ({ setState }: SignInCardProps) => {
 
     chatAuth
       .login({ email, password })
-      .then(() => router.replace('/'))
+      .then(() => router.replace(nextPath))
       .catch(() => {
         setError('Invalid email or password.');
       })

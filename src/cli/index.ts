@@ -12,6 +12,7 @@ import {
   resolveApiUrl,
   saveConfig,
 } from "./config.js";
+import { runJournalCommand } from "./journal.js";
 
 initAgent();
 
@@ -641,6 +642,32 @@ program
       console.log(`  ${t.name.padEnd(25)} ${t.description.slice(0, 80)}`);
     }
   });
+
+// ── calyx journal ─────────────────────────────────────────────────────────────
+
+program
+  .command("journal")
+  .description("Ship systemd journalctl logs from this VM to Calyx")
+  .option("--api-url <url>", "Ingestion API base URL")
+  .option("--token <token>", "Management token (skip browser login)")
+  .option("--project <slug>", "Project slug (skip interactive pick)")
+  .option("--unit <name>", "systemd unit without .service")
+  .option("--since <spec>", "journalctl --since (default: only new lines)")
+  .option("--skip-browser", "Paste a management token instead of browser auth")
+  .option("-y, --yes", "Skip confirmation")
+  .action(
+    async (opts: {
+      apiUrl?: string;
+      token?: string;
+      project?: string;
+      unit?: string;
+      since?: string;
+      skipBrowser?: boolean;
+      yes?: boolean;
+    }) => {
+      await runJournalCommand(opts);
+    }
+  );
 
 program.parseAsync(process.argv).catch((err) => {
   console.error(err instanceof Error ? err.message : String(err));

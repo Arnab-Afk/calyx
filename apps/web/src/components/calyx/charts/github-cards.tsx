@@ -1,6 +1,6 @@
 'use client';
 
-import { GitPullRequest } from 'lucide-react';
+import { ChevronRight, GitPullRequest } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FooterMeta, MetricTile, MetricValue, MicroLabel, Subcard, TrendPill, VerticalTicks } from './chart-ui';
 
@@ -91,8 +91,9 @@ export function DeployFromCommit({
         </div>
         <div className="min-w-0 flex-1">
           <p className="font-[family-name:var(--font-display)] text-[17px] font-semibold leading-snug text-white">{data.message}</p>
-          <p className="mt-2 text-[13px] text-white/45">
-            → <span className="text-white/85">{data.env}</span>
+          <p className="mt-2 flex items-center gap-1 text-[13px] text-white/45">
+            <ChevronRight className="size-3.5 shrink-0 text-white/30" aria-hidden />
+            <span className="text-white/85">{data.env}</span>
           </p>
           <p className="mt-1 text-[13px] text-[var(--sazabi-ok)]">{data.status}</p>
         </div>

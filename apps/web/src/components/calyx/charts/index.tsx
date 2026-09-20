@@ -41,6 +41,7 @@ const IncidentTimeline = dynamic(() => import('./incident-timeline').then((m) =>
 const ApprovalCard = dynamic(() => import('./approval-card').then((m) => ({ default: m.ApprovalCard })), { ssr: false, loading: () => <ChartLoader /> });
 const CompareWindow = dynamic(() => import('./compare-window').then((m) => ({ default: m.CompareWindow })), { ssr: false, loading: () => <ChartLoader /> });
 const MemoryRecall = dynamic(() => import('./memory-recall').then((m) => ({ default: m.MemoryRecall })), { ssr: false, loading: () => <ChartLoader /> });
+const AlertCard = dynamic(() => import('../alert-card').then((m) => ({ default: m.AlertCard })), { ssr: false, loading: () => <ChartLoader /> });
 
 const u = (name: string) => lazyNamed(() => import('./utility-cards') as never, name);
 const g = (name: string) => lazyNamed(() => import('./github-cards') as never, name);
@@ -97,6 +98,7 @@ const GALLERY: Record<string, ComponentType<{ data: unknown }>> = {
 };
 
 export const TITLES: Record<string, string> = {
+  'alert-card': 'Alert',
   'service-health-bars': 'Service health',
   'level-donut': 'Log levels',
   'error-timeseries': 'Error Logs',
@@ -165,7 +167,7 @@ export const TITLES: Record<string, string> = {
   'gcp-cloud-build': 'Cloud Build',
 };
 
-const BARE = new Set(['approval-card', 'action-card', 'pr-unfurl', 'progress-indicator']);
+const BARE = new Set(['approval-card', 'action-card', 'pr-unfurl', 'progress-indicator', 'alert-card']);
 
 interface ChartProps {
   type: string;
@@ -259,6 +261,9 @@ export function CalyxChart({ type, data, title, timeRange, onBrush, onFocus }: C
         break;
       case 'memory-recall':
         node = <MemoryRecall data={data as never} />;
+        break;
+      case 'alert-card':
+        node = <AlertCard alert={data as never} />;
         break;
       default:
         node = null;

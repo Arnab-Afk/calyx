@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 
 import type { SignInFlow } from '../types';
 import { SignInCard } from './sign-in-card';
@@ -57,7 +57,13 @@ export const AuthScreen = () => {
           key={state}
           className="w-full max-w-md animate-in fade-in slide-in-from-bottom-2 duration-500 md:max-w-lg"
         >
-          {state === 'signIn' ? <SignInCard setState={setState} /> : <SignUpCard setState={setState} />}
+          {state === 'signIn' ? (
+            <Suspense fallback={<div className="h-64 animate-pulse rounded-lg bg-white/5" />}>
+              <SignInCard setState={setState} />
+            </Suspense>
+          ) : (
+            <SignUpCard setState={setState} />
+          )}
         </div>
       </main>
     </div>

@@ -5,6 +5,17 @@ interface RendererProps {
   value: string;
 }
 
+function toQuillContents(value: string): { ops: Array<{ insert: string }> } {
+  try {
+    const parsed = JSON.parse(value) as { ops?: unknown };
+    if (parsed && Array.isArray(parsed.ops)) return parsed as { ops: Array<{ insert: string }> };
+  } catch {
+    /* plain text from older Calyx asks */
+  }
+  const text = value.endsWith('\n') ? value : `${value}\n`;
+  return { ops: [{ insert: text || '\n' }] };
+}
+
 const Renderer = ({ value }: RendererProps) => {
   const [isEmpty, setIsEmpty] = useState(false);
   const rendererRef = useRef<HTMLDivElement>(null);
@@ -19,18 +30,15 @@ const Renderer = ({ value }: RendererProps) => {
     });
 
     quill.enable(false);
+    quill.setContents(toQuillContents(value) as never);
 
-    const contents = JSON.parse(value);
-    quill.setContents(contents);
-
-    const isEmpty =
+    const empty =
       quill
         .getText()
         .replace(/<(.|\n)*?>/g, '')
         .trim().length === 0;
 
-    setIsEmpty(isEmpty);
-
+    setIsEmpty(empty);
     container.innerHTML = quill.root.innerHTML;
 
     return () => {

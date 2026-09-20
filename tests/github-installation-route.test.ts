@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 vi.mock("../src/github/app.js", () => ({
   provisionGithubRepository: vi.fn().mockResolvedValue(undefined),
   removeGithubRepositoryWebhook: vi.fn().mockResolvedValue(undefined),
+  listInstallationRepositories: vi.fn().mockResolvedValue(["acme/api"]),
 }));
 
 import { provisionGithubRepository } from "../src/github/app.js";

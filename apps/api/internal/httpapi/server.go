@@ -123,6 +123,9 @@ func New(
 		r.Get("/auth/github", s.githubStart)
 		r.Get("/auth/github/callback", s.githubCallback)
 
+		// Service-to-service: detector posts enriched alerts into the workspace default channel.
+		r.Post("/internal/workspaces/{workspaceID}/alerts", s.postInternalAlert)
+
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireAuth)
 			r.Get("/auth/me", s.me)

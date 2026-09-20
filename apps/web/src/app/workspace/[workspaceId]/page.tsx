@@ -5,15 +5,18 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef } from 'react';
 
 import { useOpsProjects } from '@/features/control/api/use-ops';
-import { isOnboardingPending, useLogsOnboarding } from '@/features/onboarding/store/use-logs-onboarding';
+import {
+  markOnboardingDone,
+  useLogsOnboarding,
+} from '@/features/onboarding/store/use-logs-onboarding';
 import { useGetWorkspaceInfo } from '@/features/workspaces/api/use-get-workspace-info';
 import { useWorkspaceId } from '@/hooks/use-workspace-id';
 
-/** Workspace root → Overview (Vercel-like dashboard). Chat is a separate rail section. */
+/** Workspace root → Overview. Onboarding only when this workspace has zero projects. */
 const WorkspaceIdPage = () => {
   const router = useRouter();
   const workspaceId = useWorkspaceId();
-  const { open: onboardingOpen, openFor } = useLogsOnboarding();
+  const { open: onboardingOpen, openFor, close } = useLogsOnboarding();
   const promptedRef = useRef<string | null>(null);
 
   const { data: workspace, isLoading: workspaceLoading } = useGetWorkspaceInfo({ id: workspaceId });
@@ -22,11 +25,20 @@ const WorkspaceIdPage = () => {
   const isProjectShare = workspace?.kind === 'project_share';
   const needsProjectsSetup =
     workspace?.role === 'admin' && !isProjectShare && !projectsLoading && projects.length === 0;
+  const hasProjects = !projectsLoading && projects.length > 0;
 
   useEffect(() => {
     if (workspaceLoading || projectsLoading || !workspace || !workspaceId) return;
 
-    if (needsProjectsSetup || (workspace.role === 'admin' && isOnboardingPending(String(workspaceId)))) {
+    // Already set up — never re-prompt from a stale localStorage pending flag.
+    if (hasProjects) {
+      markOnboardingDone(String(workspaceId));
+      if (onboardingOpen) close({ done: true });
+      router.replace(`/workspace/${workspaceId}/overview`);
+      return;
+    }
+
+    if (needsProjectsSetup) {
       if (promptedRef.current !== String(workspaceId)) {
         promptedRef.current = String(workspaceId);
         if (!onboardingOpen) openFor(String(workspaceId));
@@ -41,8 +53,10 @@ const WorkspaceIdPage = () => {
     workspace,
     workspaceId,
     needsProjectsSetup,
+    hasProjects,
     onboardingOpen,
     openFor,
+    close,
     router,
   ]);
 

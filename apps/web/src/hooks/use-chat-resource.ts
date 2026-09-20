@@ -8,7 +8,9 @@ export function useChatResource<T>(key: string, enabled: boolean, loader: (signa
   const [data, setData] = useState<T | undefined>();
   const [error, setError] = useState<Error | null>(null);
   const [isLoading, setIsLoading] = useState(enabled);
+  const [isValidating, setIsValidating] = useState(false);
   const [revision, setRevision] = useState(0);
+  const hasDataRef = useRef(false);
 
   useEffect(() => {
     if (!enabled) return;
@@ -18,26 +20,40 @@ export function useChatResource<T>(key: string, enabled: boolean, loader: (signa
   }, [enabled]);
 
   useEffect(() => {
+    hasDataRef.current = false;
+    setData(undefined);
+  }, [key]);
+
+  useEffect(() => {
     if (!enabled) {
       setIsLoading(false);
+      setIsValidating(false);
       return;
     }
     const controller = new AbortController();
-    setIsLoading(true);
+    const soft = hasDataRef.current;
+    if (soft) setIsValidating(true);
+    else setIsLoading(true);
     setError(null);
     loaderRef
       .current(controller.signal)
-      .then(setData)
+      .then((value) => {
+        hasDataRef.current = true;
+        setData(value);
+      })
       .catch((value) => {
         if ((value as { name?: string }).name !== 'AbortError') {
           setError(value instanceof Error ? value : new Error(String(value)));
         }
       })
       .finally(() => {
-        if (!controller.signal.aborted) setIsLoading(false);
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+          setIsValidating(false);
+        }
       });
     return () => controller.abort();
   }, [enabled, key, revision]);
 
-  return { data, error, isLoading, setData };
+  return { data, error, isLoading, isValidating, setData };
 }

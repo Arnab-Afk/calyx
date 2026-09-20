@@ -4,11 +4,12 @@ export type AppTypeId =
   | 'python'
   | 'browser'
   | 'docker'
+  | 'journald'
   | 'vercel'
   | 'other';
 
 export type SourcePlan = {
-  role: 'frontend' | 'backend';
+  role: 'frontend' | 'backend' | 'other';
   service: string;
   name: string;
   provider: string;
@@ -161,6 +162,29 @@ CALYX_SERVICE=api`,
   -H "Authorization: Bearer $CALYX_SOURCE_TOKEN" \\
   -H "Content-Type: application/json" \\
   -d '{"timestamp":"2026-09-20T12:00:00.000Z","level":"info","message":"boot ok"}'`,
+      },
+    ],
+  },
+  {
+    id: 'journald',
+    title: 'Linux VM / journalctl',
+    blurb: 'Paste one command on the VM — browser login, pick a service, logs stream in.',
+    sources: [],
+    tutorialTitle: 'Ship systemd journal logs',
+    steps: [
+      {
+        title: 'On the VM',
+        body: 'Paste this on any Linux or Docker host with Node 18+. Pick a machine type, authorize in the browser, then choose a project and service.',
+        code: `curl -fsSL https://calyx-intake.arnabbhowmik.in/install | bash`,
+      },
+      {
+        title: 'What happens next',
+        body: '1) Pick how apps are hosted (systemd, PM2, Docker, log file, or Kubernetes).\n2) Approve the device code in the browser and pick a workspace.\n3) In the terminal, pick a project and target.\n4) Calyx installs a background shipper — you can close the terminal.',
+      },
+      {
+        title: 'Non-interactive / CI',
+        code: `curl -fsSL https://calyx-intake.arnabbhowmik.in/install | CALYX_MACHINE_TYPE=pm2 bash
+# linux | pm2 | docker | file | k8s | cli`,
       },
     ],
   },

@@ -9,6 +9,7 @@ import {
   type AlertDelivery,
 } from "../storage/alert-deliveries.js";
 import { getAlertContext } from "../storage/alerts.js";
+import { listSlackChannelsForTenant } from "../storage/projects.js";
 import {
   claimRemediationDeliveries,
   markRemediationDeliveryDelivered,
@@ -21,7 +22,9 @@ import {
   type RemediationRequest,
 } from "../storage/remediations.js";
 import { getActiveTenantServices } from "../storage/events.js";
+import { workspacesForTenant } from "../storage/workspace-tenants.js";
 import { detectAndRecordForService } from "./runner.js";
+import { enrichAlert } from "./enrich.js";
 
 export type DeliveryHandler = (
   delivery: AlertDelivery,
@@ -33,6 +36,7 @@ export type RemediationDeliveryHandler = (
   request: RemediationRequest,
 ) => Promise<{ externalId: string }>;
 
+/** Env channel map is an override; product bindings are preferred when present. */
 export function slackChannelForTenant(
   tenantId: string,
   env: NodeJS.ProcessEnv = process.env,
@@ -58,6 +62,16 @@ export function slackChannelForTenant(
   return undefined;
 }
 
+export async function resolveSlackChannelsForTenant(
+  tenantId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string[]> {
+  const bound = await listSlackChannelsForTenant(tenantId);
+  if (bound.length > 0) return bound;
+  const envChannel = slackChannelForTenant(tenantId, env);
+  return envChannel ? [envChannel] : [];
+}
+
 export async function runDetectionCycle(
   pool: pg.Pool,
   now = new Date(),
@@ -81,16 +95,30 @@ export async function runDetectionCycle(
       now,
     );
     alertsDetected += detected.length;
-    const slackChannel = slackChannelForTenant(tenantId);
-    if (!slackChannel) continue;
+    if (detected.length === 0) continue;
+
+    const slackChannels = await resolveSlackChannelsForTenant(tenantId);
+    const workspaces = await workspacesForTenant(tenantId);
+
     for (const { alert } of detected) {
-      const queued = await enqueueAlertDelivery({
-        tenantId,
-        alertId: alert.id,
-        destination: "slack",
-        target: slackChannel,
-      });
-      if (queued) deliveriesQueued++;
+      for (const channel of slackChannels) {
+        const queued = await enqueueAlertDelivery({
+          tenantId,
+          alertId: alert.id,
+          destination: "slack",
+          target: channel,
+        });
+        if (queued) deliveriesQueued++;
+      }
+      for (const workspaceId of workspaces) {
+        const queued = await enqueueAlertDelivery({
+          tenantId,
+          alertId: alert.id,
+          destination: "web",
+          target: workspaceId,
+        });
+        if (queued) deliveriesQueued++;
+      }
     }
   }
 
@@ -118,7 +146,7 @@ export async function runDeliveryCycle(
         throw new Error(
           `No ${delivery.destination} delivery handler configured`,
         );
-      const alert: Alert = {
+      const base: Alert = {
         id: context.id,
         tenant_id: context.tenant_id,
         severity: context.severity,
@@ -136,6 +164,7 @@ export async function runDeliveryCycle(
         },
         created_at: context.created_at,
       };
+      const alert = await enrichAlert(base);
       const result = await handler(delivery, alert);
       await markAlertDeliveryDelivered(delivery.id, result.externalId);
       delivered++;

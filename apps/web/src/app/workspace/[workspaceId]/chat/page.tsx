@@ -7,16 +7,19 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useGetChannels } from '@/features/channels/api/use-get-channels';
 import { useCreateChannelModal } from '@/features/channels/store/use-create-channel-modal';
 import { useOpsProjects } from '@/features/control/api/use-ops';
-import { isOnboardingPending, useLogsOnboarding } from '@/features/onboarding/store/use-logs-onboarding';
+import {
+  markOnboardingDone,
+  useLogsOnboarding,
+} from '@/features/onboarding/store/use-logs-onboarding';
 import { useGetWorkspaceInfo } from '@/features/workspaces/api/use-get-workspace-info';
 import { useWorkspaceId } from '@/hooks/use-workspace-id';
 
-/** Chat entry: finish onboarding if needed, then land on first channel. */
+/** Chat entry: onboarding only when this workspace has zero projects. */
 const ChatIndexPage = () => {
   const router = useRouter();
   const workspaceId = useWorkspaceId();
   const [open, setOpen] = useCreateChannelModal();
-  const { open: onboardingOpen, openFor } = useLogsOnboarding();
+  const { open: onboardingOpen, openFor, close } = useLogsOnboarding();
   const promptedRef = useRef<string | null>(null);
 
   const { data: workspace, isLoading: workspaceLoading } = useGetWorkspaceInfo({ id: workspaceId });
@@ -27,20 +30,21 @@ const ChatIndexPage = () => {
   const isProjectShare = workspace?.kind === 'project_share';
   const needsProjectsSetup =
     workspace?.role === 'admin' && !isProjectShare && !projectsLoading && projects.length === 0;
+  const hasProjects = !projectsLoading && projects.length > 0;
 
   useEffect(() => {
     if (workspaceLoading || channelsLoading || projectsLoading || !workspace || !workspaceId) return;
+
+    if (hasProjects) {
+      markOnboardingDone(String(workspaceId));
+      if (onboardingOpen) close({ done: true });
+    }
 
     if (needsProjectsSetup) {
       if (promptedRef.current !== String(workspaceId)) {
         promptedRef.current = String(workspaceId);
         if (!onboardingOpen) openFor(String(workspaceId));
       }
-      return;
-    }
-
-    if (workspace.role === 'admin' && isOnboardingPending(String(workspaceId))) {
-      if (!onboardingOpen) openFor(String(workspaceId));
       return;
     }
 
@@ -58,7 +62,9 @@ const ChatIndexPage = () => {
     workspaceId,
     onboardingOpen,
     openFor,
+    close,
     needsProjectsSetup,
+    hasProjects,
     isProjectShare,
   ]);
 
@@ -79,13 +85,11 @@ const ChatIndexPage = () => {
     );
   }
 
-  if (onboardingOpen || needsProjectsSetup || isOnboardingPending(String(workspaceId))) {
+  if (onboardingOpen || needsProjectsSetup) {
     return (
       <div className="flex h-full flex-1 flex-col items-center justify-center gap-2 bg-[#101014]/95 text-white">
         <Loader className="size-5 animate-spin" />
-        <span className="text-sm text-white/50">
-          {needsProjectsSetup ? 'Let’s connect your first project…' : 'Setting up chat…'}
-        </span>
+        <span className="text-sm text-white/50">Let’s connect your first project…</span>
       </div>
     );
   }
