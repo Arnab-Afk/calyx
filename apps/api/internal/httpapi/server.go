@@ -7,6 +7,7 @@ import (
 	"errors"
 	"math/big"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -22,16 +23,25 @@ import (
 	"nhooyr.io/websocket"
 )
 
+const sessionCookie = "calyx_session"
+
 type Server struct {
-	db   *pgxpool.Pool
-	auth *auth.Service
-	hub  *realtime.Hub
+	db           *pgxpool.Pool
+	auth         *auth.Service
+	hub          *realtime.Hub
+	cookieSecure bool
+	cookieTTL    time.Duration
+	wsOrigins    []string
 }
 
-func New(db *pgxpool.Pool, authSvc *auth.Service, hub *realtime.Hub, corsOrigins string) http.Handler {
-	s := &Server{db: db, auth: authSvc, hub: hub}
+func New(db *pgxpool.Pool, authSvc *auth.Service, hub *realtime.Hub, corsOrigins string, cookieSecure bool, cookieTTL time.Duration) http.Handler {
+	s := &Server{
+		db: db, auth: authSvc, hub: hub, cookieSecure: cookieSecure,
+		cookieTTL: cookieTTL, wsOrigins: websocketOrigins(corsOrigins),
+	}
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.RealIP, middleware.Logger, middleware.Recoverer)
+	r.Use(maxRequestBody(1 << 20))
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   strings.Split(corsOrigins, ","),
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
@@ -47,6 +57,7 @@ func New(db *pgxpool.Pool, authSvc *auth.Service, hub *realtime.Hub, corsOrigins
 	r.Route("/v1", func(r chi.Router) {
 		r.Post("/auth/register", s.register)
 		r.Post("/auth/login", s.login)
+		r.Post("/auth/logout", s.logout)
 
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireAuth)
@@ -82,14 +93,39 @@ type ctxKey string
 
 const userIDKey ctxKey = "userID"
 
+func maxRequestBody(limit int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Body = http.MaxBytesReader(w, r.Body, limit)
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func websocketOrigins(origins string) []string {
+	patterns := make([]string, 0)
+	for _, origin := range strings.Split(origins, ",") {
+		parsed, err := url.Parse(strings.TrimSpace(origin))
+		if err == nil && parsed.Host != "" {
+			patterns = append(patterns, parsed.Host)
+		}
+	}
+	return patterns
+}
+
 func (s *Server) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h := r.Header.Get("Authorization")
-		if !strings.HasPrefix(h, "Bearer ") {
-			writeErr(w, http.StatusUnauthorized, "missing bearer token")
+		var token string
+		if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
+			token = strings.TrimSpace(strings.TrimPrefix(h, "Bearer "))
+		} else if cookie, err := r.Cookie(sessionCookie); err == nil {
+			token = cookie.Value
+		}
+		if token == "" {
+			writeErr(w, http.StatusUnauthorized, "missing session")
 			return
 		}
-		claims, err := s.auth.ParseToken(strings.TrimPrefix(h, "Bearer "))
+		claims, err := s.auth.ParseToken(token)
 		if err != nil {
 			writeErr(w, http.StatusUnauthorized, "invalid token")
 			return
@@ -97,6 +133,22 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), userIDKey, claims.UserID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func (s *Server) setSessionCookie(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name: sessionCookie, Value: token, Path: "/", HttpOnly: true,
+		Secure: s.cookieSecure, SameSite: http.SameSiteLaxMode,
+		MaxAge: int(s.cookieTTL.Seconds()),
+	})
+}
+
+func (s *Server) logout(w http.ResponseWriter, _ *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name: sessionCookie, Value: "", Path: "/", HttpOnly: true,
+		Secure: s.cookieSecure, SameSite: http.SameSiteLaxMode, MaxAge: -1,
+	})
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func userID(ctx context.Context) string {
@@ -173,6 +225,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "token failed")
 		return
 	}
+	s.setSessionCookie(w, token)
 	writeJSON(w, http.StatusCreated, map[string]any{"token": token, "user": u})
 }
 
@@ -201,6 +254,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "token failed")
 		return
 	}
+	s.setSessionCookie(w, token)
 	writeJSON(w, http.StatusOK, map[string]any{"token": token, "user": u})
 }
 
@@ -667,10 +721,9 @@ func (s *Server) createMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Body            string           `json:"body"`
-		ParentMessageID *string          `json:"parentMessageId"`
-		ImageURL        *string          `json:"imageUrl"`
-		CalyxData       *models.CalyxData `json:"calyxData"`
+		Body            string  `json:"body"`
+		ParentMessageID *string `json:"parentMessageId"`
+		ImageURL        *string `json:"imageUrl"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid json")
@@ -681,17 +734,25 @@ func (s *Server) createMessage(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "body required")
 		return
 	}
-	var calyx any
-	if body.CalyxData != nil {
-		b, _ := json.Marshal(body.CalyxData)
-		calyx = b
+	if body.ParentMessageID != nil {
+		var validParent bool
+		err = s.db.QueryRow(r.Context(),
+			`SELECT EXISTS(
+			   SELECT 1 FROM chat_messages
+			   WHERE id=$1 AND workspace_id=$2 AND channel_id=$3
+			 )`, *body.ParentMessageID, wsID, channelID,
+		).Scan(&validParent)
+		if err != nil || !validParent {
+			writeErr(w, http.StatusBadRequest, "parent message must belong to the same channel")
+			return
+		}
 	}
 	row := s.db.QueryRow(r.Context(),
 		`INSERT INTO chat_messages (body, member_id, workspace_id, channel_id, parent_message_id, image_url, calyx_data)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7)
 		 RETURNING id::text, body, member_id::text, workspace_id::text, channel_id::text,
 		           parent_message_id::text, conversation_id::text, image_url, calyx_data, created_at, updated_at`,
-		body.Body, mem.ID, wsID, channelID, body.ParentMessageID, body.ImageURL, calyx,
+		body.Body, mem.ID, wsID, channelID, body.ParentMessageID, body.ImageURL, nil,
 	)
 	msg, err := scanMessage(row)
 	if err != nil {
@@ -714,6 +775,11 @@ func (s *Server) updateMessage(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid json")
 		return
 	}
+	body.Body = strings.TrimSpace(body.Body)
+	if body.Body == "" {
+		writeErr(w, http.StatusBadRequest, "body required")
+		return
+	}
 	uid := userID(r.Context())
 	row := s.db.QueryRow(r.Context(),
 		`UPDATE chat_messages m SET body=$1, updated_at=NOW()
@@ -721,7 +787,7 @@ func (s *Server) updateMessage(w http.ResponseWriter, r *http.Request) {
 		 WHERE m.id=$2 AND m.member_id=mem.id AND mem.user_id=$3
 		 RETURNING m.id::text, m.body, m.member_id::text, m.workspace_id::text, m.channel_id::text,
 		           m.parent_message_id::text, m.conversation_id::text, m.image_url, m.calyx_data, m.created_at, m.updated_at`,
-		strings.TrimSpace(body.Body), msgID, uid,
+		body.Body, msgID, uid,
 	)
 	msg, err := scanMessage(row)
 	if err != nil {
@@ -819,7 +885,7 @@ func (s *Server) workspaceWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		OriginPatterns: []string{"*"},
+		OriginPatterns: s.wsOrigins,
 	})
 	if err != nil {
 		return

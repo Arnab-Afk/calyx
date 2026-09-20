@@ -168,8 +168,11 @@ services:
     environment:
       DATABASE_URL: postgres://calyx:calyx@postgres:5432/calyx
       ADDR: ":14000"
+      APP_ENV: ${APP_ENV:-development}
       JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-calyx-chat-api}
-      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      JWT_ISSUER: ${JWT_ISSUER:-calyx-chat-api}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-calyx-web}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
     ports:
       - "14000:14000"
     depends_on:

@@ -261,3 +261,23 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Because.** Deployability and a single Postgres source of truth for product data matter more than keeping Convex’s free subscriptions during this phase.
 
 **Consequence.** Next.js must later swap Convex hooks for the Go HTTP/WS client. Until then both can run; do not write new Convex chat features.
+
+---
+
+## D-014 — Harden the Go identity boundary before migrating the frontend
+
+**Date:** 2026-09-20
+**Status:** accepted
+
+**Context.** The initial Go API proves the chat data model and REST flow, but the browser cannot safely migrate while production configuration is permissive, WebSockets depend on a bearer header browsers cannot set, and trusted Calyx message metadata can be submitted by ordinary clients.
+
+**Options considered.**
+- **Migrate the UI immediately** — demonstrates progress but carries insecure session and trust boundaries into every hook.
+- **Keep Convex indefinitely** — avoids migration work but contradicts D-013 and preserves two identity planes.
+- **Harden Go first, then migrate one vertical frontend slice at a time** — establishes the target security contract before client coupling.
+
+**Decision.** Go issues issuer/audience-bound JWTs through both bearer responses and HTTP-only browser cookies. Production fails closed without a strong secret or with wildcard CORS. WebSockets use the same cookie and explicit origin allowlist. User message endpoints cannot mint trusted Calyx metadata.
+
+**Because.** Authentication, tenant membership, and trusted AI presentation are expensive boundaries to retrofit after frontend migration.
+
+**Consequence.** Go hardening and API parity precede remediation work. Next.js migration follows as focused auth/workspace, channel/message, realtime, and MCP-administration slices.

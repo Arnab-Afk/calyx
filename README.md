@@ -77,8 +77,8 @@ The **skeleton** of both acts exists. The **product loop is not closed**.
 | Layer | In the repo | Still missing for a real demo |
 |---|---|---|
 | Ingestion | `POST /v1/logs`, Redis stream, Loki forwarder, Vercel drain, CloudWatch Logs subscription intake | Additional telemetry providers and first-class environments |
-| Storage | Postgres events, alert contexts, incidents, and evidence snapshots (`tenant_id` on every row) | Thread memory, ClickHouse later |
-| Agent | Claude/NVIDIA investigation with tenant-scoped log, alert, and durable incident tools | Change correlation, blast radius, code search, request trace |
+| Storage | Postgres events, alert contexts, incidents, evidence snapshots, and durable GitHub change records (`tenant_id` on every observability row) | Cross-signal thread memory; ClickHouse later |
+| Agent | Claude/NVIDIA investigation with tenant-scoped log, alert, incident, and deployment/commit correlation tools | Blast radius, code search, request trace |
 | Detection | Scheduled error-rate detector, durable alert/incident persistence, retrying Slack outbox | Web dispatch; silent-failure and the rest of the six |
 | Slack | Durable alert delivery, canonical acknowledge/resolve lifecycle, charts, threads, approval modal | Web deep links; richer incident collaboration |
 | CLI / MCP | Scoped stdio + stateless or affinity-stateful Streamable HTTP, API keys + OAuth, live `tail_logs`; published `calyx-mcp@0.1.0` bridge; CLI onboarding; published `calyx-logger@0.2.0` | Production deployment validation |
@@ -156,7 +156,7 @@ GitHub App, SSO/RBAC (Clerk/WorkOS), data residency, SOC2-class controls. After 
 
 ## Web UI
 
-Slack-style app lives in `apps/web`. Ask Calyx in-channel with `/calyx …` — AI replies can include Grafana-like chart panels. See [`apps/web/README.md`](./apps/web/README.md).
+The Slack-style Next.js app lives in `apps/web`. It still uses Convex while the first-party Go chat API in `apps/api` is hardened and brought to feature parity. Do not add new Convex chat features; the tracked next step is migrating the existing hooks to Go REST, HTTP-only JWT sessions, and WebSockets. See [`apps/web/README.md`](./apps/web/README.md) and [`apps/api/README.md`](./apps/api/README.md).
 
 ---
 

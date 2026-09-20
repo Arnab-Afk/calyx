@@ -10,7 +10,7 @@ docker compose up -d postgres
 
 cd apps/api
 export DATABASE_URL=postgres://calyx:calyx@localhost:15432/calyx
-export JWT_SECRET=change-me-in-prod
+export JWT_SECRET=dev-only-change-me-calyx-chat-api
 export ADDR=:14000
 go run ./cmd/server
 ```
@@ -35,7 +35,7 @@ curl -s -X POST http://localhost:14000/v1/auth/login \
 # → { "token": "...", "user": {...} }
 ```
 
-Use `Authorization: Bearer <token>` on all other routes.
+Registration and login return a bearer token for CLI clients and also set an HTTP-only `calyx_session` cookie for the browser and authenticated WebSocket connection. Use `Authorization: Bearer <token>` from non-browser clients. `POST /v1/auth/logout` clears the browser session.
 
 ## Core routes
 
@@ -44,6 +44,7 @@ Use `Authorization: Bearer <token>` on all other routes.
 | `GET` | `/health` |
 | `POST` | `/v1/auth/register` |
 | `POST` | `/v1/auth/login` |
+| `POST` | `/v1/auth/logout` |
 | `GET` | `/v1/auth/me` |
 | `GET/POST` | `/v1/workspaces` |
 | `POST` | `/v1/workspaces/join` |
@@ -63,9 +64,12 @@ Use `Authorization: Bearer <token>` on all other routes.
 |---|---|---|
 | `ADDR` | `:14000` | Listen address |
 | `DATABASE_URL` | local compose Postgres | Same DB as Node; tables prefixed `chat_*` |
-| `JWT_SECRET` | dev default | **Required in production** |
-| `JWT_TTL_HOURS` | `720` | Token lifetime |
-| `CORS_ORIGINS` | `*` | Comma-separated |
+| `APP_ENV` | `development` | Set to `production` to require secure cookies and fail-closed config |
+| `JWT_SECRET` | dev default | At least 32 characters; **required in production** |
+| `JWT_ISSUER` | `calyx-chat-api` | Validated token issuer |
+| `JWT_AUDIENCE` | `calyx-web` | Validated token audience |
+| `JWT_TTL_HOURS` | `24` | Access/session lifetime; range 1–720 hours |
+| `CORS_ORIGINS` | local Next.js origins | Comma-separated; wildcard rejected in production |
 
 ## Deploy
 
@@ -75,10 +79,10 @@ Build and push the image from `apps/api`:
 docker build -t calyx-chat-api ./apps/api
 ```
 
-Set `DATABASE_URL` + `JWT_SECRET`, expose `14000`, point the Next app at `NEXT_PUBLIC_CALYX_CHAT_URL` (frontend switch from Convex is a follow-up).
+Set `APP_ENV=production`, `DATABASE_URL`, a random `JWT_SECRET`, and explicit HTTPS `CORS_ORIGINS`; expose `14000`, then point Next.js at `NEXT_PUBLIC_CALYX_CHAT_URL`. The frontend switch from Convex is a follow-up.
 
 ## Smoke
 
 ```bash
-./scripts/smoke-chat-api.sh   # or see README curl sequence above
+bash ./scripts/smoke-chat-api.sh   # or see README curl sequence above
 ```
