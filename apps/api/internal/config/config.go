@@ -10,18 +10,19 @@ import (
 )
 
 type Config struct {
-	Addr              string
-	DatabaseURL       string
-	JWTSecret         string
-	JWTIssuer         string
-	JWTAudience       string
-	TokenTTL          time.Duration
-	CORSOrigins       string
-	CookieSecure      bool
-	CookieSameSite    http.SameSite
-	CookieDomain      string
-	CalyxAskURL       string
-	CalyxInternalKey  string
+	Addr               string
+	DatabaseURL        string
+	RedisURL           string
+	JWTSecret          string
+	JWTIssuer          string
+	JWTAudience        string
+	TokenTTL           time.Duration
+	CORSOrigins        string
+	CookieSecure       bool
+	CookieSameSite     http.SameSite
+	CookieDomain       string
+	CalyxAskURL        string
+	CalyxInternalKey   string
 	CalyxDefaultTenant string
 }
 
@@ -50,6 +51,10 @@ func Load() (Config, error) {
 	if production && strings.Contains(corsOrigins, "*") {
 		return Config{}, fmt.Errorf("CORS_ORIGINS must list explicit origins in production")
 	}
+	redisURL := strings.TrimSpace(envOr("REDIS_URL", "redis://localhost:16379"))
+	if production && os.Getenv("REDIS_URL") == "" {
+		return Config{}, fmt.Errorf("REDIS_URL is required in production")
+	}
 	calyxAskURL := strings.TrimSpace(os.Getenv("CALYX_ASK_URL"))
 	calyxInternalKey := strings.TrimSpace(os.Getenv("CALYX_INTERNAL_API_KEY"))
 	if (calyxAskURL == "") != (calyxInternalKey == "") {
@@ -68,6 +73,7 @@ func Load() (Config, error) {
 	return Config{
 		Addr:               envOr("ADDR", ":14000"),
 		DatabaseURL:        envOr("DATABASE_URL", "postgres://calyx:calyx@localhost:15432/calyx"),
+		RedisURL:           redisURL,
 		JWTSecret:          secret,
 		JWTIssuer:          envOr("JWT_ISSUER", "calyx-chat-api"),
 		JWTAudience:        envOr("JWT_AUDIENCE", "calyx-web"),

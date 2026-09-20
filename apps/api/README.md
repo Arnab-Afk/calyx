@@ -5,13 +5,14 @@ Deployable REST + WebSocket backend. Observability (logs, ask, MCP) stays on the
 ## Run locally
 
 ```bash
-# Postgres (shared Calyx DB)
-docker compose up -d postgres
+# Shared Postgres and Redis
+docker compose up -d postgres redis
 
 cd apps/api
 export DATABASE_URL=postgres://calyx:calyx@localhost:15432/calyx
+export REDIS_URL=redis://localhost:16379
 export JWT_SECRET=dev-only-change-me-calyx-chat-api
-export ADDR=:14000
+go run ./cmd/migrate
 go run ./cmd/server
 ```
 
@@ -72,6 +73,7 @@ Registration and login return a bearer token for CLI clients and also set an HTT
 |---|---|---|
 | `ADDR` | `:14000` | Listen address |
 | `DATABASE_URL` | local compose Postgres | Same DB as Node; tables prefixed `chat_*` |
+| `REDIS_URL` | `redis://localhost:16379` | Shared realtime pub/sub; **required in production** |
 | `APP_ENV` | `development` | Set to `production` to require secure cookies and fail-closed config |
 | `JWT_SECRET` | dev default | At least 32 characters; **required in production** |
 | `JWT_ISSUER` | `calyx-chat-api` | Validated token issuer |
@@ -110,7 +112,9 @@ Build and push the image from `apps/api`:
 docker build -t calyx-chat-api ./apps/api
 ```
 
-Set `APP_ENV=production`, `DATABASE_URL`, a random `JWT_SECRET`, and explicit HTTPS `CORS_ORIGINS`; expose `14000`, then point Next.js at `NEXT_PUBLIC_CALYX_CHAT_URL`. The frontend switch from Convex is a follow-up.
+Run `/app/calyx-migrate` as a release job before starting API replicas. Migrations are ordered, checksummed, transactional, and protected by a PostgreSQL advisory lock. Never edit an applied migration; add the next numbered SQL file.
+
+Set `APP_ENV=production`, `DATABASE_URL`, `REDIS_URL`, a random `JWT_SECRET`, and explicit HTTPS `CORS_ORIGINS`; expose `14000`, then point Next.js at `NEXT_PUBLIC_CALYX_CHAT_URL`. Every API replica subscribes to the same Redis channel, so WebSocket clients receive events created on any replica.
 
 ## Smoke
 

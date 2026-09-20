@@ -1,6 +1,6 @@
 # Deploy Calyx end-to-end (web + Go chat + Node intake)
 
-Deploy these three services against the **same Postgres**. Redis is required for log intake.
+Deploy these three services against the **same Postgres and Redis**. Redis backs both log intake and cross-replica Go realtime delivery.
 
 | Service | Role | Typical URL |
 |---|---|---|
@@ -14,7 +14,15 @@ Deploy these three services against the **same Postgres**. Redis is required for
 DATABASE_URL='postgresql://…/calyx?sslmode=require' npm run migrate
 ```
 
-Creates `events`, `projects`, `mgmt_api_keys`, `workspace_tenant_links`, etc. Go migrates `chat_*` on boot.
+Creates `events`, `projects`, `mgmt_api_keys`, `workspace_tenant_links`, etc.
+
+Run the Go image's migration binary as a release job before API replicas start:
+
+```bash
+DATABASE_URL='postgresql://…/calyx?sslmode=require' /app/calyx-migrate
+```
+
+Go migrations under `apps/api/internal/db/migrations` are ordered, checksummed, transactional, and serialized with an advisory lock. The API no longer mutates schema at startup.
 
 ## 2. Mint Control Center token
 
@@ -36,6 +44,7 @@ Set the **same** value on Go and Node.
 ```bash
 APP_ENV=production
 DATABASE_URL=…
+REDIS_URL=…
 JWT_SECRET=<≥32 chars>
 CORS_ORIGINS=https://YOUR_WEB_ORIGIN
 # Cross-origin web (e.g. Vercel → api subdomain): leave COOKIE_DOMAIN empty.
@@ -46,6 +55,8 @@ CALYX_INTERNAL_API_KEY=…
 CALYX_DEFAULT_TENANT=default
 ADDR=:14000
 ```
+
+Every Go replica must use the same Redis deployment so WebSocket events fan out across replicas. Production startup fails closed when `REDIS_URL` is missing.
 
 Creating a workspace **auto-links** it to `CALYX_DEFAULT_TENANT` via Node
 `POST /v1/internal/workspaces/:id/link`.

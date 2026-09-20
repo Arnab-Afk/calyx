@@ -367,3 +367,18 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Because.** Installation IDs are identifiers, not credentials or proof of repository access. Validation must happen server-to-server under the App identity and remain bound to the authenticated project selection.
 
 **Consequence.** Failed callbacks require restarting setup and cannot be replayed. Browser code never receives the webhook secret or App private key. Disconnect attempts webhook cleanup but removes stale local state even if the installation was already revoked.
+
+---
+
+## D-019 — Use Redis pub/sub for ephemeral realtime and versioned SQL for Go schema
+
+**Date:** 2026-09-20
+**Status:** accepted
+
+**Context.** Go WebSocket clients were registered in process memory, so replicas could not deliver each other’s events. The Go API also executed one embedded startup DDL block, which had no immutable migration history or deployment gate.
+
+**Decision.** Each Go replica delivers locally-created events immediately and publishes an origin-tagged envelope on one Redis channel. Other replicas route the raw event only to clients in the matching workspace. Production requires Redis. Go schema changes are ordered embedded SQL files recorded with SHA-256 checksums, applied transactionally under a PostgreSQL advisory lock by a standalone release binary.
+
+**Because.** Chat events are ephemeral invalidation/delivery signals while PostgreSQL remains the durable source of truth. Redis provides cross-replica fan-out without making it authoritative. Checksummed migrations make schema state reproducible and prevent silent edits to applied history.
+
+**Consequence.** Redis outages degrade realtime delivery but do not erase persisted chat data. Slow WebSocket clients can still drop events and must refetch durable state. Deployments must run `/app/calyx-migrate` before starting API replicas; the API no longer creates schema at startup.

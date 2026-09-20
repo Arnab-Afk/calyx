@@ -28,13 +28,15 @@ func main() {
 		log.Fatalf("database: %v", err)
 	}
 	defer pool.Close()
-
-	if err := db.Migrate(ctx, pool); err != nil {
-		log.Fatalf("migrate: %v", err)
+	if err := db.VerifyMigrations(ctx, pool); err != nil {
+		log.Fatalf("database schema: %v; run calyx-migrate before starting the API", err)
 	}
-	log.Println("chat schema ready")
 
-	hub := realtime.NewHub()
+	hub, err := realtime.NewHub(ctx, cfg.RedisURL)
+	if err != nil {
+		log.Fatalf("realtime: %v", err)
+	}
+	defer hub.Close()
 	authSvc := auth.NewService(cfg.JWTSecret, cfg.TokenTTL, cfg.JWTIssuer, cfg.JWTAudience)
 	handler := httpapi.New(
 		pool, authSvc, hub, cfg.CORSOrigins, cfg.CookieSecure, cfg.CookieSameSite, cfg.CookieDomain, cfg.TokenTTL,
