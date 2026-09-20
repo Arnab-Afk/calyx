@@ -219,6 +219,50 @@ CREATE TABLE IF NOT EXISTS incident_evidence (
 CREATE INDEX IF NOT EXISTS incident_evidence_tenant_incident
   ON incident_evidence (tenant_id, incident_id, created_at ASC);
 
+CREATE TABLE IF NOT EXISTS coding_agent_jobs (
+  id              UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  tenant_id       TEXT        NOT NULL,
+  incident_id     UUID        NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
+  project_id      UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  repo            TEXT        NOT NULL,
+  installation_id TEXT        NOT NULL,
+  status          TEXT        NOT NULL CHECK (status IN ('queued','running','submitting','succeeded','failed','cancelled')),
+  objective       TEXT        NOT NULL,
+  base_ref        TEXT,
+  branch_name     TEXT,
+  pull_request_number INTEGER,
+  pull_request_url TEXT,
+  launched_by     TEXT        NOT NULL,
+  callback_prefix TEXT        NOT NULL UNIQUE,
+  callback_hash   BYTEA       NOT NULL,
+  error_message   TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  started_at      TIMESTAMPTZ,
+  completed_at    TIMESTAMPTZ,
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS coding_agent_jobs_tenant_time
+  ON coding_agent_jobs (tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS coding_agent_jobs_incident
+  ON coding_agent_jobs (tenant_id, incident_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS coding_agent_jobs_active_once
+  ON coding_agent_jobs (tenant_id, incident_id, project_id)
+  WHERE status IN ('queued','running','submitting');
+
+CREATE TABLE IF NOT EXISTS coding_agent_events (
+  id          UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  job_id      UUID        NOT NULL REFERENCES coding_agent_jobs(id) ON DELETE CASCADE,
+  tenant_id   TEXT        NOT NULL,
+  event_type  TEXT        NOT NULL CHECK (event_type IN ('launched','started','submission_started','pull_request_created','failed','cancelled')),
+  actor_id    TEXT        NOT NULL,
+  data        JSONB       NOT NULL DEFAULT '{}',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS coding_agent_events_job_time
+  ON coding_agent_events (job_id, created_at ASC);
+
 CREATE TABLE IF NOT EXISTS alert_deliveries (
   id            UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   tenant_id     TEXT        NOT NULL,

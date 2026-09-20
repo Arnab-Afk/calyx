@@ -12,6 +12,7 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Context.** The initial planning optimized for a short AWS hackathon demonstration. The product direction now requires durable integrations and compatibility beyond the event.
 
 **Options considered.**
+
 - **Hackathon slice** — implement only the shortest CloudWatch-to-demo path.
 - **Product foundation** — preserve the incident-loop priority while designing external interfaces for tenant isolation, lifecycle management, and broad client compatibility.
 
@@ -31,6 +32,7 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Context.** Coding agents vary in transport and authentication support. Local stdio is universally useful for development, while a product service needs remote sessions and revocable credentials.
 
 **Options considered.**
+
 - **stdio only** — simple, but requires local database access and cannot provide a hosted connector.
 - **Legacy HTTP+SSE** — broadly deployed but deprecated by the MCP SDK.
 - **Streamable HTTP only** — correct for hosted use but less convenient for local tools.
@@ -52,6 +54,7 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Context.** MCP supports server notifications, but coding-agent clients differ in whether and how they expose unsolicited notifications to the model.
 
 **Options considered.**
+
 - **Logging notifications/resources subscriptions** — push-based but inconsistently surfaced by clients.
 - **One large blocking tool call** — hard to cancel and prone to client timeouts.
 - **Bounded long polling with an opaque cursor** — works anywhere tools work and allows cancellation between calls.
@@ -72,6 +75,7 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Context.** IDE users need the same “ask Calyx” workflow available in web chat, Slack, and CLI without creating a second investigation backend. The wrapper must not recursively invoke itself or allow model-generated tenant identifiers to cross tenant boundaries.
 
 **Options considered.**
+
 - **Duplicate the investigation flow in MCP** — gives transport-specific control but creates divergent reasoning and evidence behavior.
 - **Call the public HTTP ask route** — adds an unnecessary network and authentication hop inside the same service.
 - **Register an `ask` tool that invokes the shared agent loop** — preserves one tool registry and one investigation implementation.
@@ -92,6 +96,7 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Context.** Web, Slack, and IDE investigations need one stable alert identifier and evidence record. Recomputing an alert independently in each surface would produce inconsistent context, while storing only a rendered notification would discard detector evidence.
 
 **Options considered.**
+
 - **Recompute from recent logs on every surface** — simple but unstable and cannot support alert deep links.
 - **Persist rendered Slack/web cards** — tightly couples the evidence model to presentation.
 - **Persist detector anomalies and retrieve nearby evidence by alert ID** — keeps detection facts durable and presentation-neutral.
@@ -112,6 +117,7 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Context.** Detector alerts are individual signals, while an incident is the investigation unit that may eventually group several signals and human notes. The existing `search_past_incidents` name incorrectly described raw log keyword matches as incidents.
 
 **Options considered.**
+
 - **Treat alert contexts as incidents** — minimal storage but prevents multi-signal grouping and lifecycle state.
 - **Replace `search_past_incidents` in place** — cleans the API but silently changes results for existing clients.
 - **Add incidents, alert links, and immutable evidence snapshots** — introduces the correct domain boundary and permits explicit compatibility migration.
@@ -132,6 +138,7 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Context.** Detection must run without a user request and notifications must survive process crashes, provider outages, and restarts. Calling Slack directly inside detector code would couple evidence generation to presentation and lose failed deliveries.
 
 **Options considered.**
+
 - **Post directly from the detector** — minimal, but failures are lost and provider latency blocks detection.
 - **Use an in-memory retry queue** — decouples code but loses state on restart and cannot coordinate workers.
 - **Persist an alert delivery outbox** — supports deduplication, retries, leases, and independent destination handlers.
@@ -152,6 +159,7 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Context.** Slack acknowledgement and resolution were stored in a process-local map, so state disappeared on restart and diverged from MCP/web incident status. An opaque alert ID alone is not enough authorization for a Slack action originating in an arbitrary channel.
 
 **Options considered.**
+
 - **Keep Slack-local state** — simple but non-durable and invisible to other surfaces.
 - **Update by alert ID alone** — durable but permits a copied action payload from an unrelated channel.
 - **Require a delivered alert/channel match and update alert plus incident transactionally** — durable, shared, and bound to the notification destination.
@@ -172,6 +180,7 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Context.** A hosted MCP endpoint needs abuse controls and a durable security trail across replicas. Process-local counters and logs disappear on restart and diverge under horizontal scaling.
 
 **Options considered.**
+
 - **In-memory counters and application logs** — low latency but not shared or durable.
 - **External rate-limit/audit services** — scalable but introduces another required system before deployment.
 - **PostgreSQL fixed-window counters and structured audit rows** — immediately shared, transactional, and operable with the existing stack.
@@ -192,6 +201,7 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Context.** Convex authenticates web users and workspace membership, while PostgreSQL owns telemetry tenants and MCP credentials. Treating a Convex workspace ID as a tenant ID would silently expose or create data under the wrong security boundary.
 
 **Options considered.**
+
 - **Use workspace IDs as tenant IDs** — simple but conflates independent identity systems.
 - **Let the browser or Convex action submit a tenant ID** — flexible but permits tenant selection at the credential boundary.
 - **Persist an operator-established workspace-to-tenant link in PostgreSQL** — keeps tenant resolution inside the credential authority.
@@ -212,6 +222,7 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Context.** Hosted MCP clients need browser OAuth, but Calyx should not implement passwords, browser sessions, consent, dynamic client registration, and refresh-token security as a new identity provider.
 
 **Options considered.**
+
 - **Build a Calyx authorization server** — maximum control but creates a large new authentication attack surface.
 - **API keys only** — sufficient for machines but not standards-based browser authorization.
 - **External OAuth 2.1/OIDC issuer plus token introspection** — delegates browser login and consent while Calyx remains responsible for tenant and scope enforcement.
@@ -232,6 +243,7 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Context.** SDK transport objects and protocol servers contain live connection state that cannot be serialized safely into PostgreSQL. Process-local session maps require sticky routing and lose sessions during deploys.
 
 **Options considered.**
+
 - **Externalize SDK transport objects** — not supported because live streams and callbacks are process resources.
 - **Require affinity for every deployment** — preserves resumability but complicates scaling and rolling deploys.
 - **Use stateless Streamable HTTP by default** — each POST is independent and any replica can serve it.
@@ -252,6 +264,7 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Context.** The Slack-style web UI depended on Convex for auth, workspaces, channels, and messages, while logs/agent/MCP already run on the Node/Postgres stack. We need a deployable, first-party backend without a dual-runtime chat store.
 
 **Options considered.**
+
 - **Keep Convex** — fastest UI iteration, but couples the product to a proprietary realtime DB and complicates self-host deploy.
 - **Move chat into the existing Node Fastify service** — one runtime, but mixes chat and observability concerns and slows the “finish backend for deploy” goal.
 - **Greenfield Go chat API** sharing Postgres — clear ownership boundary; Node stays the observability plane.
@@ -272,6 +285,7 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Context.** The initial Go API proves the chat data model and REST flow, but the browser cannot safely migrate while production configuration is permissive, WebSockets depend on a bearer header browsers cannot set, and trusted Calyx message metadata can be submitted by ordinary clients.
 
 **Options considered.**
+
 - **Migrate the UI immediately** — demonstrates progress but carries insecure session and trust boundaries into every hook.
 - **Keep Convex indefinitely** — avoids migration work but contradicts D-013 and preserves two identity planes.
 - **Harden Go first, then migrate one vertical frontend slice at a time** — establishes the target security contract before client coupling.
@@ -292,6 +306,7 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Context.** The original execution prototype stored pending actions and audit snapshots in process memory and accepted a caller-provided `human_approved` boolean. Restarts lost approvals, multiple replicas could execute twice, and no durable artifact proved who approved what.
 
 **Options considered.**
+
 - **Retain the in-memory gate** — sufficient for demos but unsafe for production changes.
 - **Persist only audit messages after execution** — durable history, but still permits races and fabricated approval claims.
 - **Persist the proposal and claim its transition atomically before execution** — binds dry run, parameters, approver, reason, and outcome to one request.
@@ -312,6 +327,7 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Context.** Calyx needs to turn evidence-backed incident recommendations into real infrastructure changes without receiving customers’ provider credentials or granting the model direct execution authority.
 
 **Options considered.**
+
 - **Embed provider SDK credentials in Calyx** — convenient, but expands the control plane’s secret and privilege surface.
 - **Let coding agents execute commands directly** — flexible, but difficult to constrain, approve, and reconcile safely.
 - **Call a customer-side operator with a signed, allowlisted protocol** — keeps credentials and final provider policy inside the customer boundary.
@@ -321,3 +337,18 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Because.** A narrow operator contract separates recommendation and approval from privileged provider access while giving both systems a stable reconciliation identifier.
 
 **Consequence.** Operator endpoints must use HTTPS in production, verify timestamp/HMAC/idempotency, and enforce their own target policy. Calyx does not automatically replay an execution after an ambiguous timeout. Slack approval-card delivery is a durable retrying outbox rather than an in-process best effort.
+
+---
+
+## D-017 — Coding agents submit bounded files; Calyx owns GitHub credentials and draft PR creation
+
+**Date:** 2026-09-20
+**Status:** accepted
+
+**Context.** Incident investigations need a coding-agent handoff, but giving an external agent a reusable GitHub token or merge authority would expand the trust boundary substantially.
+
+**Decision.** Calyx creates durable incident/repository jobs and dispatches a single-job capability. Agents search and read repository content through bounded Calyx endpoints, then submit complete file contents. Calyx alone exchanges the GitHub App installation token, creates a job-specific branch, and opens a draft pull request. It exposes no merge or deploy operation.
+
+**Because.** The agent needs enough access to propose a fix, not standing repository credentials or production authority. The callback digest, atomic submission claim, file/count limits, and append-only events provide a narrow auditable boundary.
+
+**Consequence.** A configured external dispatcher remains responsible for sandboxed code execution and tests. GitHub App installation OAuth must provision and validate installation IDs before this workflow can be enabled for customers.
