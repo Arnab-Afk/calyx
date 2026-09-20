@@ -10,7 +10,7 @@ interface AskResult {
   toolCallsMade: { toolName: string; summary?: string }[];
 }
 
-export function useCalyxAsk(tenantId: string) {
+export function useCalyxAsk(workspaceId: string) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,7 +21,7 @@ export function useCalyxAsk(tenantId: string) {
       const res = await fetch('/api/calyx/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, tenantId }),
+        body: JSON.stringify({ message, workspaceId }),
       });
       if (!res.ok) {
         const text = await res.text();
@@ -34,7 +34,7 @@ export function useCalyxAsk(tenantId: string) {
     } finally {
       setIsLoading(false);
     }
-  }, [tenantId]);
+  }, [workspaceId]);
 
   const buildCalyxData = useCallback((query: string, result: AskResult): CalyxData => ({
     query,
@@ -42,8 +42,8 @@ export function useCalyxAsk(tenantId: string) {
     chartType: result.chartType ?? undefined,
     chartData: result.chartData ? JSON.stringify(result.chartData) : undefined,
     toolNames: result.toolCallsMade.map((c) => c.toolName),
-    tenantId,
-  }), [tenantId]);
+    tenantId: workspaceId,
+  }), [workspaceId]);
 
   return { ask, buildCalyxData, isLoading, error };
 }

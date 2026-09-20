@@ -47,13 +47,12 @@ Confirm: `pnpm exec convex env list` shows `JWT_PRIVATE_KEY`, `JWKS`, `SITE_URL`
 ```bash
 cat >> .env.local <<'EOF'
 CALYX_API_URL=http://127.0.0.1:13000
-NEXT_PUBLIC_CALYX_TENANT_ID=default
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 NEXT_PUBLIC_CALYX_MCP_URL=http://localhost:13002/mcp
 EOF
 ```
 
-MCP credential management runs as authenticated Convex actions. Give Convex the backend URL and the same service-to-service secret configured as `CALYX_INTERNAL_API_KEY` on the Calyx ingestion service:
+MCP credential management and `/calyx` investigations run through authenticated server-side workspace calls. Give Convex the backend URL and the same service-to-service secret configured as `CALYX_INTERNAL_API_KEY` on the Calyx ingestion service:
 
 ```bash
 INTERNAL_KEY="$(openssl rand -hex 32)"

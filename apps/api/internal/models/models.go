@@ -48,7 +48,7 @@ type CalyxData struct {
 	ChartType *string  `json:"chartType,omitempty"`
 	ChartData *string  `json:"chartData,omitempty"`
 	ToolNames []string `json:"toolNames"`
-	TenantID  string   `json:"tenantId"`
+	TenantID  string   `json:"tenantId,omitempty"`
 }
 
 type Message struct {

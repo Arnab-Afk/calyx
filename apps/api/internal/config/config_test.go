@@ -6,6 +6,7 @@ func clearConfigEnv(t *testing.T) {
 	t.Helper()
 	for _, key := range []string{
 		"APP_ENV", "JWT_SECRET", "JWT_TTL_HOURS", "CORS_ORIGINS", "JWT_ISSUER", "JWT_AUDIENCE",
+		"CALYX_ASK_URL", "CALYX_INTERNAL_API_KEY",
 	} {
 		t.Setenv(key, "")
 	}
@@ -41,6 +42,14 @@ func TestLoadProductionRejectsWildcardCORS(t *testing.T) {
 	t.Setenv("CORS_ORIGINS", "*")
 	if _, err := Load(); err == nil {
 		t.Fatal("expected wildcard CORS to fail")
+	}
+}
+
+func TestLoadRejectsPartialCalyxIntegration(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("CALYX_ASK_URL", "http://ingestion:3000")
+	if _, err := Load(); err == nil {
+		t.Fatal("expected partial Calyx integration to fail")
 	}
 }
 
