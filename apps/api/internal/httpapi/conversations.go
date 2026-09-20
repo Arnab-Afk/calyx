@@ -139,7 +139,7 @@ func (s *Server) createConversationMessage(w http.ResponseWriter, r *http.Reques
 	var body struct {
 		Body            string  `json:"body"`
 		ParentMessageID *string `json:"parentMessageId"`
-		ImageURL        *string `json:"imageUrl"`
+		ImageID         *string `json:"imageId"`
 	}
 	if decodeJSON(r, &body) != nil {
 		writeErr(w, http.StatusBadRequest, "invalid json")
@@ -161,13 +161,18 @@ func (s *Server) createConversationMessage(w http.ResponseWriter, r *http.Reques
 			return
 		}
 	}
+	imageURL, err := s.uploadURL(r, conversation.WorkspaceID, body.ImageID)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	message, err := scanMessage(s.db.QueryRow(r.Context(),
 		`INSERT INTO chat_messages
 		   (body, member_id, workspace_id, conversation_id, parent_message_id, image_url)
 		 VALUES ($1,$2,$3,$4,$5,$6)
 		 RETURNING id::text, body, member_id::text, workspace_id::text, channel_id::text,
 		           parent_message_id::text, conversation_id::text, image_url, calyx_data, created_at, updated_at`,
-		body.Body, member.ID, conversation.WorkspaceID, conversationID, body.ParentMessageID, body.ImageURL))
+		body.Body, member.ID, conversation.WorkspaceID, conversationID, body.ParentMessageID, imageURL))
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "message creation failed")
 		return

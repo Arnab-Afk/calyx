@@ -4,11 +4,11 @@
 
 ## In progress
 
-- [ ] Complete Go API parity required by the existing Next.js workspace UI.
+- [ ] Migrate Next.js authentication and workspace navigation from Convex to the Go API.
 
 ## Next
 
-- [ ] Migrate Next.js auth, workspaces, channels, messages, and realtime updates from Convex to the Go API.
+- [ ] Migrate channels, messages, uploads, and realtime updates from Convex to the Go API.
 - [ ] Reconnect MCP credential administration through the Go workspace identity boundary.
 - [ ] Add human-approved remediation and coding-agent pull-request handoff.
 - [ ] Add GitHub App installation OAuth and automatic webhook provisioning.
@@ -20,6 +20,7 @@
 
 ## Done
 
+- [x] Complete Go API parity for bounded workspace-scoped image uploads — 2026-09-20
 - [x] Add the trusted workspace-to-tenant web investigation boundary and retire caller-selected tenant asks — 2026-09-20
 - [x] Add private direct-conversation and direct-message API parity — 2026-09-20
 - [x] Add workspace/member administration and single-resource API parity — 2026-09-20
