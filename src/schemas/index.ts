@@ -140,5 +140,8 @@ export interface Action {
   reversible: boolean;
   dry_run: (params: unknown) => Promise<ActionResult>;
   execute: (params: unknown) => Promise<ActionResult>;
-  undo?: (params: unknown) => Promise<ActionResult>;
+  undo?: (
+    params: unknown,
+    executionResult?: ActionResult,
+  ) => Promise<ActionResult>;
 }

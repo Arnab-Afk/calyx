@@ -258,6 +258,50 @@ CREATE TABLE IF NOT EXISTS audit_events (
 CREATE INDEX IF NOT EXISTS audit_events_tenant_time
   ON audit_events (tenant_id, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS remediation_requests (
+  id              UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  tenant_id       TEXT        NOT NULL,
+  action_name     TEXT        NOT NULL,
+  params          JSONB       NOT NULL,
+  tier            TEXT        NOT NULL CHECK (tier IN ('0','1','2')),
+  reversible      BOOLEAN     NOT NULL,
+  status          TEXT        NOT NULL CHECK (status IN ('pending','executing','executed','failed','rejected','undoing','undone')),
+  proposed_by     TEXT        NOT NULL,
+  dry_run_result  JSONB       NOT NULL,
+  execute_result  JSONB,
+  undo_result     JSONB,
+  approved_by     TEXT,
+  approval_reason TEXT,
+  rejected_by     TEXT,
+  rejection_reason TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  decided_at      TIMESTAMPTZ,
+  executed_at     TIMESTAMPTZ,
+  undone_at       TIMESTAMPTZ,
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS remediation_requests_tenant_time
+  ON remediation_requests (tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS remediation_requests_pending
+  ON remediation_requests (created_at ASC) WHERE status = 'pending';
+
+CREATE TABLE IF NOT EXISTS remediation_events (
+  id          UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  request_id  UUID        NOT NULL REFERENCES remediation_requests(id),
+  tenant_id   TEXT        NOT NULL,
+  event_type  TEXT        NOT NULL CHECK (event_type IN ('proposed','approved','execution_started','executed','failed','rejected','undo_started','undone')),
+  actor_id    TEXT        NOT NULL,
+  reason      TEXT,
+  data        JSONB       NOT NULL DEFAULT '{}',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS remediation_events_request_time
+  ON remediation_events (request_id, created_at ASC);
+CREATE INDEX IF NOT EXISTS remediation_events_tenant_time
+  ON remediation_events (tenant_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS mcp_rate_limits (
   credential_id UUID        NOT NULL REFERENCES mcp_api_keys(id) ON DELETE CASCADE,
   window_start  TIMESTAMPTZ NOT NULL,

@@ -82,7 +82,7 @@ The **skeleton** of both acts exists. The **product loop is not closed**.
 | Detection | Scheduled error-rate detector, durable alert/incident persistence, retrying Slack outbox | Web dispatch; silent-failure and the rest of the six |
 | Slack | Durable alert delivery, canonical acknowledge/resolve lifecycle, charts, threads, approval modal | Web deep links; richer incident collaboration |
 | CLI / MCP | Scoped stdio + stateless or affinity-stateful Streamable HTTP, API keys + OAuth, live `tail_logs`; published `calyx-mcp@0.1.0` bridge; CLI onboarding; published `calyx-logger@0.2.0` | Production deployment validation |
-| Execution | Action interface, policy tiers, audit log, flag-toggle stub | Real operator, real integrations, Slack “Run it” on live alerts |
+| Execution | Durable approval requests/events, Slack approver allowlist, dry-run gate, exact-once claim, flag-toggle stub | Customer-side operator, real integrations, proposal cards on live alerts |
 
 Shared contracts live in `src/schemas/` (`Event`, `Anomaly`, `Alert`, `Tool`, `Action`). New detectors, tools, and transports stay additive. Do not invent a second shape per layer.
 
@@ -185,6 +185,8 @@ docker compose --profile chat up --build -d chat-api
 ```
 
 Coding-agent setup for Claude Code, Codex, Pi, Cursor, and other MCP clients: [`docs/MCP_CONNECTORS.md`](./docs/MCP_CONNECTORS.md).
+
+Durable remediation approval lifecycle and remaining operator boundary: [`docs/REMEDIATION.md`](./docs/REMEDIATION.md).
 
 Scheduled detection and Slack delivery: [`docs/ALERT_DELIVERY.md`](./docs/ALERT_DELIVERY.md).
 

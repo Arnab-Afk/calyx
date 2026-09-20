@@ -1,88 +1,165 @@
-// Executor: orchestrates dry-run → policy check → execute → audit for any Action.
-
 import { getActionRegistry } from "./registry.js";
 import { decide } from "./policy.js";
 import {
-  propose,
-  recordExecution,
-  recordUndo,
-} from "./audit-log.js";
-import type { AuditEntry } from "./types.js";
+  claimApprovedRemediation,
+  claimUndo,
+  completeRemediation,
+  completeUndo,
+  createRemediationRequest,
+  getRemediationRequest,
+  rejectRemediation,
+  type RemediationRequest,
+} from "../storage/remediations.js";
 
-export interface ExecuteRequest {
-  tenant_id: string;
-  action_name: string;
+export interface ProposeActionRequest {
+  tenantId: string;
+  actionName: string;
   params: unknown;
-  triggered_by: string;
-  // If true, skip the policy gate and force execution (for approved-in-Slack flows).
-  // The approval UI sets this after a human clicks "Run it."
-  human_approved?: boolean;
+  proposedBy: string;
 }
 
-export interface ExecuteResponse {
-  entry: AuditEntry;
+export interface ActionTransitionResponse {
+  request: RemediationRequest;
   executed: boolean;
   message: string;
 }
 
-export async function executeAction(
-  req: ExecuteRequest
-): Promise<ExecuteResponse> {
-  const action = getActionRegistry().get(req.action_name);
-  if (!action) {
-    throw new Error(`Unknown action: ${req.action_name}`);
-  }
+export async function proposeAction(
+  input: ProposeActionRequest,
+): Promise<ActionTransitionResponse> {
+  const action = getActionRegistry().get(input.actionName);
+  if (!action) throw new Error(`Unknown action: ${input.actionName}`);
 
-  // 1. Always dry-run first — this is a hard gate in staging and informative in prod
-  const dryRunResult = await action.dry_run(req.params);
-
-  // 2. Record the proposal
-  const decision = decide(req.tenant_id, action);
-  const entry = propose({
-    tenant_id: req.tenant_id,
-    action_name: req.action_name,
-    params: req.params,
+  const dryRunResult = await action.dry_run(input.params);
+  const decision = decide(input.tenantId, action);
+  const request = await createRemediationRequest({
+    tenantId: input.tenantId,
+    actionName: action.name,
+    params: input.params,
     tier: decision.tier,
-    triggered_by: req.triggered_by,
-    dry_run_result: dryRunResult,
+    reversible: action.reversible,
+    proposedBy: input.proposedBy,
+    dryRunResult,
+    initialStatus: dryRunResult.success ? "pending" : "failed",
   });
 
-  // 3. Check if auto-execution is allowed
-  const canRun = req.human_approved || decision.canAutoExecute;
-  if (!canRun) {
+  return {
+    request,
+    executed: false,
+    message: dryRunResult.success
+      ? "Remediation is waiting for explicit human approval."
+      : `Dry run failed; remediation cannot be approved: ${dryRunResult.message}`,
+  };
+}
+
+export async function approveAction(input: {
+  requestId: string;
+  approvedBy: string;
+  reason: string;
+}): Promise<ActionTransitionResponse> {
+  const reason = input.reason.trim();
+  if (!reason) throw new Error("Approval reason is required");
+
+  const request = await claimApprovedRemediation(
+    input.requestId,
+    input.approvedBy,
+    reason,
+  );
+  if (!request)
+    throw new Error(`Remediation request is not pending: ${input.requestId}`);
+
+  const action = getActionRegistry().get(request.actionName);
+  if (!action) {
+    const failed = await completeRemediation(request.id, input.approvedBy, {
+      success: false,
+      message: `Action is no longer registered: ${request.actionName}`,
+    });
     return {
-      entry,
+      request: failed,
       executed: false,
-      message: decision.reason,
+      message: failed.executeResult!.message,
     };
   }
 
-  // 4. Execute and record
-  const result = await action.execute(req.params);
-  const finalEntry = recordExecution(entry.id, result);
-
+  let result;
+  try {
+    result = await action.execute(request.params);
+  } catch (error) {
+    result = {
+      success: false,
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+  const completed = await completeRemediation(
+    request.id,
+    input.approvedBy,
+    result,
+  );
   return {
-    entry: finalEntry,
+    request: completed,
     executed: result.success,
     message: result.message,
   };
 }
 
-export async function undoAction(
-  entryId: string,
-  triggeredBy: string
-): Promise<ExecuteResponse> {
-  const { getAuditLog } = await import("./audit-log.js");
-  const entries = getAuditLog();
-  const entry = [...entries].reverse().find((e) => e.id === entryId && e.status === "executed");
-  if (!entry) throw new Error(`No executed action with id: ${entryId}`);
-
-  const action = getActionRegistry().get(entry.action_name);
-  if (!action) throw new Error(`Unknown action: ${entry.action_name}`);
-  if (!action.undo) throw new Error(`Action is not reversible: ${entry.action_name}`);
-
-  const result = await action.undo(entry.params);
-  const undoEntry = recordUndo(entryId, result);
-
-  return { entry: undoEntry, executed: result.success, message: result.message };
+export async function rejectAction(input: {
+  requestId: string;
+  rejectedBy: string;
+  reason: string;
+}): Promise<RemediationRequest> {
+  const reason = input.reason.trim();
+  if (!reason) throw new Error("Rejection reason is required");
+  const request = await rejectRemediation(
+    input.requestId,
+    input.rejectedBy,
+    reason,
+  );
+  if (!request)
+    throw new Error(`Remediation request is not pending: ${input.requestId}`);
+  return request;
 }
+
+export async function undoAction(input: {
+  requestId: string;
+  triggeredBy: string;
+  reason: string;
+}): Promise<ActionTransitionResponse> {
+  const reason = input.reason.trim();
+  if (!reason) throw new Error("Undo reason is required");
+  const request = await claimUndo(input.requestId, input.triggeredBy, reason);
+  if (!request)
+    throw new Error(
+      `Executed reversible remediation not found: ${input.requestId}`,
+    );
+
+  const action = getActionRegistry().get(request.actionName);
+  if (!action?.undo) {
+    const failed = await completeUndo(request.id, input.triggeredBy, {
+      success: false,
+      message: `Action is not reversible: ${request.actionName}`,
+    });
+    return {
+      request: failed,
+      executed: false,
+      message: failed.undoResult!.message,
+    };
+  }
+
+  let result;
+  try {
+    result = await action.undo(request.params, request.executeResult);
+  } catch (error) {
+    result = {
+      success: false,
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+  const completed = await completeUndo(request.id, input.triggeredBy, result);
+  return {
+    request: completed,
+    executed: result.success,
+    message: result.message,
+  };
+}
+
+export { getRemediationRequest };

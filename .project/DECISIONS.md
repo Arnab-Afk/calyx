@@ -281,3 +281,23 @@ Append-only. Newest at the bottom. Never edit or delete a past entry — superse
 **Because.** Authentication, tenant membership, and trusted AI presentation are expensive boundaries to retrofit after frontend migration.
 
 **Consequence.** Go hardening and API parity precede remediation work. Next.js migration follows as focused auth/workspace, channel/message, realtime, and MCP-administration slices.
+
+---
+
+## D-015 — Represent remediation approval as a durable server-side state transition
+
+**Date:** 2026-09-20
+**Status:** accepted
+
+**Context.** The original execution prototype stored pending actions and audit snapshots in process memory and accepted a caller-provided `human_approved` boolean. Restarts lost approvals, multiple replicas could execute twice, and no durable artifact proved who approved what.
+
+**Options considered.**
+- **Retain the in-memory gate** — sufficient for demos but unsafe for production changes.
+- **Persist only audit messages after execution** — durable history, but still permits races and fabricated approval claims.
+- **Persist the proposal and claim its transition atomically before execution** — binds dry run, parameters, approver, reason, and outcome to one request.
+
+**Decision.** PostgreSQL owns remediation requests and immutable transition events. Every action is proposed after a successful dry run and remains pending until an authorized human claims it. Approval, rejection, execution, and undo accept a request ID rather than tenant/action parameters or a boolean approval claim.
+
+**Because.** The action parameters and tenant must come from the persisted proposal, and an atomic `pending → executing` transition guarantees that concurrent approvals cannot both run the action.
+
+**Consequence.** Slack approvers are fail-closed through an explicit user-ID allowlist. A process crash after claiming an action leaves it in `executing` for manual reconciliation rather than risking an automatic duplicate side effect. Real operator integrations must add provider idempotency before production rollout.
