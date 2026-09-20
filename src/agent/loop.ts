@@ -105,7 +105,13 @@ When investigating errors, spikes, regressions, outages, or "what changed" quest
 
 When you cannot find data, say so clearly rather than guessing. When you do find data,
 cite specific numbers and service names from the tool results. Never call a mutation or
-remediation proposal tool unless the user explicitly asked you to prepare that action.`;
+remediation proposal tool unless the user explicitly asked you to prepare that action.
+
+Answer style:
+- Lead with the live mapped service status (e.g. "prohuman-api is running — N events, X% errors").
+- At most one short clause for project→service mapping. Skip long "Naming note" digressions
+  about synthetic/smoke-test services unless the user asked about those specifically.
+- Keep the final answer concise (about 4–8 short lines). Charts/cards carry the detail.`;
 
   const system = systemSuffix ? `${base}\n${systemSuffix}` : base;
 

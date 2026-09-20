@@ -41,7 +41,10 @@ export type SourceTokenResult = {
   source: OpsSource;
   token?: string;
   intakeUrl?: string;
+  drainUrl?: string;
+  drainSecret?: string | null;
   curlExample?: string;
+  nextSteps?: string[];
   note?: string;
 };
 
@@ -157,6 +160,27 @@ export function useOpsProjectDetail(projectSlug: string | null) {
     [projectSlug, workspaceId],
   );
 
+  const deleteSource = useCallback(
+    async (sourceId: string) => {
+      if (!projectSlug) throw new Error('No project selected');
+      return opsFetch<{ deleted: boolean; sourceId: string }>(
+        workspaceId,
+        `projects/${encodeURIComponent(projectSlug)}/sources/${encodeURIComponent(sourceId)}`,
+        { method: 'DELETE' },
+      );
+    },
+    [projectSlug, workspaceId],
+  );
+
+  const deleteProject = useCallback(async () => {
+    if (!projectSlug) throw new Error('No project selected');
+    return opsFetch<{ deleted: boolean; projectId: string; slug: string }>(
+      workspaceId,
+      `projects/${encodeURIComponent(projectSlug)}`,
+      { method: 'DELETE' },
+    );
+  }, [projectSlug, workspaceId]);
+
   const connectGithub = useCallback(
     async (input?: { repo?: string; returnTo?: string }) => {
       if (!projectSlug) throw new Error('No project selected');
@@ -232,6 +256,8 @@ export function useOpsProjectDetail(projectSlug: string | null) {
     reload,
     createSource,
     rotateToken,
+    deleteSource,
+    deleteProject,
     connectGithub,
     completeGithub,
     disconnectGithub,

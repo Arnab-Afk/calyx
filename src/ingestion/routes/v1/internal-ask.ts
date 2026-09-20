@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { runAgent } from "../../../agent/index.js";
-import { autoChartType } from "../../../slack/charts/index.js";
+import { pickChartFromToolCalls } from "../../../slack/pick-chart.js";
 import {
   authorizeInternal,
   resolveWorkspaceTenant,
@@ -32,6 +32,9 @@ For this web ask:
   unless that slug also appears as a real emitting service with non-synthetic traffic.
 - For errors/spikes/uptime/health/"what changed", use query_logs + get_service_stats on the
   mapped services, plus get_change_context for the window.
+- Answer style: lead with the live service (e.g. "prohuman-api is running — N events, X% errors").
+  One short clause for project→service mapping is enough. Do NOT write long "Naming note"
+  digressions about synthetic/smoke services. Keep the prose under ~8 short lines; cards show detail.
 `;
 
       const response = await runAgent(
@@ -44,26 +47,7 @@ For this web ask:
           actorId: parsed.data.actorId,
         },
       );
-      const remediation = [...response.toolCallsMade]
-        .reverse()
-        .find(
-          (call) => call.toolName === "propose_remediation" && call.result.ok,
-        );
-      const chartable = [...response.toolCallsMade]
-        .reverse()
-        .find(
-          (call) =>
-            call.output?.visualization_hint &&
-            call.output.visualization_hint !== "none",
-        );
-      const chartType = remediation
-        ? "approval-card"
-        : chartable?.output
-          ? autoChartType(
-              chartable.output.visualization_hint!,
-              chartable.output.data,
-            )
-          : null;
+      const picked = pickChartFromToolCalls(response.toolCallsMade);
 
       return {
         answer: response.answer,
@@ -71,8 +55,8 @@ For this web ask:
           toolName: call.toolName,
           summary: call.result.summary,
         })),
-        chartType,
-        chartData: remediation?.output?.data ?? chartable?.output?.data ?? null,
+        chartType: picked?.chartType ?? null,
+        chartData: picked?.chartData ?? null,
         turns: response.turns,
       };
     },

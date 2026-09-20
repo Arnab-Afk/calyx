@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Tool, ToolOutput } from "../../schemas/index.js";
+import { pickChartFromToolCalls } from "../../slack/pick-chart.js";
 import { runAgent } from "../loop.js";
 
 const InputSchema = z.object({
@@ -18,13 +19,7 @@ async function handler(input: Input): Promise<ToolOutput> {
     4096,
     { excludeTools: ["ask", "propose_remediation"] },
   );
-  const chartableCall = [...response.toolCallsMade]
-    .reverse()
-    .find(
-      (call) =>
-        call.output?.visualization_hint &&
-        call.output.visualization_hint !== "none",
-    );
+  const picked = pickChartFromToolCalls(response.toolCallsMade);
 
   return {
     summary: response.answer,
@@ -37,12 +32,12 @@ async function handler(input: Input): Promise<ToolOutput> {
         summary: call.result.summary,
         error: call.result.error,
       })),
-      chartHint: chartableCall?.output?.visualization_hint ?? null,
-      chartData: chartableCall?.output?.data ?? null,
+      chartHint: picked?.chartType ?? null,
+      chartData: picked?.chartData ?? null,
       turns: response.turns,
       stopReason: response.stopReason,
     },
-    visualization_hint: chartableCall?.output?.visualization_hint ?? "none",
+    visualization_hint: picked ? "bar" : "none",
   };
 }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Check, ChevronRight, Copy, GitBranch, GitCommitHorizontal, GitMerge, GitPullRequest, Loader2, Plus, RefreshCw, Rocket, Tag, Unplug } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, Copy, GitBranch, GitCommitHorizontal, GitMerge, GitPullRequest, Loader2, Plus, RefreshCw, Rocket, Tag, Trash2, Unplug } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -409,62 +409,121 @@ function SourcesPanel({
   sources,
   createSource,
   rotateToken,
+  deleteSource,
   reload,
 }: {
   projectSlug: string;
   sources: OpsSource[];
   createSource: ReturnType<typeof useOpsProjectDetail>['createSource'];
   rotateToken: ReturnType<typeof useOpsProjectDetail>['rotateToken'];
+  deleteSource: ReturnType<typeof useOpsProjectDetail>['deleteSource'];
   reload: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
   const [sourceName, setSourceName] = useState('');
-  const [sourceRole, setSourceRole] = useState<'frontend' | 'backend'>('frontend');
-  const [lastToken, setLastToken] = useState<{ token: string; sourceName: string; intakeUrl?: string } | null>(null);
+  const [sourceRole, setSourceRole] = useState<'frontend' | 'backend' | 'other'>('backend');
+  const [provider, setProvider] = useState<'http' | 'cloudwatch' | 'vercel'>('http');
+  const [lastCreated, setLastCreated] = useState<{
+    token?: string;
+    sourceName: string;
+    intakeUrl?: string;
+    drainUrl?: string;
+    drainSecret?: string | null;
+    provider: string;
+  } | null>(null);
+
+  const defaultService =
+    provider === 'cloudwatch' ? 'aws' : provider === 'vercel' ? 'vercel' : sourceRole === 'frontend' ? 'web' : 'api';
 
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-        <p className="text-sm font-medium text-white">Generate source API key</p>
-        <p className="mt-1 text-xs text-white/45">Token is shown once. Rotate anytime to revoke the old one.</p>
+        <p className="text-sm font-medium text-white">Connect a log source</p>
+        <p className="mt-1 text-xs text-white/45">
+          HTTP for apps/SDKs. CloudWatch for AWS log groups (no VM agent). Vercel for platform drains.
+        </p>
         <div className="mt-3 flex flex-wrap items-end gap-2">
           <div className="min-w-[140px] flex-1">
             <label className="mb-1 block text-[11px] uppercase tracking-wide text-white/40">Name</label>
             <Input
-              placeholder={`${projectSlug}-api`}
+              placeholder={
+                provider === 'cloudwatch'
+                  ? `${projectSlug}-cloudwatch`
+                  : provider === 'vercel'
+                    ? `${projectSlug}-vercel`
+                    : `${projectSlug}-api`
+              }
               value={sourceName}
               onChange={(e) => setSourceName(e.target.value)}
               className="border-white/15 bg-black/40 text-white"
             />
           </div>
-          <div className="w-[140px]">
-            <label className="mb-1 block text-[11px] uppercase tracking-wide text-white/40">Role</label>
-            <Select value={sourceRole} onValueChange={(v) => setSourceRole(v as 'frontend' | 'backend')}>
+          <div className="w-[150px]">
+            <label className="mb-1 block text-[11px] uppercase tracking-wide text-white/40">Type</label>
+            <Select
+              value={provider}
+              onValueChange={(v) => {
+                const next = v as 'http' | 'cloudwatch' | 'vercel';
+                setProvider(next);
+                if (next === 'cloudwatch' || next === 'vercel') setSourceRole(next === 'vercel' ? 'frontend' : 'backend');
+              }}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="frontend">frontend</SelectItem>
-                <SelectItem value="backend">backend</SelectItem>
+                <SelectItem value="http">HTTP / SDK</SelectItem>
+                <SelectItem value="cloudwatch">CloudWatch</SelectItem>
+                <SelectItem value="vercel">Vercel drain</SelectItem>
               </SelectContent>
             </Select>
           </div>
+          {provider === 'http' && (
+            <div className="w-[140px]">
+              <label className="mb-1 block text-[11px] uppercase tracking-wide text-white/40">Role</label>
+              <Select value={sourceRole} onValueChange={(v) => setSourceRole(v as 'frontend' | 'backend' | 'other')}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="frontend">frontend</SelectItem>
+                  <SelectItem value="backend">backend</SelectItem>
+                  <SelectItem value="other">other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <Button
             disabled={busy}
             onClick={async () => {
               setBusy(true);
               try {
-                const name = sourceName.trim() || `${projectSlug}-${sourceRole}`;
+                const name =
+                  sourceName.trim() ||
+                  `${projectSlug}-${provider === 'http' ? sourceRole : provider}`;
                 const res = await createSource({
-                  role: sourceRole,
-                  service: sourceRole === 'frontend' ? 'web' : 'api',
+                  role: provider === 'vercel' ? 'frontend' : provider === 'cloudwatch' ? 'backend' : sourceRole,
+                  service: defaultService,
                   name,
-                  provider: 'http',
+                  provider,
                 });
-                if (res.token) {
-                  setLastToken({ token: res.token, sourceName: name, intakeUrl: res.intakeUrl ?? `${INTAKE}/v1/logs` });
-                }
-                toast.success('Source created');
+                setLastCreated({
+                  token: res.token,
+                  sourceName: name,
+                  intakeUrl: res.intakeUrl ?? `${INTAKE}/v1/logs`,
+                  drainUrl: res.drainUrl ?? (provider === 'cloudwatch' && res.source?.id
+                    ? `${INTAKE}/v1/drains/cloudwatch/${res.source.id}`
+                    : undefined),
+                  drainSecret: res.drainSecret,
+                  provider,
+                });
+                toast.success(
+                  provider === 'cloudwatch'
+                    ? 'CloudWatch source created — copy drain URL + token'
+                    : provider === 'vercel'
+                      ? 'Vercel drain created — copy URL + secret'
+                      : 'Source created',
+                );
                 setSourceName('');
                 await reload();
               } catch (e) {
@@ -474,67 +533,186 @@ function SourcesPanel({
               }
             }}
           >
-            Generate key
+            {provider === 'cloudwatch' ? 'Connect CloudWatch' : provider === 'vercel' ? 'Create Vercel drain' : 'Generate key'}
           </Button>
         </div>
       </div>
 
-      {lastToken && (
+      {lastCreated && lastCreated.provider === 'cloudwatch' && lastCreated.token && lastCreated.drainUrl && (
+        <div className="space-y-3 rounded-xl border border-sky-500/25 bg-sky-500/5 p-4">
+          <p className="text-sm font-medium text-sky-100">CloudWatch connected — finish setup in AWS</p>
+          <p className="text-xs leading-relaxed text-white/55">
+            No VM agent needed. In AWS, create a small Lambda that POSTs CloudWatch subscription events to Calyx, then
+            add a subscription filter on your log group pointing at that Lambda.
+          </p>
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-white/40">Drain URL</p>
+            <div className="mt-1 flex items-start gap-2">
+              <code className="flex-1 break-all font-mono text-[11px] text-sky-200/90">{lastCreated.drainUrl}</code>
+              <CopyButton value={lastCreated.drainUrl} label="Drain URL" />
+            </div>
+          </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-white/40">Source token (shown once)</p>
+            <div className="mt-1 flex items-start gap-2">
+              <code className="flex-1 break-all font-mono text-[11px] text-sky-200/90">{lastCreated.token}</code>
+              <CopyButton value={lastCreated.token} label="Token" />
+            </div>
+          </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-white/40">Lambda handler</p>
+            <pre className="mt-1 overflow-x-auto rounded bg-black/40 p-2 font-mono text-[10px] text-white/70">{`export const handler = async (event) => {
+  const res = await fetch(process.env.CALYX_CLOUDWATCH_URL, {
+    method: "POST",
+    headers: {
+      authorization: \`Bearer \${process.env.CALYX_SOURCE_TOKEN}\`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(event),
+  });
+  if (!res.ok) throw new Error(await res.text());
+};`}</pre>
+          </div>
+          <pre className="overflow-x-auto rounded bg-black/40 p-2 font-mono text-[10px] text-white/70">{`CALYX_CLOUDWATCH_URL=${lastCreated.drainUrl}
+CALYX_SOURCE_TOKEN=${lastCreated.token}`}</pre>
+          <ol className="list-decimal space-y-1 pl-4 text-xs text-white/55">
+            <li>Create a Node.js Lambda with the handler above.</li>
+            <li>Set the two env vars (store the token in Secrets Manager if you prefer).</li>
+            <li>On your CloudWatch log group → Subscription filters → Lambda destination.</li>
+            <li>Send a test log — this source should flip to “receiving”.</li>
+          </ol>
+        </div>
+      )}
+
+      {lastCreated && lastCreated.provider === 'vercel' && lastCreated.drainUrl && (
+        <div className="space-y-3 rounded-xl border border-violet-500/25 bg-violet-500/5 p-4">
+          <p className="text-sm font-medium text-violet-100">Vercel drain — paste into Vercel</p>
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-white/40">Drain URL</p>
+            <div className="mt-1 flex items-start gap-2">
+              <code className="flex-1 break-all font-mono text-[11px] text-violet-200/90">{lastCreated.drainUrl}</code>
+              <CopyButton value={lastCreated.drainUrl} label="Drain URL" />
+            </div>
+          </div>
+          {lastCreated.drainSecret && (
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-white/40">Signature secret (once)</p>
+              <div className="mt-1 flex items-start gap-2">
+                <code className="flex-1 break-all font-mono text-[11px] text-violet-200/90">{lastCreated.drainSecret}</code>
+                <CopyButton value={lastCreated.drainSecret} label="Secret" />
+              </div>
+            </div>
+          )}
+          <p className="text-xs text-white/50">Vercel → Team Settings → Drains → Custom Endpoint → Format JSON.</p>
+        </div>
+      )}
+
+      {lastCreated && lastCreated.provider === 'http' && lastCreated.token && (
         <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-4">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <p className="text-xs font-medium text-emerald-200/90">API key for {lastToken.sourceName} (once)</p>
-              <p className="mt-2 break-all font-mono text-[11px] text-emerald-300/90">{lastToken.token}</p>
+              <p className="text-xs font-medium text-emerald-200/90">API key for {lastCreated.sourceName} (once)</p>
+              <p className="mt-2 break-all font-mono text-[11px] text-emerald-300/90">{lastCreated.token}</p>
             </div>
-            <CopyButton value={lastToken.token} label="API key" />
+            <CopyButton value={lastCreated.token} label="API key" />
           </div>
-          <pre className="mt-3 overflow-x-auto rounded bg-black/40 p-2 font-mono text-[10px] text-white/70">{`CALYX_INTAKE_URL=${lastToken.intakeUrl}
-CALYX_SOURCE_TOKEN=${lastToken.token}`}</pre>
+          <pre className="mt-3 overflow-x-auto rounded bg-black/40 p-2 font-mono text-[10px] text-white/70">{`CALYX_INTAKE_URL=${lastCreated.intakeUrl}
+CALYX_SOURCE_TOKEN=${lastCreated.token}`}</pre>
         </div>
       )}
 
       <ul className="divide-y divide-white/5 rounded-xl border border-white/10 bg-white/[0.02]">
         {sources.length === 0 && <li className="px-4 py-6 text-sm text-white/45">No sources yet.</li>}
-        {sources.map((s) => (
-          <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-            <div>
-              <p className="text-sm text-white/90">{s.name}</p>
-              <p className="text-[11px] text-white/40">
-                {s.role}/{s.service} · {s.provider}
-                {s.lastEventAt ? (
-                  <span className="ml-2 text-emerald-400/80">receiving</span>
-                ) : (
-                  <span className="ml-2 text-amber-300/70">waiting</span>
+        {sources.map((s) => {
+          const drainGuess =
+            s.drainUrl ||
+            (s.provider === 'cloudwatch' ? `${INTAKE}/v1/drains/cloudwatch/${s.id}` : undefined) ||
+            (s.provider === 'vercel' ? `${INTAKE}/v1/drains/vercel/${s.id}` : undefined);
+          return (
+            <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-sm text-white/90">{s.name}</p>
+                <p className="text-[11px] text-white/40">
+                  {s.role}/{s.service} · {s.provider}
+                  {s.lastEventAt ? (
+                    <span className="ml-2 text-emerald-400/80">receiving</span>
+                  ) : (
+                    <span className="ml-2 text-amber-300/70">waiting</span>
+                  )}
+                </p>
+                {drainGuess && (
+                  <p className="mt-1 truncate font-mono text-[10px] text-white/35" title={drainGuess}>
+                    {drainGuess}
+                  </p>
                 )}
-              </p>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="border-white/15"
-              disabled={busy || s.provider === 'vercel'}
-              onClick={async () => {
-                if (!confirm(`Rotate API key for “${s.name}”?`)) return;
-                setBusy(true);
-                try {
-                  const res = await rotateToken(s.id);
-                  if (res.token) {
-                    setLastToken({ token: res.token, sourceName: s.name, intakeUrl: res.intakeUrl ?? `${INTAKE}/v1/logs` });
-                  }
-                  toast.success('Key rotated');
-                  await reload();
-                } catch (e) {
-                  toast.error(e instanceof Error ? e.message : 'Rotate failed');
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              <RefreshCw className="mr-1 size-3.5" />
-              Rotate
-            </Button>
-          </li>
-        ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {drainGuess && <CopyButton value={drainGuess} label="Drain URL" />}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-white/15"
+                  disabled={busy || s.provider === 'vercel'}
+                  onClick={async () => {
+                    if (!confirm(`Rotate API key for “${s.name}”?`)) return;
+                    setBusy(true);
+                    try {
+                      const res = await rotateToken(s.id);
+                      if (res.token) {
+                        setLastCreated({
+                          token: res.token,
+                          sourceName: s.name,
+                          intakeUrl: res.intakeUrl ?? `${INTAKE}/v1/logs`,
+                          drainUrl:
+                            res.drainUrl ||
+                            (s.provider === 'cloudwatch' ? `${INTAKE}/v1/drains/cloudwatch/${s.id}` : undefined),
+                          provider: s.provider,
+                        });
+                      }
+                      toast.success('Key rotated');
+                      await reload();
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : 'Rotate failed');
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  <RefreshCw className="mr-1 size-3.5" />
+                  Rotate
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-red-500/30 text-red-200/90 hover:bg-red-500/10"
+                  disabled={busy}
+                  onClick={async () => {
+                    if (
+                      !confirm(
+                        `Delete source “${s.name}”? Its API key stops working immediately. Past logs stay in Calyx.`,
+                      )
+                    ) {
+                      return;
+                    }
+                    setBusy(true);
+                    try {
+                      await deleteSource(s.id);
+                      toast.success('Source deleted');
+                      await reload();
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : 'Delete failed');
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  <Trash2 className="mr-1 size-3.5" />
+                  Delete
+                </Button>
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
@@ -553,6 +731,8 @@ export function ProjectDetailPage({ slug }: { slug: string }) {
     error,
     createSource,
     rotateToken,
+    deleteSource,
+    deleteProject,
     connectGithub,
     completeGithub,
     disconnectGithub,
@@ -713,6 +893,7 @@ export function ProjectDetailPage({ slug }: { slug: string }) {
             sources={sources}
             createSource={createSource}
             rotateToken={rotateToken}
+            deleteSource={deleteSource}
             reload={reload}
           />
         )}
@@ -909,6 +1090,46 @@ export function ProjectDetailPage({ slug }: { slug: string }) {
                 </div>
               </div>
             )}
+
+            <div className="rounded-xl border border-red-500/25 bg-red-500/[0.04] p-4">
+              <p className="text-sm font-medium text-red-100/90">Delete project</p>
+              <p className="mt-1 text-xs text-white/45">
+                Removes this project, its sources, and GitHub/Slack bindings. Past log events stay in Calyx.
+              </p>
+              <Button
+                className="mt-3 border-red-500/40 bg-red-500/15 text-red-100 hover:bg-red-500/25"
+                variant="outline"
+                disabled={busy}
+                onClick={async () => {
+                  const label = project?.slug || slug;
+                  if (
+                    !confirm(
+                      `Delete project “${label}”? This cannot be undone. Type-confirm by continuing only if you mean it.`,
+                    )
+                  ) {
+                    return;
+                  }
+                  const typed = window.prompt(`Type “${label}” to confirm deletion:`);
+                  if (typed !== label) {
+                    toast.message('Delete cancelled');
+                    return;
+                  }
+                  setBusy(true);
+                  try {
+                    await deleteProject();
+                    toast.success(`Deleted ${label}`);
+                    router.push(`/workspace/${workspaceId}/projects`);
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : 'Delete failed');
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                <Trash2 className="mr-1 size-3.5" />
+                Delete project
+              </Button>
+            </div>
           </div>
         )}
       </div>

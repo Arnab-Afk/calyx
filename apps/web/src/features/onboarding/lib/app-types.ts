@@ -5,6 +5,7 @@ export type AppTypeId =
   | 'browser'
   | 'docker'
   | 'journald'
+  | 'cloudwatch'
   | 'vercel'
   | 'other';
 
@@ -185,6 +186,38 @@ CALYX_SERVICE=api`,
         title: 'Non-interactive / CI',
         code: `curl -fsSL https://calyx-intake.arnabbhowmik.in/install | CALYX_MACHINE_TYPE=pm2 bash
 # linux | pm2 | docker | file | k8s | cli`,
+      },
+    ],
+  },
+  {
+    id: 'cloudwatch',
+    title: 'AWS CloudWatch',
+    blurb: 'No VM agent — a Lambda in your AWS account forwards log groups to Calyx.',
+    sources: [{ role: 'backend', service: 'aws', name: 'cloudwatch', provider: 'cloudwatch' }],
+    tutorialTitle: 'Connect CloudWatch Logs',
+    steps: [
+      {
+        title: 'What Calyx created',
+        body: 'A CloudWatch log source with a drain URL and write token. Copy them from the next screen (or Project → Sources).',
+      },
+      {
+        title: 'Create a forwarder Lambda in AWS',
+        body: 'Node.js 22+. Set CALYX_CLOUDWATCH_URL and CALYX_SOURCE_TOKEN from Calyx.',
+        code: `export const handler = async (event) => {
+  const res = await fetch(process.env.CALYX_CLOUDWATCH_URL, {
+    method: "POST",
+    headers: {
+      authorization: \`Bearer \${process.env.CALYX_SOURCE_TOKEN}\`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(event),
+  });
+  if (!res.ok) throw new Error(await res.text());
+};`,
+      },
+      {
+        title: 'Subscribe the log group',
+        body: 'CloudWatch → your log group → Subscription filters → Lambda → pick the forwarder. No always-on machine required.',
       },
     ],
   },

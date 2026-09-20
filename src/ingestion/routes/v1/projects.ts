@@ -11,6 +11,8 @@ import {
   createLogSource,
   createProject,
   deleteGithubConnection,
+  deleteLogSource,
+  deleteProject,
   getGithubConnection,
   getLogSourceById,
   getProject,
@@ -324,6 +326,48 @@ export async function projectsRoute(app: FastifyInstance): Promise<void> {
       token: source.token,
       intakeUrl: `${intake}/v1/logs`,
       note: "Previous token is revoked. Copy the new token now — it is shown once.",
+    });
+  });
+
+  app.delete("/v1/projects/:id/sources/:sourceId", async (request, reply) => {
+    const principal = await requireMgmt(request, reply, "sources:write");
+    if (!principal) return;
+
+    const { id, sourceId } = request.params as { id: string; sourceId: string };
+    const project = await getProject(principal.tenantId, id);
+    if (!project) return reply.status(404).send({ error: "Project not found" });
+
+    const existing = await getLogSourceById(sourceId);
+    if (!existing || existing.projectId !== project.id) {
+      return reply.status(404).send({ error: "Source not found" });
+    }
+
+    const deleted = await deleteLogSource(sourceId, principal.tenantId);
+    if (!deleted) return reply.status(404).send({ error: "Source not found" });
+
+    return reply.send({
+      deleted: true,
+      sourceId,
+      note: "Source and API key removed. Previously ingested log events are kept.",
+    });
+  });
+
+  app.delete("/v1/projects/:id", async (request, reply) => {
+    const principal = await requireMgmt(request, reply, "projects:write");
+    if (!principal) return;
+
+    const { id } = request.params as { id: string };
+    const project = await getProject(principal.tenantId, id);
+    if (!project) return reply.status(404).send({ error: "Project not found" });
+
+    const deleted = await deleteProject(project.id, principal.tenantId);
+    if (!deleted) return reply.status(404).send({ error: "Project not found" });
+
+    return reply.send({
+      deleted: true,
+      projectId: project.id,
+      slug: project.slug,
+      note: "Project, sources, and integrations removed. Previously ingested log events are kept.",
     });
   });
 

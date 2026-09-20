@@ -62,9 +62,10 @@ func main() {
 		Addr:              cfg.Addr,
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       90 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		// Calyx asks hold the connection open while the agent runs (up to ~3m).
+		WriteTimeout: 200 * time.Second,
+		IdleTimeout:  210 * time.Second,
 	}
 
 	go func() {

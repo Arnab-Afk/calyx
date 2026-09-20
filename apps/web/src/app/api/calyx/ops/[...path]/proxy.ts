@@ -124,6 +124,9 @@ export async function proxyOpsRequest(request: NextRequest, path: string[]) {
   if (scope && request.method === 'POST' && path.length === 1 && path[0] === 'projects') {
     return NextResponse.json({ error: 'This shared project workspace cannot create new projects' }, { status: 403 });
   }
+  if (scope && request.method === 'DELETE' && path.length === 2 && path[0] === 'projects') {
+    return NextResponse.json({ error: 'This shared project workspace cannot delete the project' }, { status: 403 });
+  }
   if (!projectPathAllowed(path, scope)) {
     return NextResponse.json({ error: 'Project is outside this workspace scope' }, { status: 403 });
   }

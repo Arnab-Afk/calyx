@@ -286,6 +286,50 @@ export async function rotateLogSourceToken(
   return { ...mapSource(result.rows[0]), token };
 }
 
+/** Remove a log source (API key). Existing ingested events are kept. */
+export async function deleteLogSource(
+  sourceId: string,
+  tenantId: string,
+): Promise<boolean> {
+  const result = await getPool().query(
+    `DELETE FROM log_sources WHERE id = $1 AND tenant_id = $2`,
+    [sourceId, tenantId],
+  );
+  return result.rowCount === 1;
+}
+
+/**
+ * Delete a project and cascaded config (sources, GitHub/Slack bindings, etc.).
+ * Also clears workspace project-share scopes. Ingested log events are kept.
+ */
+export async function deleteProject(
+  projectId: string,
+  tenantId: string,
+): Promise<boolean> {
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query(
+      `DELETE FROM projects WHERE id = $1 AND tenant_id = $2 RETURNING id`,
+      [projectId, tenantId],
+    );
+    if (result.rowCount !== 1) {
+      await client.query("ROLLBACK");
+      return false;
+    }
+    await client.query(`DELETE FROM workspace_project_scopes WHERE project_id = $1`, [
+      projectId,
+    ]);
+    await client.query("COMMIT");
+    return true;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 export async function upsertGithubConnection(input: {
   projectId: string;
   tenantId: string;

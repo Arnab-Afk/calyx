@@ -102,7 +102,14 @@ export const ChatInput = ({ placeholder }: ChatInputProps) => {
       innerRef.current?.setContents([] as never);
       innerRef.current?.setText('');
     } catch (error) {
+      // Ask inserts the question immediately; the reply often lands via websocket even if
+      // the long HTTP wait times out (browser "Failed to fetch"). Soft-refresh instead of
+      // a scary toast when that happens.
+      window.dispatchEvent(new Event('calyx:chat-mutated'));
       const detail = error instanceof Error && error.message ? error.message : 'Failed to send message.';
+      if (/failed to fetch|networkerror|abort|timeout/i.test(detail)) {
+        return;
+      }
       toast.error(detail);
     } finally {
       setIsPending(false);

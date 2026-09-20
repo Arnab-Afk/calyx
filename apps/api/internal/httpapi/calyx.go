@@ -93,8 +93,9 @@ func (s *Server) askCalyx(w http.ResponseWriter, r *http.Request) {
 	}
 	payload, _ := json.Marshal(payloadMap)
 	endpoint := fmt.Sprintf("%s/v1/internal/workspaces/%s/ask", s.calyxAskURL, url.PathEscape(workspaceID))
-	// Agent tool loops can exceed the default API client timeout.
-	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
+	// Detach from the client request so a browser/proxy disconnect still lets us
+	// finish the investigation and post the answer into the channel.
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
@@ -104,8 +105,8 @@ func (s *Server) askCalyx(w http.ResponseWriter, r *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Calyx-Internal-Key", s.calyxInternalKey)
 	client := s.httpClient
-	if client == nil || client.Timeout < 90*time.Second {
-		client = &http.Client{Timeout: 95 * time.Second}
+	if client == nil || client.Timeout < 180*time.Second {
+		client = &http.Client{Timeout: 185 * time.Second}
 	}
 	response, err := client.Do(req)
 	if err != nil {

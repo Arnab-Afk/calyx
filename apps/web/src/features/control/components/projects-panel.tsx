@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ChevronRight, Copy, GitBranch, KeyRound, Loader2, Plus, RefreshCw, Unplug } from 'lucide-react';
+import { Check, ChevronRight, Copy, GitBranch, KeyRound, Loader2, Plus, RefreshCw, Trash2, Unplug } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -56,6 +56,8 @@ export function ProjectsPanel({ initialSlug = null }: { initialSlug?: string | n
     loading: detailLoading,
     createSource,
     rotateToken,
+    deleteSource,
+    deleteProject,
     connectGithub,
     disconnectGithub,
     reload: reloadDetail,
@@ -235,29 +237,59 @@ export function ProjectsPanel({ initialSlug = null }: { initialSlug?: string | n
                       )}
                     </p>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-white/15"
-                    disabled={busy || s.provider === 'vercel'}
-                    onClick={async () => {
-                      if (!confirm(`Rotate API key for “${s.name}”? The old token stops working immediately.`)) return;
-                      setBusy(true);
-                      try {
-                        const res = await rotateToken(s.id);
-                        if (res.token) showToken(res.token, s.name, res.intakeUrl);
-                        toast.success('New API key issued');
-                        await reloadDetail();
-                      } catch (e) {
-                        toast.error(e instanceof Error ? e.message : 'Rotate failed');
-                      } finally {
-                        setBusy(false);
-                      }
-                    }}
-                  >
-                    <RefreshCw className="mr-1 size-3.5" />
-                    Rotate key
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-white/15"
+                      disabled={busy || s.provider === 'vercel'}
+                      onClick={async () => {
+                        if (!confirm(`Rotate API key for “${s.name}”? The old token stops working immediately.`)) return;
+                        setBusy(true);
+                        try {
+                          const res = await rotateToken(s.id);
+                          if (res.token) showToken(res.token, s.name, res.intakeUrl);
+                          toast.success('New API key issued');
+                          await reloadDetail();
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : 'Rotate failed');
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      <RefreshCw className="mr-1 size-3.5" />
+                      Rotate key
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-red-500/30 text-red-200/90 hover:bg-red-500/10"
+                      disabled={busy}
+                      onClick={async () => {
+                        if (
+                          !confirm(
+                            `Delete source “${s.name}”? Its API key stops working immediately. Past logs stay in Calyx.`,
+                          )
+                        ) {
+                          return;
+                        }
+                        setBusy(true);
+                        try {
+                          await deleteSource(s.id);
+                          toast.success('Source deleted');
+                          await reloadDetail();
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : 'Delete failed');
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      <Trash2 className="mr-1 size-3.5" />
+                      Delete
+                    </Button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -395,6 +427,42 @@ CALYX_SOURCE_TOKEN=${lastToken.token}`}</pre>
               </div>
             </Card>
           )}
+
+          <Card className="border-red-500/25 bg-red-500/[0.04]">
+            <p className="text-sm font-medium text-red-100/90">Delete project</p>
+            <p className="mt-1 text-xs text-white/45">
+              Removes <strong className="font-medium text-white/70">{selected}</strong>, its sources, and integrations. Past logs stay.
+            </p>
+            <Button
+              className="mt-3 border-red-500/40 bg-red-500/15 text-red-100 hover:bg-red-500/25"
+              variant="outline"
+              disabled={busy || !selected}
+              onClick={async () => {
+                if (!selected) return;
+                if (!confirm(`Delete project “${selected}”? This cannot be undone.`)) return;
+                const typed = window.prompt(`Type “${selected}” to confirm deletion:`);
+                if (typed !== selected) {
+                  toast.message('Delete cancelled');
+                  return;
+                }
+                setBusy(true);
+                try {
+                  await deleteProject();
+                  toast.success(`Deleted ${selected}`);
+                  setSelected(null);
+                  setLastToken(null);
+                  await reload();
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : 'Delete failed');
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <Trash2 className="mr-1 size-3.5" />
+              Delete project
+            </Button>
+          </Card>
         </>
       )}
     </div>

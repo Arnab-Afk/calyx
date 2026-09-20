@@ -192,9 +192,13 @@ export function CalyxChart({ type, data, title, timeRange, onBrush, onFocus }: C
   } else {
     switch (type) {
       case 'service-health-bars':
-      case 'event-volume-bar':
-        node = <ServiceHealthBars stats={data as never} />;
+      case 'event-volume-bar': {
+        const stats = Array.isArray(data)
+          ? data
+          : ((data as { stats?: unknown })?.stats ?? []);
+        node = <ServiceHealthBars stats={stats as never} />;
         break;
+      }
       case 'level-donut':
         node = (
           <div className="max-w-xs">
@@ -220,9 +224,13 @@ export function CalyxChart({ type, data, title, timeRange, onBrush, onFocus }: C
       case 'anomaly-scatter':
         node = <AnomalyScatter points={data as never} />;
         break;
-      case 'text-status-bars':
-        node = <TextStatusBars services={data as never} />;
+      case 'text-status-bars': {
+        const services = Array.isArray(data)
+          ? data
+          : ((data as { services?: unknown })?.services ?? []);
+        node = <TextStatusBars services={services as never} />;
         break;
+      }
       case 'deploy-correlation':
         node = <DeployCorrelation data={data as never} onBrush={onBrush} />;
         break;

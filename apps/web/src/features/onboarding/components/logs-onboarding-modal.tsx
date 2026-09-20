@@ -5,6 +5,7 @@ import {
   Box,
   Check,
   ChevronRight,
+  Cloud,
   Code2,
   Copy,
   FolderKanban,
@@ -55,6 +56,7 @@ const STACK_ICONS: Record<AppTypeId, typeof Globe> = {
   browser: AppWindow,
   docker: Box,
   journald: Server,
+  cloudwatch: Cloud,
   vercel: Triangle,
   other: Box,
 };
@@ -86,6 +88,7 @@ export function LogsOnboardingModal() {
   const [busy, setBusy] = useState(false);
   const [frontendToken, setFrontendToken] = useState('');
   const [backendToken, setBackendToken] = useState('');
+  const [drainUrl, setDrainUrl] = useState('');
   const [createdSources, setCreatedSources] = useState<string[]>([]);
   const [session, setSession] = useState(0);
 
@@ -94,7 +97,7 @@ export function LogsOnboardingModal() {
   const stageRank = STAGE_ORDER.indexOf(stage);
   const hasTutorial =
     createdSources.length > 0 ||
-    Boolean(frontendToken || backendToken) ||
+    Boolean(frontendToken || backendToken || drainUrl) ||
     appType === 'journald';
 
 
@@ -105,6 +108,7 @@ export function LogsOnboardingModal() {
     setBusy(false);
     setFrontendToken('');
     setBackendToken('');
+    setDrainUrl('');
     setCreatedSources([]);
   };
 
@@ -159,32 +163,40 @@ export function LogsOnboardingModal() {
       const names: string[] = [];
       let fe = '';
       let be = '';
+      let drain = '';
       for (const plan of selected.sources) {
-        const res = await opsFetch<{ source?: { name?: string }; token?: string }>(
-          workspaceId,
-          `projects/${encodeURIComponent(slug)}/sources`,
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              role: plan.role,
-              service: plan.service,
-              name: `${slug}-${plan.name}`,
-              provider: plan.provider,
-            }),
-          },
-        );
+        const res = await opsFetch<{
+          source?: { name?: string; id?: string };
+          token?: string;
+          drainUrl?: string;
+        }>(workspaceId, `projects/${encodeURIComponent(slug)}/sources`, {
+          method: 'POST',
+          body: JSON.stringify({
+            role: plan.role,
+            service: plan.service,
+            name: `${slug}-${plan.name}`,
+            provider: plan.provider,
+          }),
+        });
         names.push(res.source?.name ?? plan.name);
         if (plan.role === 'frontend' && res.token) fe = res.token;
-        if (plan.role === 'backend' && res.token) be = res.token;
+        if ((plan.role === 'backend' || plan.role === 'other') && res.token) be = res.token;
+        if (res.drainUrl) drain = res.drainUrl;
+        else if (plan.provider === 'cloudwatch' && res.source?.id) {
+          drain = `${INTAKE}/v1/drains/cloudwatch/${res.source.id}`;
+        }
       }
       setCreatedSources(names);
       setFrontendToken(fe);
       setBackendToken(be);
+      setDrainUrl(drain);
       setStep('tutorial');
       toast.success(
         selected.id === 'journald'
           ? 'Project ready — run the journal command on your VM'
-          : 'Project + sources ready',
+          : selected.id === 'cloudwatch'
+            ? 'CloudWatch source ready — copy the drain URL + token'
+            : 'Project + sources ready',
       );
     } catch (e) {
       setStep('project');
@@ -350,6 +362,7 @@ export function LogsOnboardingModal() {
                   createdSources={createdSources}
                   frontendToken={frontendToken}
                   backendToken={backendToken}
+                  drainUrl={drainUrl}
                   steps={selected.steps}
                   tutorialTitle={selected.tutorialTitle}
                   onCopy={(text) => void copy(text)}
@@ -507,6 +520,7 @@ function ConnectPane({
   createdSources,
   frontendToken,
   backendToken,
+  drainUrl,
   steps,
   tutorialTitle,
   onCopy,
@@ -514,6 +528,7 @@ function ConnectPane({
   createdSources: string[];
   frontendToken: string;
   backendToken: string;
+  drainUrl?: string;
   steps: { title: string; body?: string; code?: string }[];
   tutorialTitle: string;
   onCopy: (text: string) => void;
@@ -523,15 +538,30 @@ function ConnectPane({
       <div>
         <h3 className="font-[family-name:var(--font-display)] text-xl font-semibold tracking-tight">{tutorialTitle}</h3>
         <p className="mt-2 text-[14px] leading-relaxed text-white/50">
-          Tokens are shown once. Paste them into the app, then send a test event.
+          {drainUrl
+            ? 'Copy the drain URL and token into AWS, then subscribe your log group.'
+            : 'Tokens are shown once. Paste them into the app, then send a test event.'}
         </p>
       </div>
 
-      {(frontendToken || backendToken) && (
+      {(frontendToken || backendToken || drainUrl) && (
         <div className="space-y-2 rounded-xl bg-black/40 px-4 py-3">
-          <p className="text-[12px] font-medium text-white/60">Source tokens</p>
+          <p className="text-[12px] font-medium text-white/60">
+            {drainUrl ? 'CloudWatch drain credentials' : 'Source tokens'}
+          </p>
+          {drainUrl && <TokenRow label="Drain URL" value={drainUrl} onCopy={() => onCopy(drainUrl)} />}
           {frontendToken && <TokenRow label="Frontend" value={frontendToken} onCopy={() => onCopy(frontendToken)} />}
-          {backendToken && <TokenRow label="Backend" value={backendToken} onCopy={() => onCopy(backendToken)} />}
+          {backendToken && (
+            <TokenRow
+              label={drainUrl ? 'Source token' : 'Backend'}
+              value={backendToken}
+              onCopy={() => onCopy(backendToken)}
+            />
+          )}
+          {drainUrl && backendToken && (
+            <pre className="mt-2 overflow-x-auto rounded-lg bg-black/55 p-2 font-mono text-[10px] text-white/60">{`CALYX_CLOUDWATCH_URL=${drainUrl}
+CALYX_SOURCE_TOKEN=${backendToken}`}</pre>
+          )}
           <p className="pt-1 font-mono text-[11px] text-white/35">Intake {INTAKE}</p>
         </div>
       )}
