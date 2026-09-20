@@ -20,6 +20,7 @@
 
 ## Done
 
+- [x] Reconnect MCP credential administration through authenticated Go workspace identity — 2026-09-20
 - [x] Adapt Next.js message, thread, reaction, upload, trusted ask, and realtime paths to the feature-gated Go backend — 2026-09-20
 - [x] Adapt Next.js workspace, channel, member, and conversation mutations to the feature-gated Go backend — 2026-09-20
 - [x] Adapt Next.js workspace, channel, and member read paths to the feature-gated Go backend — 2026-09-20

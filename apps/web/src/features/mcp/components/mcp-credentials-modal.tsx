@@ -1,17 +1,16 @@
 'use client';
 
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden';
-import { useAction } from 'convex/react';
 import { Check, Copy, KeyRound, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
-import { api } from '@/../convex/_generated/api';
 import type { Id } from '@/../convex/_generated/dataModel';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useConfirm } from '@/hooks/use-confirm';
+import { chatApi } from '@/lib/chat-api';
 
 interface Credential {
   credentialId: string;
@@ -36,9 +35,6 @@ interface McpCredentialsModalProps {
 }
 
 export function McpCredentialsModal({ workspaceId, open, setOpen }: McpCredentialsModalProps) {
-  const listCredentials = useAction(api.mcpCredentials.list);
-  const createCredential = useAction(api.mcpCredentials.create);
-  const revokeCredential = useAction(api.mcpCredentials.revoke);
   const [ConfirmDialog, confirmRevoke] = useConfirm('Revoke this connector?', 'The coding agent will immediately lose access.');
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [created, setCreated] = useState<CreatedCredential | null>(null);
@@ -51,13 +47,13 @@ export function McpCredentialsModal({ workspaceId, open, setOpen }: McpCredentia
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      setCredentials(await listCredentials({ workspaceId }));
+      setCredentials((await chatApi.mcpCredentials(String(workspaceId))).credentials);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to load connectors.');
     } finally {
       setLoading(false);
     }
-  }, [listCredentials, workspaceId]);
+  }, [workspaceId]);
 
   useEffect(() => {
     if (open) void refresh();
@@ -67,11 +63,7 @@ export function McpCredentialsModal({ workspaceId, open, setOpen }: McpCredentia
     event.preventDefault();
     setLoading(true);
     try {
-      const credential = await createCredential({
-        workspaceId,
-        name,
-        expiresInDays: Number.parseInt(expiresInDays, 10),
-      });
+      const credential = (await chatApi.createMcpCredential(String(workspaceId), name, Number.parseInt(expiresInDays, 10))).credential;
       setCreated(credential);
       setName('Coding agent');
       await refresh();
@@ -87,7 +79,7 @@ export function McpCredentialsModal({ workspaceId, open, setOpen }: McpCredentia
     if (!(await confirmRevoke())) return;
     setLoading(true);
     try {
-      await revokeCredential({ workspaceId, credentialId });
+      await chatApi.revokeMcpCredential(String(workspaceId), credentialId);
       await refresh();
       toast.success('Connector revoked.');
     } catch (error) {
