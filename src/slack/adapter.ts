@@ -24,6 +24,7 @@ import {
 import { buildServiceDrilldownButtons } from "./blocks/service-drilldown.js";
 import { approveAction, getRemediationRequest, rejectAction } from "../execution/executor.js";
 import type { RemediationRequest } from "../storage/remediations.js";
+import { enqueueRemediationDelivery } from "../storage/remediation-deliveries.js";
 import { executeTool } from "../agent/registry.js";
 import { buildStatusOverviewCard } from "./blocks/status-card.js";
 import {
@@ -116,6 +117,7 @@ async function handleQuestion(opts: {
     {
       provider: "anthropic",
       model: process.env.CALYX_SLACK_MODEL ?? "claude-opus-5",
+      actorId: `slack:${tenantId}:${userId}`,
     }
   );
   const ackPromise = quickAck(rawText, isFollowUp, prior);
@@ -194,6 +196,24 @@ async function handleQuestion(opts: {
     thread_ts: threadTs,
     blocks: replyBlocks,
   });
+
+  const proposedRequestIds = new Set(
+    response.toolCallsMade
+      .filter((call) => call.toolName === "propose_remediation" && call.result.ok)
+      .map((call) => (call.output?.data as { remediation_request_id?: unknown } | undefined)?.remediation_request_id)
+      .filter((id): id is string => typeof id === "string"),
+  );
+  for (const requestId of proposedRequestIds) {
+    const request = await getRemediationRequest(requestId, tenantId);
+    if (request?.status === "pending") {
+      await enqueueRemediationDelivery({
+        tenantId,
+        requestId,
+        target: channel,
+        threadTs,
+      });
+    }
+  }
 
   if (chartResult?.image) {
     await client.files
@@ -745,13 +765,13 @@ export async function postAlert(
 // Called by any Slack-triggered flow that proposes a Tier-0/blocked action.
 
 export async function postPendingActionCard(
-  app: App,
+  client: WebClient,
   channelId: string,
   threadTs: string,
   request: RemediationRequest
-): Promise<void> {
+): Promise<{ ts: string }> {
   if (request.status !== "pending") throw new Error(`Remediation request is not pending: ${request.id}`);
-  await app.client.chat.postMessage({
+  const result = await client.chat.postMessage({
     channel: channelId,
     thread_ts: threadTs,
     text: `:lock: Action requires approval: \`${request.actionName}\``,
@@ -784,4 +804,6 @@ export async function postPendingActionCard(
       },
     ],
   });
+  if (!result.ts) throw new Error("Slack did not return a remediation message timestamp");
+  return { ts: result.ts };
 }

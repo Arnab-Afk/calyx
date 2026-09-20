@@ -1,8 +1,15 @@
 import "dotenv/config";
 import { WebClient } from "@slack/web-api";
 import { buildAlertCard } from "../slack/alert-card.js";
+import { postPendingActionCard } from "../slack/adapter.js";
 import { closePool, getPool } from "../storage/client.js";
-import { runDeliveryCycle, runDetectionCycle, type DeliveryHandler } from "./scheduler.js";
+import {
+  runDeliveryCycle,
+  runDetectionCycle,
+  runRemediationDeliveryCycle,
+  type DeliveryHandler,
+  type RemediationDeliveryHandler,
+} from "./scheduler.js";
 
 function positiveInt(name: string, fallback: number): number {
   const value = Number.parseInt(process.env[name] ?? "", 10);
@@ -24,7 +31,20 @@ const slackHandler: DeliveryHandler | undefined = slack
         blocks: card.blocks as never,
         attachments: [{ color: card.color, fallback: card.text }],
       });
-      if (!result.ts) throw new Error("Slack did not return a message timestamp");
+      if (!result.ts)
+        throw new Error("Slack did not return a message timestamp");
+      return { externalId: result.ts };
+    }
+  : undefined;
+
+const remediationSlackHandler: RemediationDeliveryHandler | undefined = slack
+  ? async (delivery, request) => {
+      const result = await postPendingActionCard(
+        slack,
+        delivery.target,
+        delivery.thread_ts,
+        request,
+      );
       return { externalId: result.ts };
     }
   : undefined;
@@ -32,14 +52,32 @@ const slackHandler: DeliveryHandler | undefined = slack
 let stopping = false;
 async function run(): Promise<void> {
   const pool = getPool();
-  console.log(`Detection scheduler started (interval=${intervalMs}ms, lookback=${lookbackHours}h)`);
+  console.log(
+    `Detection scheduler started (interval=${intervalMs}ms, lookback=${lookbackHours}h)`,
+  );
   while (!stopping) {
     const started = Date.now();
     try {
-      const detection = await runDetectionCycle(pool, new Date(), lookbackHours);
+      const detection = await runDetectionCycle(
+        pool,
+        new Date(),
+        lookbackHours,
+      );
       const delivery = await runDeliveryCycle({ slack: slackHandler });
-      if (detection.alertsDetected > 0 || delivery.delivered > 0 || delivery.failed > 0) {
-        console.log({ detection, delivery }, "Detection cycle complete");
+      const remediationDelivery = await runRemediationDeliveryCycle(
+        remediationSlackHandler,
+      );
+      if (
+        detection.alertsDetected > 0 ||
+        delivery.delivered > 0 ||
+        delivery.failed > 0 ||
+        remediationDelivery.delivered > 0 ||
+        remediationDelivery.failed > 0
+      ) {
+        console.log(
+          { detection, delivery, remediationDelivery },
+          "Detection cycle complete",
+        );
       }
     } catch (error) {
       console.error("Detection cycle failed:", error);
@@ -50,7 +88,11 @@ async function run(): Promise<void> {
   await closePool();
 }
 
-process.on("SIGINT", () => { stopping = true; });
-process.on("SIGTERM", () => { stopping = true; });
+process.on("SIGINT", () => {
+  stopping = true;
+});
+process.on("SIGTERM", () => {
+  stopping = true;
+});
 
 await run();

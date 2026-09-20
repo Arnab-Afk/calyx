@@ -16,11 +16,15 @@ async function handler(input: Input): Promise<ToolOutput> {
     undefined,
     "Separate observed evidence, correlations, and hypotheses. Never claim an unverified hypothesis as root cause.",
     4096,
-    { excludeTools: ["ask"] }
+    { excludeTools: ["ask", "propose_remediation"] },
   );
   const chartableCall = [...response.toolCallsMade]
     .reverse()
-    .find((call) => call.output?.visualization_hint && call.output.visualization_hint !== "none");
+    .find(
+      (call) =>
+        call.output?.visualization_hint &&
+        call.output.visualization_hint !== "none",
+    );
 
   return {
     summary: response.answer,
@@ -53,7 +57,8 @@ export const askTool: Tool<Input> = {
       tenant_id: { type: "string", description: "Tenant identifier" },
       question: {
         type: "string",
-        description: "Observability or incident question to investigate (maximum 4000 characters)",
+        description:
+          "Observability or incident question to investigate (maximum 4000 characters)",
       },
     },
     required: ["tenant_id", "question"],

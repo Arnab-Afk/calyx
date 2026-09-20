@@ -14,6 +14,7 @@ export type RemediationStatus =
 export interface RemediationRequest {
   id: string;
   tenantId: string;
+  incidentId?: string;
   actionName: string;
   params: unknown;
   tier: ApprovalTier;
@@ -36,6 +37,7 @@ export interface RemediationRequest {
 interface RequestRow {
   id: string;
   tenant_id: string;
+  incident_id: string | null;
   action_name: string;
   params: unknown;
   tier: ApprovalTier;
@@ -59,6 +61,7 @@ function mapRequest(row: RequestRow): RemediationRequest {
   return {
     id: row.id,
     tenantId: row.tenant_id,
+    ...(row.incident_id && { incidentId: row.incident_id }),
     actionName: row.action_name,
     params: row.params,
     tier: row.tier,
@@ -79,7 +82,7 @@ function mapRequest(row: RequestRow): RemediationRequest {
   };
 }
 
-const columns = `id, tenant_id, action_name, params, tier, reversible, status, proposed_by,
+const columns = `id, tenant_id, incident_id, action_name, params, tier, reversible, status, proposed_by,
   dry_run_result, execute_result, undo_result, approved_by, approval_reason,
   rejected_by, rejection_reason, created_at, decided_at, executed_at, undone_at`;
 
@@ -109,7 +112,9 @@ async function appendEvent(
 }
 
 export async function createRemediationRequest(input: {
+  id: string;
   tenantId: string;
+  incidentId?: string;
   actionName: string;
   params: unknown;
   tier: ApprovalTier;
@@ -121,13 +126,24 @@ export async function createRemediationRequest(input: {
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
+    if (input.incidentId) {
+      const incident = await client.query(
+        "SELECT 1 FROM incidents WHERE id=$1 AND tenant_id=$2",
+        [input.incidentId, input.tenantId],
+      );
+      if (!incident.rows[0]) {
+        throw new Error(`Incident not found for tenant: ${input.incidentId}`);
+      }
+    }
     const result = await client.query<RequestRow>(
       `INSERT INTO remediation_requests
-         (tenant_id, action_name, params, tier, reversible, status, proposed_by, dry_run_result)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         (id, tenant_id, incident_id, action_name, params, tier, reversible, status, proposed_by, dry_run_result)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        RETURNING ${columns}`,
       [
+        input.id,
         input.tenantId,
+        input.incidentId ?? null,
         input.actionName,
         input.params,
         input.tier,

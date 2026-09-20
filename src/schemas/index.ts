@@ -133,15 +133,21 @@ export interface ActionResult {
   after?: unknown;
 }
 
+export interface ActionContext {
+  tenantId: string;
+  requestId: string;
+}
+
 export interface Action {
   name: string;
   description: string;
   defaultTier: ApprovalTier;
   reversible: boolean;
-  dry_run: (params: unknown) => Promise<ActionResult>;
-  execute: (params: unknown) => Promise<ActionResult>;
+  dry_run: (params: unknown, context: ActionContext) => Promise<ActionResult>;
+  execute: (params: unknown, context: ActionContext) => Promise<ActionResult>;
   undo?: (
     params: unknown,
-    executionResult?: ActionResult,
+    executionResult: ActionResult | undefined,
+    context: ActionContext,
   ) => Promise<ActionResult>;
 }
