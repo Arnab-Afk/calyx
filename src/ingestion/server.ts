@@ -8,7 +8,9 @@ import { githubWebhookRoute } from "./routes/v1/github-webhook.js";
 import { vercelDrainRoute } from "./routes/v1/vercel-drain.js";
 import { cloudWatchDrainRoute } from "./routes/v1/cloudwatch-drain.js";
 import { mcpCredentialsRoute } from "./routes/v1/mcp-credentials.js";
+import { eventsRoute } from "./routes/v1/events.js";
 import { internalAskRoute } from "./routes/v1/internal-ask.js";
+import { internalWorkspaceLinkRoute } from "./routes/v1/internal-workspace-link.js";
 import { closePool } from "../storage/client.js";
 import { closeRedis } from "./queue.js";
 
@@ -20,6 +22,7 @@ await app.register(cors, {
   allowedHeaders: ["Content-Type", "Authorization", "X-Tenant-ID"],
 });
 await app.register(logsRoute);
+await app.register(eventsRoute);
 await app.register(askRoute);
 await app.register(projectsRoute);
 await app.register(githubWebhookRoute);
@@ -27,6 +30,7 @@ await app.register(vercelDrainRoute);
 await app.register(cloudWatchDrainRoute);
 await app.register(mcpCredentialsRoute);
 await app.register(internalAskRoute);
+await app.register(internalWorkspaceLinkRoute);
 
 app.get("/health", async () => ({ status: "ok" }));
 

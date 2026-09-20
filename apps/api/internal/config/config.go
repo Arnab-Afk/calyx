@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -9,16 +10,19 @@ import (
 )
 
 type Config struct {
-	Addr             string
-	DatabaseURL      string
-	JWTSecret        string
-	JWTIssuer        string
-	JWTAudience      string
-	TokenTTL         time.Duration
-	CORSOrigins      string
-	CookieSecure     bool
-	CalyxAskURL      string
-	CalyxInternalKey string
+	Addr              string
+	DatabaseURL       string
+	JWTSecret         string
+	JWTIssuer         string
+	JWTAudience       string
+	TokenTTL          time.Duration
+	CORSOrigins       string
+	CookieSecure      bool
+	CookieSameSite    http.SameSite
+	CookieDomain      string
+	CalyxAskURL       string
+	CalyxInternalKey  string
+	CalyxDefaultTenant string
 }
 
 func Load() (Config, error) {
@@ -42,28 +46,74 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("JWT_SECRET must contain at least 32 characters")
 	}
 
-	corsOrigins := envOr("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
+	corsOrigins := normalizeOrigins(envOr("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"))
 	if production && strings.Contains(corsOrigins, "*") {
 		return Config{}, fmt.Errorf("CORS_ORIGINS must list explicit origins in production")
 	}
-	calyxAskURL := os.Getenv("CALYX_ASK_URL")
-	calyxInternalKey := os.Getenv("CALYX_INTERNAL_API_KEY")
+	calyxAskURL := strings.TrimSpace(os.Getenv("CALYX_ASK_URL"))
+	calyxInternalKey := strings.TrimSpace(os.Getenv("CALYX_INTERNAL_API_KEY"))
 	if (calyxAskURL == "") != (calyxInternalKey == "") {
 		return Config{}, fmt.Errorf("CALYX_ASK_URL and CALYX_INTERNAL_API_KEY must be configured together")
 	}
 
+	sameSite, err := parseSameSite(envOr("COOKIE_SAMESITE", defaultSameSite(production, os.Getenv("COOKIE_DOMAIN"))))
+	if err != nil {
+		return Config{}, err
+	}
+	cookieDomain := strings.TrimSpace(os.Getenv("COOKIE_DOMAIN"))
+	if sameSite == http.SameSiteNoneMode && !production {
+		// None requires Secure; allow in non-prod only when explicitly forced secure.
+	}
+
 	return Config{
-		Addr:             envOr("ADDR", ":14000"),
-		DatabaseURL:      envOr("DATABASE_URL", "postgres://calyx:calyx@localhost:15432/calyx"),
-		JWTSecret:        secret,
-		JWTIssuer:        envOr("JWT_ISSUER", "calyx-chat-api"),
-		JWTAudience:      envOr("JWT_AUDIENCE", "calyx-web"),
-		TokenTTL:         time.Duration(ttlHours) * time.Hour,
-		CORSOrigins:      corsOrigins,
-		CookieSecure:     production,
-		CalyxAskURL:      calyxAskURL,
-		CalyxInternalKey: calyxInternalKey,
+		Addr:               envOr("ADDR", ":14000"),
+		DatabaseURL:        envOr("DATABASE_URL", "postgres://calyx:calyx@localhost:15432/calyx"),
+		JWTSecret:          secret,
+		JWTIssuer:          envOr("JWT_ISSUER", "calyx-chat-api"),
+		JWTAudience:        envOr("JWT_AUDIENCE", "calyx-web"),
+		TokenTTL:           time.Duration(ttlHours) * time.Hour,
+		CORSOrigins:        corsOrigins,
+		CookieSecure:       production || sameSite == http.SameSiteNoneMode,
+		CookieSameSite:     sameSite,
+		CookieDomain:       cookieDomain,
+		CalyxAskURL:        calyxAskURL,
+		CalyxInternalKey:   calyxInternalKey,
+		CalyxDefaultTenant: envOr("CALYX_DEFAULT_TENANT", "default"),
 	}, nil
+}
+
+func defaultSameSite(production bool, cookieDomain string) string {
+	// Cross-origin SPAs (e.g. Vercel → api.example.com) need None.
+	// Sibling subdomains can use Lax; prefer None in production unless Domain is set for first-party.
+	if production && strings.TrimSpace(cookieDomain) == "" {
+		return "none"
+	}
+	return "lax"
+}
+
+func parseSameSite(v string) (http.SameSite, error) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "lax":
+		return http.SameSiteLaxMode, nil
+	case "none":
+		return http.SameSiteNoneMode, nil
+	case "strict":
+		return http.SameSiteStrictMode, nil
+	default:
+		return 0, fmt.Errorf("COOKIE_SAMESITE must be lax, none, or strict")
+	}
+}
+
+func normalizeOrigins(raw string) string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return strings.Join(out, ",")
 }
 
 func envOr(k, def string) string {

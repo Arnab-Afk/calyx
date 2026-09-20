@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -137,4 +138,29 @@ func (s *Server) askCalyx(w http.ResponseWriter, r *http.Request) {
 	s.hub.Publish(realtime.Event{Type: "message.created", WorkspaceID: workspaceID, ChannelID: channelID, Payload: question})
 	s.hub.Publish(realtime.Event{Type: "message.created", WorkspaceID: workspaceID, ChannelID: channelID, Payload: message})
 	writeJSON(w, http.StatusCreated, map[string]any{"question": question, "message": message})
+}
+
+// linkWorkspaceTenant best-effort maps a new chat workspace to the observability tenant
+// so /calyx ask and MCP credentials work without a separate CLI step.
+func (s *Server) linkWorkspaceTenant(ctx context.Context, workspaceID string) {
+	if s.calyxAskURL == "" || s.calyxInternalKey == "" {
+		return
+	}
+	tenant := strings.TrimSpace(s.calyxDefaultTenant)
+	if tenant == "" {
+		tenant = "default"
+	}
+	payload, _ := json.Marshal(map[string]string{"tenantId": tenant})
+	endpoint := fmt.Sprintf("%s/v1/internal/workspaces/%s/link", s.calyxAskURL, url.PathEscape(workspaceID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Calyx-Internal-Key", s.calyxInternalKey)
+	res, err := s.httpClient.Do(req)
+	if err != nil {
+		return
+	}
+	defer res.Body.Close()
 }

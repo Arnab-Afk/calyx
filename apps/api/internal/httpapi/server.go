@@ -26,29 +26,48 @@ import (
 const sessionCookie = "calyx_session"
 
 type Server struct {
-	db               *pgxpool.Pool
-	auth             *auth.Service
-	hub              *realtime.Hub
-	cookieSecure     bool
-	cookieTTL        time.Duration
-	wsOrigins        []string
-	calyxAskURL      string
-	calyxInternalKey string
-	httpClient       *http.Client
+	db                 *pgxpool.Pool
+	auth               *auth.Service
+	hub                *realtime.Hub
+	cookieSecure       bool
+	cookieSameSite     http.SameSite
+	cookieDomain       string
+	cookieTTL          time.Duration
+	wsOrigins          []string
+	calyxAskURL        string
+	calyxInternalKey   string
+	calyxDefaultTenant string
+	httpClient         *http.Client
 }
 
-func New(db *pgxpool.Pool, authSvc *auth.Service, hub *realtime.Hub, corsOrigins string, cookieSecure bool, cookieTTL time.Duration, calyxAskURL, calyxInternalKey string) http.Handler {
+func New(
+	db *pgxpool.Pool,
+	authSvc *auth.Service,
+	hub *realtime.Hub,
+	corsOrigins string,
+	cookieSecure bool,
+	cookieSameSite http.SameSite,
+	cookieDomain string,
+	cookieTTL time.Duration,
+	calyxAskURL, calyxInternalKey, calyxDefaultTenant string,
+) http.Handler {
+	origins := strings.Split(corsOrigins, ",")
+	for i := range origins {
+		origins[i] = strings.TrimSpace(origins[i])
+	}
 	s := &Server{
-		db: db, auth: authSvc, hub: hub, cookieSecure: cookieSecure,
+		db: db, auth: authSvc, hub: hub,
+		cookieSecure: cookieSecure, cookieSameSite: cookieSameSite, cookieDomain: cookieDomain,
 		cookieTTL: cookieTTL, wsOrigins: websocketOrigins(corsOrigins),
 		calyxAskURL: strings.TrimRight(calyxAskURL, "/"), calyxInternalKey: calyxInternalKey,
-		httpClient: &http.Client{Timeout: 25 * time.Second},
+		calyxDefaultTenant: calyxDefaultTenant,
+		httpClient:         &http.Client{Timeout: 25 * time.Second},
 	}
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.RealIP, middleware.Logger, middleware.Recoverer)
 	r.Use(maxRequestBody(1<<20, 6<<20))
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   strings.Split(corsOrigins, ","),
+		AllowedOrigins:   origins,
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		AllowCredentials: true,
@@ -167,7 +186,7 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 func (s *Server) setSessionCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name: sessionCookie, Value: token, Path: "/", HttpOnly: true,
-		Secure: s.cookieSecure, SameSite: http.SameSiteLaxMode,
+		Secure: s.cookieSecure, SameSite: s.cookieSameSite, Domain: s.cookieDomain,
 		MaxAge: int(s.cookieTTL.Seconds()),
 	})
 }
@@ -175,7 +194,8 @@ func (s *Server) setSessionCookie(w http.ResponseWriter, token string) {
 func (s *Server) logout(w http.ResponseWriter, _ *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: sessionCookie, Value: "", Path: "/", HttpOnly: true,
-		Secure: s.cookieSecure, SameSite: http.SameSiteLaxMode, MaxAge: -1,
+		Secure: s.cookieSecure, SameSite: s.cookieSameSite, Domain: s.cookieDomain,
+		MaxAge: -1,
 	})
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -385,6 +405,7 @@ func (s *Server) createWorkspace(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.linkWorkspaceTenant(r.Context(), ws.ID)
 	writeJSON(w, http.StatusCreated, map[string]any{"workspace": ws, "memberId": memberID})
 }
 

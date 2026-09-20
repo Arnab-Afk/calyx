@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { tenantForWorkspace } from "../storage/workspace-tenants.js";
+import { linkWorkspaceToTenant, tenantForWorkspace } from "../storage/workspace-tenants.js";
 
 function safeEqual(left: string, right: string): boolean {
   const a = Buffer.from(left);
@@ -27,10 +27,16 @@ export async function resolveWorkspaceTenant(
   workspaceId: string,
   reply: FastifyReply
 ): Promise<string | null> {
-  const tenantId = await tenantForWorkspace(workspaceId);
+  let tenantId = await tenantForWorkspace(workspaceId);
   if (!tenantId) {
-    await reply.status(409).send({ error: "Workspace is not linked to a Calyx tenant" });
-    return null;
+    const autoTenant = process.env.CALYX_DEFAULT_TENANT?.trim() || "default";
+    try {
+      await linkWorkspaceToTenant(workspaceId, autoTenant);
+      tenantId = autoTenant;
+    } catch {
+      await reply.status(409).send({ error: "Workspace is not linked to a Calyx tenant" });
+      return null;
+    }
   }
   return tenantId;
 }

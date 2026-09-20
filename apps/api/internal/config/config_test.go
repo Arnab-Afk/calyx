@@ -1,12 +1,15 @@
 package config
 
-import "testing"
+import (
+	"net/http"
+	"testing"
+)
 
 func clearConfigEnv(t *testing.T) {
 	t.Helper()
 	for _, key := range []string{
 		"APP_ENV", "JWT_SECRET", "JWT_TTL_HOURS", "CORS_ORIGINS", "JWT_ISSUER", "JWT_AUDIENCE",
-		"CALYX_ASK_URL", "CALYX_INTERNAL_API_KEY",
+		"CALYX_ASK_URL", "CALYX_INTERNAL_API_KEY", "COOKIE_SAMESITE", "COOKIE_DOMAIN", "CALYX_DEFAULT_TENANT",
 	} {
 		t.Setenv(key, "")
 	}
@@ -64,5 +67,20 @@ func TestLoadProductionUsesSecureCookie(t *testing.T) {
 	}
 	if !cfg.CookieSecure {
 		t.Fatal("production cookie must require TLS")
+	}
+	if cfg.CookieSameSite != http.SameSiteNoneMode {
+		t.Fatalf("production default SameSite want None, got %v", cfg.CookieSameSite)
+	}
+}
+
+func TestLoadTrimsCORSOrigins(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("CORS_ORIGINS", " https://app.example.com , http://localhost:3000 ")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.CORSOrigins != "https://app.example.com,http://localhost:3000" {
+		t.Fatalf("unexpected CORS_ORIGINS %q", cfg.CORSOrigins)
 	}
 }

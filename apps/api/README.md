@@ -77,9 +77,12 @@ Registration and login return a bearer token for CLI clients and also set an HTT
 | `JWT_ISSUER` | `calyx-chat-api` | Validated token issuer |
 | `JWT_AUDIENCE` | `calyx-web` | Validated token audience |
 | `JWT_TTL_HOURS` | `24` | Access/session lifetime; range 1–720 hours |
-| `CORS_ORIGINS` | local Next.js origins | Comma-separated; wildcard rejected in production |
+| `CORS_ORIGINS` | local Next.js origins | Comma-separated (spaces trimmed); wildcard rejected in production |
+| `COOKIE_SAMESITE` | `none` in production (no domain), else `lax` | Use `none` when web and API are on different sites (e.g. Vercel → API host) |
+| `COOKIE_DOMAIN` | unset | Optional parent domain for sibling subdomains, e.g. `.arnabbhowmik.in` |
 | `CALYX_ASK_URL` | unset | Node ingestion origin, for example `http://ingestion:3000` |
 | `CALYX_INTERNAL_API_KEY` | unset | Shared server-only key; must be configured with `CALYX_ASK_URL` |
+| `CALYX_DEFAULT_TENANT` | `default` | Auto-linked when a workspace is created |
 
 ## Image uploads
 
@@ -91,13 +94,13 @@ The first-party v1 stores bounded images in shared PostgreSQL so multi-instance 
 
 `POST /v1/channels/:id/calyx` accepts only a query and optional thread parent. The Go API authenticates workspace membership, calls Node through the internal service key, and persists both the question and trusted Calyx response. The browser cannot supply tenant IDs or `calyxData`.
 
-Before using it, link the Go workspace UUID to its observability tenant:
+Workspace → tenant linking is automatic on workspace create (and on first ask if missing). Manual override:
 
 ```bash
 npm run mcp:workspace-link -- --workspace <go-workspace-uuid> --tenant <tenant-id>
 ```
 
-Configure the same `CALYX_INTERNAL_API_KEY` on Go and Node, and set Go's `CALYX_ASK_URL` to the Node ingestion origin.
+Configure the same `CALYX_INTERNAL_API_KEY` on Go and Node, and set Go's `CALYX_ASK_URL` to the Node ingestion origin. See [`docs/DEPLOY.md`](../../docs/DEPLOY.md).
 
 ## Deploy
 

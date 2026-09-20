@@ -1,20 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const CALYX_API = process.env.CALYX_API_URL ?? 'http://localhost:13000';
+const CALYX_API = (process.env.CALYX_API_URL ?? 'http://localhost:13000').replace(/\/$/, '');
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const tenantId = req.headers.get('x-tenant-id') ?? searchParams.get('tenantId') ?? 'default';
-
-  const params = new URLSearchParams();
-  for (const [k, v] of searchParams.entries()) {
-    if (k !== 'tenantId') params.set(k, v);
+  const token = process.env.CALYX_MGMT_TOKEN?.trim();
+  if (!token) {
+    return NextResponse.json(
+      { error: 'CALYX_MGMT_TOKEN is not configured on the web server' },
+      { status: 503 },
+    );
   }
 
-  const res = await fetch(`${CALYX_API}/v1/logs?${params}`, {
-    headers: { 'X-Tenant-ID': tenantId },
+  const { searchParams } = new URL(req.url);
+  const params = new URLSearchParams();
+  for (const key of ['service', 'level', 'limit'] as const) {
+    const value = searchParams.get(key);
+    if (value) params.set(key, value);
+  }
+
+  const res = await fetch(`${CALYX_API}/v1/events?${params}`, {
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
   });
 
-  const data = await res.json();
+  const data = await res.json().catch(() => ({ error: 'Invalid upstream response' }));
   return NextResponse.json(data, { status: res.status });
 }

@@ -37,8 +37,8 @@ func main() {
 	hub := realtime.NewHub()
 	authSvc := auth.NewService(cfg.JWTSecret, cfg.TokenTTL, cfg.JWTIssuer, cfg.JWTAudience)
 	handler := httpapi.New(
-		pool, authSvc, hub, cfg.CORSOrigins, cfg.CookieSecure, cfg.TokenTTL,
-		cfg.CalyxAskURL, cfg.CalyxInternalKey,
+		pool, authSvc, hub, cfg.CORSOrigins, cfg.CookieSecure, cfg.CookieSameSite, cfg.CookieDomain, cfg.TokenTTL,
+		cfg.CalyxAskURL, cfg.CalyxInternalKey, cfg.CalyxDefaultTenant,
 	)
 
 	srv := &http.Server{

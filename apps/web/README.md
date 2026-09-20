@@ -60,3 +60,7 @@ NEXT_PUBLIC_CALYX_CHAT_URL=http://localhost:14000 pnpm build
 ```
 
 Do not commit `.env.local` or service credentials.
+
+## Production
+
+See [`docs/DEPLOY.md`](../../docs/DEPLOY.md) for the full web + Go + Node env checklist (cookies, CORS, mgmt token, Redis consumer, workspace auto-link).

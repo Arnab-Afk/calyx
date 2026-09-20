@@ -38,14 +38,14 @@ func TestRequireAuthAcceptsHTTPOnlySessionCookie(t *testing.T) {
 }
 
 func TestLogoutClearsSessionCookie(t *testing.T) {
-	s := &Server{cookieSecure: true}
+	s := &Server{cookieSecure: true, cookieSameSite: http.SameSiteNoneMode}
 	res := httptest.NewRecorder()
 	s.logout(res, httptest.NewRequest(http.MethodPost, "/v1/auth/logout", nil))
 	cookies := res.Result().Cookies()
 	if len(cookies) != 1 || cookies[0].Name != sessionCookie || cookies[0].MaxAge != -1 {
 		t.Fatalf("session cookie was not cleared: %#v", cookies)
 	}
-	if !cookies[0].HttpOnly || !cookies[0].Secure {
+	if !cookies[0].HttpOnly || !cookies[0].Secure || cookies[0].SameSite != http.SameSiteNoneMode {
 		t.Fatalf("cookie flags missing: %#v", cookies[0])
 	}
 }
